@@ -55,10 +55,10 @@ void fit(TF1 * ee, TH1D * hist, bool & n_good, bool & b12_good, double & n_mag, 
   for(int i = 0; i < 8; i++) if(0 == (status = hist->Fit("ee", "ql"))) break;
 
   // Now that we're (hopefully) reasonably converged, let muon lifetime float
-  //ee->ReleaseParameter(2);
-  //nfree_par++;
-  //nb12_par++;
-  ////nneutron_par++;
+  ee->ReleaseParameter(2);
+  nfree_par++;
+  nb12_par++;
+  nneutron_par++;
 
   // But check if there is almost no B-12, if so, fix it at the best fit because
   // otherwise we'll probably get problems running MINOS.
@@ -180,11 +180,11 @@ void rhc()
   TH2D * rhc_s = (TH2D *)fhc_s->Clone("rhc_s");
 
   const char * const basecut = "primary && type == 3 && timeleft > 270 && timeback > 210 "
-                               "&& remid > 0.95 && "
+                               "&& remid > 0.9 && "
                                "trklen > 200 && " // standard
                                //"trklen > 300 && " // longer
                                "abs(trkstartx) < 180 && abs(trkstarty) < 180 && trkstartz > 50 && "
-                               "abs(trkx)      < 180 && abs(trky)      < 180 && trkz < 1250";
+                               "abs(trkx)      < 170 && abs(trky)      < 170 && trkz < 1250";
 
   // Attempt to agressively reduce neutrons while still getting some B-12
   const std::string ccut = Form("%s && t > -210 && t < 270 && !(t >= -1 && t < 2) && nhit <= 3 && mindist <= 2 && dist2 < 4 && pe > 35 && e < 20", basecut);
