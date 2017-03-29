@@ -612,29 +612,106 @@
   fhc_numubar->SetBinContent(100,7);
   fhc_numubar->SetBinContent(101,232);
 
-  /* rebin here */
-
   const int nbins = 5;
-  const double bins[nbins+1] = {0.5, 1.25, 2, 3, 4, 5};
+  const double bins[nbins+1] = {0.5, 1.25, 2, 3, 4, 6};
 
-  fhc_numubar = (TH1D*)fhc_numubar->Rebin(nbins, "fhc_numubar", bins);
-  fhc_numu    = (TH1D*)fhc_numu   ->Rebin(nbins, "fhc_numu"   , bins);
   rhc_numubar = (TH1D*)rhc_numubar->Rebin(nbins, "rhc_numubar", bins);
   rhc_numu    = (TH1D*)rhc_numu   ->Rebin(nbins, "rhc_numu"   , bins);
+  fhc_numubar = (TH1D*)fhc_numubar->Rebin(nbins, "fhc_numubar", bins);
+  fhc_numu    = (TH1D*)fhc_numu   ->Rebin(nbins, "fhc_numu"   , bins);
 
-  fhc_reco_numubar = (TH1D*)fhc_reco_numubar->Rebin(nbins, "fhc_reco_numubar", bins);
-  fhc_reco_numu    = (TH1D*)fhc_reco_numu   ->Rebin(nbins, "fhc_reco_numu"   , bins);
   rhc_reco_numubar = (TH1D*)rhc_reco_numubar->Rebin(nbins, "rhc_reco_numubar", bins);
   rhc_reco_numu    = (TH1D*)rhc_reco_numu   ->Rebin(nbins, "rhc_reco_numu"   , bins);
+  fhc_reco_numubar = (TH1D*)fhc_reco_numubar->Rebin(nbins, "fhc_reco_numubar", bins);
+  fhc_reco_numu    = (TH1D*)fhc_reco_numu   ->Rebin(nbins, "fhc_reco_numu"   , bins);
 
-  TH1D * fhc = fhc_reco_numu->Clone("fhc");
-  fhc.Add(fhc_reco_numubar);
-  TH1D * rhc = rhc_reco_numu->Clone("rhc");
+  // Total numu+numubar in RHC
+  TH1D * rhc = (TH1D*)rhc_reco_numu->Clone("rhc");
   rhc.Add(rhc_reco_numubar);
-  TH1D * fhcrat  = fhc->Clone("fhcrat");
-  TH1D * rhcrat  = rhc->Clone("rhcrat");
-  fhcrat->Divide(fhc_reco_numu, fhc);
+
+  // Total numu+numubar in FHC
+  TH1D * fhc = (TH1D*)fhc_reco_numu->Clone("fhc");
+  fhc.Add(fhc_reco_numubar);
+
+  TH1D * rhcrat  = (TH1D*)rhc->Clone("rhcrat");
+  TH1D * fhcrat  = (TH1D*)fhc->Clone("fhcrat");
+
+  // Fraction of numu in FHC, RHC
   rhcrat->Divide(rhc_reco_numu, rhc);
-  TH1D * doublerat = rhcrat->Clone("doublerat");
-  doublerat->Divide(rhcrat, fhcrat);
+  fhcrat->Divide(fhc_reco_numu, fhc);
+
+  // ratio of fractions of numu for RHC/FHC
+  TH1D * doublerat_simple = (TH1D*)rhcrat->Clone("doublerat_simple");
+  doublerat_simple->Divide(rhcrat, fhcrat);
+
+  // Estimate of number of neutrons from RHC per muon
+  // Assume 5% NC background across all bins
+  // Should this be bigger for RHC?
+  const double sigfrac = 0.95;
+  const double bgfrac = 1 - sigfrac;
+
+  // Probability of getting a neutron from a mu- and a mu+
+  const double mum_nyield = 0.15;
+  const double mup_nyield = 1e-4;
+
+  // Assume the track in NC events is a pi- this fraction of the time
+  const double piminus_frac = 0.33;
+  // Take the neutron yield from pions to be 2.5 times that of muons,
+  // and they all capture. (R. Madey, et al. Neutrons from nuclear
+  // capture of negative pions. Phys. Rev. C, 25:3050­3067, Jun 198)
+  const double muminus_capture_frac = 0.182;
+  const double piminus_relative_nyield =2.5/muminus_capture_frac;
+
+  /* We're going to ignore the corner case of pi+ -> mu+ Michel decays
+     making a neutron, since we've fudged lots of other bigger stuff. */
+
+  TH1D * rhc_neutrons = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons");
+  rhc_neutrons.Reset();
+  rhc_neutrons.Add(rhc, bgfrac * piminus_frac * piminus_relative_nyield * mum_nyield);
+  rhc_neutrons.Add(rhc_reco_numu,    sigfrac * mum_nyield);
+  rhc_neutrons.Add(rhc_reco_numubar, sigfrac * mup_nyield);
+  rhc_neutrons.Divide(rhc);
+
+  // Estimate of number of neutrons from FHC per muon
+  TH1D * fhc_neutrons = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons");
+  fhc_neutrons.Reset();
+  fhc_neutrons.Add(fhc, bgfrac * piminus_frac * piminus_relative_nyield * mum_nyield);
+  fhc_neutrons.Add(fhc_reco_numu,    sigfrac * mum_nyield);
+  fhc_neutrons.Add(fhc_reco_numubar, sigfrac * mup_nyield);
+  fhc_neutrons.Divide(fhc);
+
+  const double mum_b12yield = 0.177; // Double Chooz!
+
+  // I think really zero, although of course the mu+ in flight (or the
+  // e+ Michel) could make N-12, which looks the same (in fact, doubled
+  // due to half the lifetime). I'd guess this is 1e-5 at most, and
+  // maybe much lower.
+  const double mup_b12yield = 1e-6;
+
+  // H. Hilscher, W.-D. Krebs, G. Sepp, and V. Soergel. An experimental
+  // test of the analogy between radiative pion absorption and muon
+  // capture in 12C. Nuclear Physics A, 158(2):584-592, 1970
+  const double piminus_relative_b12yield = 1/30./muminus_capture_fraction;
+
+  // Estimate of number of B-12 from FHC per muon
+  TH1D * rhc_b12 = (TH1D*)rhc_reco_numu->Clone("rhc_b12");
+  rhc_b12.Reset();
+  rhc_b12.Add(rhc, bgfrac * piminus_frac * piminus_relative_b12yield * mum_b12yield);
+  rhc_b12.Add(rhc_reco_numu,    sigfrac * mum_b12yield);
+  rhc_b12.Add(rhc_reco_numubar, sigfrac * mup_b12yield);
+  rhc_b12.Divide(rhc);
+
+  // Estimate of number of b12 from FHC per muon
+  TH1D * fhc_b12 = (TH1D*)fhc_reco_numu->Clone("fhc_b12");
+  fhc_b12.Reset();
+  fhc_b12.Add(fhc, bgfrac * piminus_frac * piminus_relative_b12yield * mum_b12yield);
+  fhc_b12.Add(fhc_reco_numu,    sigfrac * mum_b12yield);
+  fhc_b12.Add(fhc_reco_numubar, sigfrac * mup_b12yield);
+  fhc_b12.Divide(fhc);
+
+  TH1D * doublerat_ncomplications = (TH1D*)rhc_neutrons->Clone("doublerat_ncomplications");
+  doublerat_ncomplications.Divide(rhc_neutrons, fhc_neutrons);
+
+  TH1D * doublerat_b12complications = (TH1D*)rhc_b12->Clone("doublerat_b12complications");
+  doublerat_b12complications.Divide(rhc_b12, fhc_b12);
 }
