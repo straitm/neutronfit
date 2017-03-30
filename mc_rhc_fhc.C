@@ -612,8 +612,8 @@
   fhc_numubar->SetBinContent(100,7);
   fhc_numubar->SetBinContent(101,232);
 
-  const int nbins = 5;
-  const double bins[nbins+1] = {0.5, 1.25, 2, 3, 4, 6};
+  const int nbins = 4;
+  const double bins[nbins+1] = {0.5, 1.25, 2, 3, 6};
 
   rhc_numubar = (TH1D*)rhc_numubar->Rebin(nbins, "rhc_numubar", bins);
   rhc_numu    = (TH1D*)rhc_numu   ->Rebin(nbins, "rhc_numu"   , bins);
@@ -680,7 +680,8 @@
   fhc_neutrons.Add(fhc_reco_numubar, sigfrac * mup_nyield);
   fhc_neutrons.Divide(fhc);
 
-  const double mum_b12yield = 0.177; // Double Chooz!
+  // My toy mc atomic cap frac, nucl cap frac on C-12, and Double Chooz!
+  const double mum_b12yield = 0.82 * 0.077 * 0.177;
 
   // I think really zero, although of course the mu+ in flight (or the
   // e+ Michel) could make N-12, which looks the same (in fact, doubled
@@ -691,7 +692,7 @@
   // H. Hilscher, W.-D. Krebs, G. Sepp, and V. Soergel. An experimental
   // test of the analogy between radiative pion absorption and muon
   // capture in 12C. Nuclear Physics A, 158(2):584-592, 1970
-  const double piminus_relative_b12yield = 1/30./muminus_capture_fraction;
+  const double piminus_relative_b12yield = 1/30./muminus_capture_frac;
 
   // Estimate of number of B-12 from FHC per muon
   TH1D * rhc_b12 = (TH1D*)rhc_reco_numu->Clone("rhc_b12");
