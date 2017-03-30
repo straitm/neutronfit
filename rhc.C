@@ -70,6 +70,31 @@ static TF1 * ee = new TF1("ee",
 
 static TCanvas * c1 = new TCanvas;
 
+double getminerrup(int i) // 0-indexed!
+{
+  // Figure out how many fixed parameters there are below the one
+  // desired. Fixed parameters are, of course, FORTRAN-indexed, but the
+  // array fErp is C-indexed.
+
+  // If there are no fixed parameters, it is just the C-index
+  int wherearewe = i;
+
+  for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
+    if(mn->fIpfix[fixpar] < i+1)
+      wherearewe--;
+
+  return mn->fErp[wherearewe];
+}
+
+double getminerrdn(int i) // 0-indexed!
+{
+  int wherearewe = i;
+  for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
+    if(mn->fIpfix[fixpar] < i+1)
+      wherearewe--;
+  return -mn->fErn[wherearewe];
+}
+
 double getpar(int i) // 0-indexed!
 {
   double answer, dum;
@@ -112,6 +137,7 @@ static void fixat(int i, float v) // 1-indexed!
 
 static void fixatzero(int i) // 1-indexed!
 {
+  mn->Command(Form("REL %d", i));
   mn->Command(Form("SET LIM %d", i));
   mn->Command(Form("SET PAR %d 0", i));
   mn->Command(Form("FIX %d", i));
@@ -120,7 +146,7 @@ static void fixatzero(int i) // 1-indexed!
 
 static bool onegoodminos(const int par, const bool no_low_ok)
 {
-  if((!no_low_ok && gMinuit->fErn[par] == 0) || gMinuit->fErp[par] == 0){
+  if((!no_low_ok && getminerrdn(par) == 0) || getminerrup(par) == 0){
     printf("Incomplete MINOS errors for free par %d\n", par);
     return false;
   }
@@ -216,6 +242,7 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   mn->Command(Form("SET PAR %d %f", pileup_nf,
     hist->GetBinContent(nnegbins - 2)/8.));
 
+
   // Fix neutron lifetime and diffusion parameters
   fixat(tneut_nf, 55);
   fixat(aneut_nf, 300);
@@ -268,8 +295,8 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   ans.n_good = onegoodminos(nneut_nc, false);
 
   ans.n_mag = getpar(nneut_nc);
-  ans.n_mage_up =  gMinuit->fErp[nneut_nc];
-  ans.n_mage_dn = -gMinuit->fErn[nneut_nc];
+  ans.n_mage_up = getminerrup(nneut_nc);
+  ans.n_mage_dn = getminerrdn(nneut_nc);
 
   // release neutron lifetime, which we had held constant for a fair
   // comparison of neutrons, but is a serious nusiance parameter for
@@ -327,10 +354,10 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   /* End cheating for sensitivity study! */
 
   ans.b12mag = getpar(nb12_nc);
-  ans.b12mage_up =  gMinuit->fErp[nb12_nc];
-  ans.b12mage_dn = (-gMinuit->fErn[nb12_nc] != 0 && 
-                 -gMinuit->fErn[nb12_nc] != 54321.0)?
-                 -gMinuit->fErn[nb12_nc]: getpar(nb12_nc);
+  ans.b12mage_up = getminerrup(nb12_nc);
+  ans.b12mage_dn = (getminerrup(nb12_nc) != 0 && 
+                 getminerrup(nb12_nc) != 54321.0)?
+                 getminerrup(nb12_nc): getpar(nb12_nc);
   printf("b12mag = %f + %f - %f\n", ans.b12mag, ans.b12mage_up, ans.b12mage_dn);
   printf("n_mag  = %f + %f - %f\n",  ans.n_mag,  ans.n_mage_up,  ans.n_mage_dn);
 
@@ -436,22 +463,40 @@ void rhc()
   TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
   TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
   TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
-  g_n_rhc->SetMarkerStyle(kOpenCircle);
+  g_n_rhc->SetMarkerStyle(kOpenSquare);
   g_n_fhc->SetMarkerStyle(kOpenCircle);
 
   g_b12_rhc->SetMarkerStyle(kOpenSquare);
-  g_b12_fhc->SetMarkerStyle(kOpenSquare);
+  g_b12_fhc->SetMarkerStyle(kOpenCircle);
+
+  g_b12_rhc->SetLineStyle(kDashed);
+  g_b12_fhc->SetLineStyle(kDashed);
+
+  g_n_rhc->SetLineWidth(1);
+  g_n_fhc->SetLineWidth(2);
+
+  g_b12_rhc->SetLineWidth(1);
+  g_b12_fhc->SetLineWidth(2);
 
   TGraphAsymmErrors * g_n_rhc_bad = new TGraphAsymmErrors;
   TGraphAsymmErrors * g_n_fhc_bad = new TGraphAsymmErrors;
   TGraphAsymmErrors * g_b12_rhc_bad = new TGraphAsymmErrors;
   TGraphAsymmErrors * g_b12_fhc_bad = new TGraphAsymmErrors;
 
-  g_n_rhc_bad->SetMarkerStyle(kOpenCircle);
+  g_n_rhc_bad->SetMarkerStyle(kOpenSquare);
   g_n_fhc_bad->SetMarkerStyle(kOpenCircle);
 
   g_b12_rhc_bad->SetMarkerStyle(kOpenSquare);
-  g_b12_fhc_bad->SetMarkerStyle(kOpenSquare);
+  g_b12_fhc_bad->SetMarkerStyle(kOpenCircle);
+
+  g_b12_rhc_bad->SetLineStyle(kDashed);
+  g_b12_fhc_bad->SetLineStyle(kDashed);
+
+  g_n_rhc_bad->SetLineWidth(1);
+  g_n_fhc_bad->SetLineWidth(2);
+
+  g_b12_rhc_bad->SetLineWidth(1);
+  g_b12_fhc_bad->SetLineWidth(2);
 
   g_n_rhc_bad->SetLineColor(kRed);
   g_n_fhc_bad->SetLineColor(kRed);
@@ -478,8 +523,8 @@ void rhc()
   TGraphAsymmErrors * b12_resultbad = new TGraphAsymmErrors;
   b12_result->SetLineStyle(kDashed);
   b12_resultbad->SetLineStyle(kDashed);
-  b12_result->SetMarkerStyle(kOpenSquare);
-  b12_resultbad->SetMarkerStyle(kOpenSquare);
+  b12_result->SetMarkerStyle(kOpenCircle);
+  b12_resultbad->SetMarkerStyle(kOpenCircle);
   b12_resultbad->SetLineColor(kRed);
   b12_resultbad->SetMarkerColor(kRed);
   b12_result->SetName("b12_result");
@@ -549,21 +594,23 @@ void rhc()
     const double graph_x = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
 
-    g_n_r->SetPoint(g_n_r->GetN(), graph_x, rhc_ans.n_mag);
+    g_n_r->SetPoint(g_n_r->GetN(), graph_x + graph_xe/10 /* visual offset */,
+      rhc_ans.n_mag/rhc_scale);
     g_n_r->SetPointError(g_n_r->GetN()-1, graph_xe, graph_xe,
-      rhc_ans.n_mage_dn, rhc_ans.n_mage_up);
+      rhc_ans.n_mage_dn/rhc_scale, rhc_ans.n_mage_up/rhc_scale);
 
-    g_n_f->SetPoint(g_n_f->GetN(), graph_x, fhc_ans.n_mag);
+    g_n_f->SetPoint(g_n_f->GetN(), graph_x, fhc_ans.n_mag/fhc_scale);
     g_n_f->SetPointError(g_n_f->GetN()-1, graph_xe, graph_xe,
-      fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
+      fhc_ans.n_mage_dn/fhc_scale, fhc_ans.n_mage_up/fhc_scale);
 
-    g_b12_r->SetPoint(g_b12_r->GetN(), graph_x, rhc_ans.b12_mag);
+    g_b12_r->SetPoint(g_b12_r->GetN(), graph_x + graph_xe/10,
+      rhc_ans.b12mag/rhc_scale);
     g_b12_r->SetPointError(g_b12_r->GetN()-1, graph_xe, graph_xe,
-      rhc_ans.b12_mage_dn, rhc_ans.b12_mage_up);
+      rhc_ans.b12mage_dn/rhc_scale, rhc_ans.b12mage_up/rhc_scale);
 
-    g_b12_f->SetPoint(g_b12_f->GetN(), graph_x, fhc_ans.b12_mag);
+    g_b12_f->SetPoint(g_b12_f->GetN(), graph_x, fhc_ans.b12mag/fhc_scale);
     g_b12_f->SetPointError(g_b12_f->GetN()-1, graph_xe, graph_xe,
-      fhc_ans.b12_mage_dn, fhc_ans.b12_mage_up);
+      fhc_ans.b12mage_dn/fhc_scale, fhc_ans.b12mage_up/fhc_scale);
 
     const bool n_good = fhc_ans.n_good && rhc_ans.n_good;
     const bool b12_good = fhc_ans.b12_good && rhc_ans.b12_good;
@@ -573,36 +620,40 @@ void rhc()
       n_rat, n_rat_err_up, n_rat_err_dn);
     TGraphAsymmErrors * addto = n_good?n_result:n_resultbad;
     addto->SetPoint(addto->GetN(), graph_x, n_rat);
-    addto->SetPointError(addto->GetN()-1, graph_xe,
-      graph_xe, n_rat_err_dn, n_rat_err_up);
+    addto->SetPointError(addto->GetN()-1, graph_xe, graph_xe,
+      n_rat_err_dn, n_rat_err_up);
 
     printf("%s/%s RHC/FHC B-12    (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rhc_ans.b12_good?"Good":"Bad", fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
       b12_rat, b12_rat_err_up, b12_rat_err_dn);
     addto = b12_good?b12_result:b12_resultbad;
-    addto->SetPoint(addto->GetN(),
-      graph_x + graph_xe/10, b12_rat);
-    addto->SetPointError(addto->GetN()-1, graph_xe,
-      graph_xe, b12_rat_err_dn, b12_rat_err_up);
+    addto->SetPoint(addto->GetN(), graph_x + graph_xe/10, b12_rat);
+    addto->SetPointError(addto->GetN()-1, graph_xe, graph_xe,
+      b12_rat_err_dn, b12_rat_err_up);
   }
 
   TCanvas * c2 = new TCanvas;
+  dum->GetYaxis()->SetTitle("Neutrons per track");
   dum->Draw();
   g_n_rhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
   g_n_fhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
+  c2->Print("fit.pdf");
   
   TCanvas * c3 = new TCanvas;
+  dum->GetYaxis()->SetTitle("B-12 per track");
   dum->Draw();
   g_b12_rhc->Draw("pz");
   g_b12_rhc_bad->Draw("pz");
   g_b12_fhc->Draw("pz");
   g_b12_rhc_bad->Draw("pz");
+  c3->Print("fit.pdf");
 
   c1->cd();
   c1->SetLogy(0);
 
+  dum->GetYaxis()->SetTitle("Ratios");
   dum->Draw();
   n_result->Draw("pz");
   n_resultbad->Draw("pz");
