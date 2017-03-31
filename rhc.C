@@ -62,7 +62,7 @@ static TF1 * ee = new TF1("ee",
   "(x >= 2)*("
    "abs([1])/[2]    * exp(-x/[2]   ) + "
    "abs([3])/[4]    * exp(-x/[4]   ) "
-   //"*(TMath::Erf(sqrt([5]/x))-2/sqrt(TMath::Pi())*sqrt([5]/x)*exp(-[5]/x))"
+   "*(TMath::Erf(sqrt([5]/x))-2/sqrt(TMath::Pi())*sqrt([5]/x)*exp(-[5]/x))"
    "+ abs([6])/29.1e3 * exp(-x/29.1e3)"
   ") + "
   "((x >= -10 && x <= -1) || (x >= 2 && x <= 10))*(abs([7])*abs(abs(x)-10))",
@@ -187,7 +187,7 @@ void fcn(int & np, double * gin, double & like, double *par, int flag)
     const double data = fithist->GetBinContent(i);
     
     like += model - data;
-    if(model != 0 && data != 0) like += data * log(data/model);
+    if(model > 0 && data > 0) like += data * log(data/model);
   }
 }
 
@@ -222,7 +222,8 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
 
   fitanswers ans;
   fithist = hist;
-  hist->GetYaxis()->SetRangeUser(0.01, 2e3);
+  hist->GetXaxis()->SetTitle(is_rhc?"RHC":"FHC");
+  hist->GetYaxis()->SetRangeUser(ntrack*1e-7, ntrack*1e-1);
   hist->Draw("e");
   int status = 0;
 
@@ -281,8 +282,8 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   // MINOS errors are wrong if we used the abs trick, so limit
   mn->Command(Form("SET PAR %d %f",  nb12_nf, getpar( nb12_nc)));
   mn->Command(Form("SET PAR %d %f", nneut_nf, getpar(nneut_nc)));
-  mn->Command(Form("SET LIMITS %d 0 %f",  nb12_nf, max(1e5, 10*getpar( nb12_nc))));
-  mn->Command(Form("SET LIMITS %d 0 %f", nneut_nf, max(1e5, 10*getpar(nneut_nc))));
+  mn->Command(Form("SET LIM %d 0 %f",  nb12_nf, max(1e6, 10*getpar( nb12_nc))));
+  mn->Command(Form("SET LIM %d 0 %f", nneut_nf, max(1e6, 10*getpar(nneut_nc))));
 
   for(int i = 0; i < 8; i++)
     if(0 == (status = mn->Command("MIGRAD")))
@@ -302,8 +303,8 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   // comparison of neutrons, but is a serious nusiance parameter for
   // B-12. The better way to handle this would be a simulatanous fit
   // of all the histograms.
-  mn->Command(Form("REL %d", nneut_nf));
-  mn->Command(Form("SET LIMITS %d 40 70", tneut_nf));
+  mn->Command(Form("REL %d", tneut_nf));
+  mn->Command(Form("SET LIM %d 40 70", tneut_nf));
 
   mn->Command(Form("REL %d", nb12_nf));
 
@@ -355,9 +356,9 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
 
   ans.b12mag = getpar(nb12_nc);
   ans.b12mage_up = getminerrup(nb12_nc);
-  ans.b12mage_dn = (getminerrup(nb12_nc) != 0 && 
-                 getminerrup(nb12_nc) != 54321.0)?
-                 getminerrup(nb12_nc): getpar(nb12_nc);
+  ans.b12mage_dn = (getminerrdn(nb12_nc) != 0 && 
+                 getminerrdn(nb12_nc) != 54321.0)?
+                 getminerrdn(nb12_nc): getpar(nb12_nc);
   printf("b12mag = %f + %f - %f\n", ans.b12mag, ans.b12mage_up, ans.b12mage_dn);
   printf("n_mag  = %f + %f - %f\n",  ans.n_mag,  ans.n_mage_up,  ans.n_mage_dn);
 
@@ -384,10 +385,10 @@ void mncommand()
 void rhc()
 {
   TFile * fhcfile = new TFile(
-  //"/nova/ana/users/mstrait/ndcosmic/period235-type3.root", "Read");
+  "/nova/ana/users/mstrait/ndcosmic/period235-type3.root", "Read");
   //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root", "Read");
   //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all.root", "Read");
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root", "Read");
+  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root", "Read");
   TFile * rhcfile = new TFile("/nova/ana/users/mstrait/ndcosmic/prod_pid_S16-12-07_nd_period6_keepup/770-type3.root"                          , "Read");
 
   TTree * fhc_tree = (TTree *)fhcfile->Get("t");
@@ -403,11 +404,16 @@ void rhc()
 
   ee->SetNpx(460);
   ee->SetLineColor(kRed);
+  ee->SetLineWidth(1);
 
   TH2D * dum = new TH2D("dum", "", 100, 0, bins_e[nbins_e], 1000, 0, 5);
+  TH2D * dum2 = (TH2D*) dum->Clone("dum2");
+  TH2D * dum3 = (TH2D*) dum->Clone("dum3");
 
   const char * const basecut = Form(
-    "primary && type == 3 && timeleft > %f && timeback > %f "
+    "run != 11601" // noise at t = 106 in this run.
+                   // I have no idea how that's possible.
+    "&& primary && type == 3 && timeleft > %f && timeback > %f "
     "&& remid > 0.75 "
     "&& trklen > 200 " // standard
     //"&& trklen > 600 " // longer -- drops nearly all NC background
@@ -421,9 +427,9 @@ void rhc()
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
     "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-    "&& nclu < 20" // cut very noisy spills
+    "&& nclu < 12" // cut very noisy spills
     //"&& nslc <= 10" // reduce pileup
-    , -nnegbins, maxrealtime);
+    , maxrealtime, -nnegbins);
 
   // Attempt to agressively reduce neutrons while still getting B-12
   /*
@@ -435,7 +441,7 @@ void rhc()
     basecut);
   */
 
-  // a reasonable cut 
+  // a pretty strict, reasonable cut 
   /*
   const std::string ccut = Form("%s"
      "&& t > %f && t < %f"
@@ -444,10 +450,19 @@ void rhc()
      "&& pe > 70 && e < 20", basecut, -nnegbins, maxrealtime);
   */
 
+  // a fairly loose, reasonable cut 
+  const std::string ccut = Form("%s"
+     "&& t > %f && t < %f"
+     "&& !(t >= -1 && t < 2)"
+     "&& nhit >= 2 && mindist <= 6"
+     "&& pe > 70 && e < 20", basecut, -nnegbins, maxrealtime);
+
   // a loose cut
+  /*
   const std::string ccut = Form("%s"
      "&& t > %f && t < %f"
      "&& !(t >= -1 && t < 2)", basecut, -nnegbins, maxrealtime);
+  */
 
   fhc_s = new TH2D("fhc_s", "",
   nnegbins + maxrealtime + additional, -nnegbins, maxrealtime + additional,
@@ -552,39 +567,15 @@ void rhc()
     const double rhc_scale = tcounts_rhc->GetBinContent(s);
     const double fhc_scale = tcounts_fhc->GetBinContent(s);
     const double scale = fhc_scale/rhc_scale;
-    printf("Scale %f/%f = %f\n", fhc_scale, rhc_scale, scale);
+    printf("Number of tracks %f/%f = %f\n", fhc_scale, rhc_scale, scale);
 
     if(fhc->Integral() < 10 || rhc->Integral() < 10){
       printf("Only %f, %f events, skipping\n", rhc->Integral(), fhc->Integral());
       continue;
     }
 
-    fitanswers rhc_ans = dothefit(rhc, true, rhc_scale);
-
-    rhc_ans.n_mag      *= scale;
-    rhc_ans.n_mage_up  *= scale;
-    rhc_ans.n_mage_dn  *= scale;
-    rhc_ans.b12mag     *= scale;
-    rhc_ans.b12mage_up *= scale;
-    rhc_ans.b12mage_dn *= scale;
-    
+    const fitanswers rhc_ans = dothefit(rhc, true, rhc_scale);
     const fitanswers fhc_ans = dothefit(fhc, false, fhc_scale);
-
-    const double n_rat     = rhc_ans.n_mag/fhc_ans.n_mag;
-    const double n_rat_err_up =
-      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
-                  rhc_ans.n_mage_up, fhc_ans.n_mage_dn);
-    const double n_rat_err_dn =
-      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
-                  rhc_ans.n_mage_dn, fhc_ans.n_mage_up);
-
-    const double b12_rat     = rhc_ans.b12mag/fhc_ans.b12mag;
-    const double b12_rat_err_up =
-      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
-                  rhc_ans.b12mage_up, fhc_ans.b12mage_dn);
-    const double b12_rat_err_dn =
-      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
-                  rhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
     TGraphAsymmErrors * g_n_r = rhc_ans.n_good? g_n_rhc: g_n_rhc_bad;
     TGraphAsymmErrors * g_n_f = fhc_ans.n_good? g_n_fhc: g_n_fhc_bad;
@@ -615,6 +606,22 @@ void rhc()
     const bool n_good = fhc_ans.n_good && rhc_ans.n_good;
     const bool b12_good = fhc_ans.b12_good && rhc_ans.b12_good;
 
+    const double n_rat     = scale*rhc_ans.n_mag/fhc_ans.n_mag;
+    const double n_rat_err_up =
+      ratio_error(scale*rhc_ans.n_mag, fhc_ans.n_mag,
+                  scale*rhc_ans.n_mage_up, fhc_ans.n_mage_dn);
+    const double n_rat_err_dn =
+      ratio_error(scale*rhc_ans.n_mag, fhc_ans.n_mag,
+                  scale*rhc_ans.n_mage_dn, fhc_ans.n_mage_up);
+
+    const double b12_rat     = scale*rhc_ans.b12mag/fhc_ans.b12mag;
+    const double b12_rat_err_up =
+      ratio_error(scale*rhc_ans.b12mag, fhc_ans.b12mag,
+                  scale*rhc_ans.b12mage_up, fhc_ans.b12mage_dn);
+    const double b12_rat_err_dn =
+      ratio_error(scale*rhc_ans.b12mag, fhc_ans.b12mag,
+                  scale*rhc_ans.b12mage_dn, fhc_ans.b12mage_up);
+
     printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rhc_ans.n_good?"Good":"Bad", fhc_ans.n_good?"Good":"Bad", loslce, hislce,
       n_rat, n_rat_err_up, n_rat_err_dn);
@@ -633,8 +640,9 @@ void rhc()
   }
 
   TCanvas * c2 = new TCanvas;
-  dum->GetYaxis()->SetTitle("Neutrons per track");
-  dum->Draw();
+  dum2->GetYaxis()->SetTitle("Neutrons per track");
+  dum2->GetYaxis()->SetRangeUser(0, 1.5);
+  dum2->Draw();
   g_n_rhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
   g_n_fhc->Draw("pz");
@@ -642,8 +650,8 @@ void rhc()
   c2->Print("fit.pdf");
   
   TCanvas * c3 = new TCanvas;
-  dum->GetYaxis()->SetTitle("B-12 per track");
-  dum->Draw();
+  dum3->GetYaxis()->SetTitle("B-12 per track");
+  dum3->Draw();
   g_b12_rhc->Draw("pz");
   g_b12_rhc_bad->Draw("pz");
   g_b12_fhc->Draw("pz");
