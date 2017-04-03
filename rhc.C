@@ -24,7 +24,7 @@ struct fitanswers{
 
 const double nnegbins = 209;
 const double maxrealtime = 269;
-const double additional = 250;
+const double additional = 0;
 
 double maxfitt = maxrealtime; // varies
 
@@ -33,11 +33,25 @@ const double bins_e[nbins_e+1] = {0.5, 1.25, 2.0, 3.0, 6.0 };
 
 static TMinuit * mn = NULL;
 
+const double n_lifetime_nominal = 50.;
+const double n_lifetime_priorerr = 5.;
+
+/* 
+   Based on my MC, 400us is reasonable for a mindist of 6, but more like
+   25us for a mindist of 2. However, it's murky because we don't measure
+   the capture point, but rather the position where the gammas compton,
+   and that usually only in 2D. Assuming 2D, I get more like 80us. And
+   of course the functional form isn't quite right for 2D...
+*/
+const double n_diffusion_nominal = 400.;
+const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
+
+
 const int npar = 8;
 const char * const parnames[npar] = {
   "flat", "NMich", "Tmich", "Nneut", "Tneut", "Aneut", "NB12", "pileup" };
 const double parinit[npar] = {
-  3, 1.5e5, 2.1, 2e4, 50, 300, 1.5e5, 300 };
+  3, 1.5e5, 2.1, 2e4, n_lifetime_nominal, n_diffusion_nominal, 1.5e5, 300 };
 const int flat_nc   = 0, // parameter numbers, C numbering
           nmich_nc  = 1, // for use with TMinuit functions
           tmich_nc  = 2,
@@ -64,14 +78,14 @@ static TH1D * tcounts_rhc = NULL;
 static TH1D * fithist = NULL;
 
 static TF1 * ee = new TF1("ee",
-  "(x <= -1 || x >= 2)*abs([0]) + "
-  "(x >= 2)*("
+  "abs([0]) + "
+  "(x >= 0)*("
    "abs([1])/[2]    * exp(-x/[2]   ) + "
    "abs([3])/[4]    * exp(-x/[4]   ) "
    "*(TMath::Erf(sqrt([5]/x))-2/sqrt(TMath::Pi())*sqrt([5]/x)*exp(-[5]/x))"
    "+ abs([6])/29.1e3 * exp(-x/29.1e3)"
   ") + "
-  "((x >= -10 && x <= -1) || (x >= 2 && x <= 10))*(abs([7])*abs(abs(x)-10))",
+  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
   -nnegbins, maxrealtime+additional);
 
 static TCanvas * c1 = new TCanvas;
@@ -159,6 +173,11 @@ static bool onegoodminos(const int par, const bool no_low_ok)
   return true;
 }
 
+static double min(const double a, const double b)
+{
+  return a < b? a: b;
+}
+
 static double max(const double a, const double b)
 {
   return a > b? a: b;
@@ -167,7 +186,6 @@ static double max(const double a, const double b)
 void fcn(int & np, double * gin, double & like, double *par, int flag)
 {
   like = 0;
-  ee->SetParameters(par);
 
   /*printf("%9f %9f %9f %9f %9f %9f %9f %9f\n",
    par[0], par[1], par[2], par[3], par[4], par[5], par[6], par[7]);*/
@@ -180,20 +198,32 @@ void fcn(int & np, double * gin, double & like, double *par, int flag)
   */
 
   for(int i = 1; i <= fithist->GetNbinsX() && i <= maxfitt+nnegbins; i++){
-    const double model = ee->Eval(fithist->GetBinCenter(i));
+    const double x = fithist->GetBinCenter(i);
+    double model = 0;
+    if(x <= -1 || x >= 2) model += abs(par[0]);
+    if(x >= 2){
+      model += fabs(par[1])/par[2]    * exp(-x/par[2]   ) + 
+               fabs(par[3])/par[4]    * exp(-x/par[4]   ) 
+         *(erf(sqrt(par[5]/x))-2/sqrt(M_PI)*sqrt(par[5]/x)*exp(-par[5]/x))
+             + fabs(par[6])/29.1e3 * exp(-x/29.1e3);
+    }
+    if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
+      model += fabs(par[7])*fabs(fabs(x)-10);
+
+    if(std::isnan(model)){ printf("Fail at %f\n", fithist->GetBinCenter(i)); continue; }
     const double data = fithist->GetBinContent(i);
     
     like += model - data;
     if(model > 0 && data > 0) like += data * log(data/model);
   }
 
-  const double n_lifetime_nominal = 50.;
-  const double n_lifetime_priorerr = 5.;
-  
-  // Penalty term for neutron lifetime, based on my studies
   const double tneut_penalty =
     0.5 * pow((par[tneut_nc] - n_lifetime_nominal)/n_lifetime_priorerr, 2);
-  like += tneut_penalty;
+
+  const double aneut_penalty =
+    0.5 * pow((par[aneut_nc] - n_diffusion_nominal)/n_diffusion_priorerr, 2);
+
+  like += tneut_penalty + aneut_penalty;
 }
 
 void make_mn()
@@ -213,10 +243,15 @@ void make_mn()
   }
 }
 
+static void set_ee_to_mn()
+{
+  for(int i = 0; i < npar; i++) ee->SetParameter(i, getpar(i));
+}
+
 static void draw_ee()
 {
   static bool first = true;
-  for(int i = 0; i < npar; i++) ee->SetParameter(i, getpar(i));
+  set_ee_to_mn();
   ee->Draw("same");
   c1->Print(Form("fit.pdf%s", first?"(":""));
   c1->Update(); c1->Modified();
@@ -226,13 +261,15 @@ static void draw_ee()
 static fitanswers dothefit(TH1D * hist, const bool is_rhc,
                            const double ntrack)
 {
+  maxfitt = maxrealtime; // modified later for sensitivity study
+
   // Start each fit with a clean MINUIT slate.  This is crucial!
   make_mn();
 
   fitanswers ans;
   fithist = hist;
   hist->GetXaxis()->SetTitle(is_rhc?"RHC":"FHC");
-  hist->GetYaxis()->SetRangeUser(ntrack*1e-5, ntrack*1e0);
+  hist->GetYaxis()->SetRangeUser(min(0.5, ntrack*1e-5), ntrack*1e0);
   hist->Draw("e");
   int status = 0;
 
@@ -257,17 +294,25 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
 
   // Letting the diffusion parameter float makes the fit not converge,
   // so don't do that.
-  fixat(aneut_nf, 300);
+  mn->Command(Form("FIX %d", aneut_nf));
 
   // Start with the muon lifetime fixed so that it doesn't try to swap
   // with the neutron lifetime.
   mn->Command(Form("FIX %d", tmich_nf));
+
   for(int i = 0; i < 8; i++)
     if(0 == (status = mn->Command("MIGRAD")))
       break;
+  status = mn->Command("HESSE");
 
   // Now that we're (hopefully) converged, let muon lifetime float
   mn->Command(Form("REL %d", tmich_nf));
+  // And the diffusion parameter
+  mn->Command(Form("REL %d", aneut_nf));
+
+  // This becomes badly behaved if allowed to wander too far, so limit
+  mn->Command(Form("SET LIM %d %f %f", aneut_nf,
+    n_diffusion_nominal*0.5, n_diffusion_nominal*1.5));
 
   // Hold the Michel lifetime to something reasonable. Among other
   // concerns, this prevents it from swapping with the neutron lifetime,
@@ -283,6 +328,7 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   for(int i = 0; i < 8; i++)
     if(0 == (status = mn->Command("MIGRAD")))
       break;
+  status = mn->Command("HESSE");
 
   if(!status)
     for(int i = 0; i < 2; i++){
@@ -294,15 +340,22 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   draw_ee();
 
   /* Cheating for sensitivity study! */
-#if 0
-
+#if 1
   // Assume that we look at cosmic trigger data or some such to get
   // the noise level to high precision.
   mn->Command(Form("FIX %d", flat_nf));
 
-  // Put in how many B-12 there ought to be
-  ee->SetParameter(6, ntrack * (is_rhc? 0.15: 0.97) * 0.82 * 0.077 * 0.177 * 0.5);
-  printf("Generating fake data with B-12 = %f\n", ee->GetParameter(6));
+  set_ee_to_mn();
+
+  // Keep however many neutrons the fit above said.
+  // And put in how many B-12 there ought to be.
+  ee->SetParameter(nb12_nc,
+    ntrack * (is_rhc? 0.2: 0.9) // mu- fraction
+           * 0.82  // atomic capture
+           * 0.077 // nuclear capture
+           * 0.177 // B-12 yield
+           * 0.4); // efficiency
+  printf("Generating fake data with B-12 = %f\n", ee->GetParameter(nb12_nc));
 
   for(int i = nnegbins + maxrealtime + 1; i <= hist->GetNbinsX(); i++)
     hist->SetBinContent(i, gRandom->Poisson(ee->Eval(hist->GetBinCenter(i))));
@@ -313,11 +366,12 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
     if(0 == (status = mn->Command("MIGRAD")))
       break;
   if(!status)
-    for(int i = 0; i < 2; i++)
+    for(int i = 0; i < 2; i++){
       gMinuit->Command(Form("MINOS 30000 %d", nb12_nf));
-  gMinuit->Command("show min");
-  ans.b12_good = onegoodminos(nb12_nc, true);
+      gMinuit->Command(Form("MINOS 30000 %d", nneut_nf));
+    }
 
+  gMinuit->Command("show min");
   draw_ee();
 #endif
   /* End cheating for sensitivity study! */
@@ -360,10 +414,10 @@ void mncommand()
 void rhc(const char * const savedhistfile = NULL)
 {
   TFile * fhcfile = new TFile(
-  //"/nova/ana/users/mstrait/ndcosmic/period235-type3.root", "Read");
+  "/nova/ana/users/mstrait/ndcosmic/period235-type3.root", "Read");
   //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root", "Read");
-  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all.root", "Read");
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root", "Read");
+  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root", "Read");
+  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root", "Read");
   TFile * rhcfile = new TFile("/nova/ana/users/mstrait/ndcosmic/prod_pid_S16-12-07_nd_period6_keepup/770-type3.root"                          , "Read");
 
   TTree * fhc_tree = (TTree *)fhcfile->Get("t");
@@ -381,7 +435,7 @@ void rhc(const char * const savedhistfile = NULL)
   ee->SetLineColor(kRed);
   ee->SetLineWidth(1);
 
-  TH2D * dum = new TH2D("dum", "", 100, 0, bins_e[nbins_e], 10000, 0, 100);
+  TH2D * dum = new TH2D("dum", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
   TH2D * dum2 = (TH2D*) dum->Clone("dum2");
   TH2D * dum3 = (TH2D*) dum->Clone("dum3");
 
@@ -402,7 +456,6 @@ void rhc(const char * const savedhistfile = NULL)
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
     "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-    "&& nclu < 12" // cut very noisy spills
     //"&& nslc <= 10" // reduce pileup
     , maxrealtime, -nnegbins);
 
@@ -411,8 +464,11 @@ void rhc(const char * const savedhistfile = NULL)
   const std::string ccut = Form("%s"
     "&& t > %f && t < %f"
     "&& !(t >= -1 && t < 2)"
-    "&& nhitx == 1 && nhity == 1 && mindist < 1.99 && dist2 < 4"
-    "&& pe > 70 && e < 20", -nnegbins, maxrealtime,
+    "&& nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
+    "&& nhitx <= 2 && nhity <= 2"
+    "&& nhit <= 3"
+    "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
+    "&& pe > 35 && e > 8*0.62 && e < 25*0.62", -nnegbins, maxrealtime,
     basecut);
   */
 
@@ -495,14 +551,16 @@ void rhc(const char * const savedhistfile = NULL)
   g_b12_rhc_bad->SetMarkerColor(kRed);
   g_b12_fhc_bad->SetMarkerColor(kRed);
 
-  g_n_rhc->SetMarkerSize(0.7);
-  g_n_rhc->SetMarkerSize(0.7);
-  g_b12_rhc->SetMarkerSize(0.7);
-  g_b12_rhc->SetMarkerSize(0.7);
-  g_n_rhc_bad->SetMarkerSize(0.7);
-  g_n_rhc_bad->SetMarkerSize(0.7);
-  g_b12_rhc_bad->SetMarkerSize(0.7);
-  g_b12_rhc_bad->SetMarkerSize(0.7);
+  const double markersize = 0.5;
+
+  g_n_rhc->SetMarkerSize(markersize);
+  g_n_rhc->SetMarkerSize(markersize);
+  g_b12_rhc->SetMarkerSize(markersize);
+  g_b12_rhc->SetMarkerSize(markersize);
+  g_n_rhc_bad->SetMarkerSize(markersize);
+  g_n_rhc_bad->SetMarkerSize(markersize);
+  g_b12_rhc_bad->SetMarkerSize(markersize);
+  g_b12_rhc_bad->SetMarkerSize(markersize);
 
 
   TGraphAsymmErrors * n_result = new TGraphAsymmErrors;
@@ -511,8 +569,8 @@ void rhc(const char * const savedhistfile = NULL)
   n_resultbad->SetMarkerStyle(kOpenCircle);
   n_resultbad->SetLineColor(kRed);
   n_resultbad->SetMarkerColor(kRed);
-  n_result->SetMarkerSize(0.7);
-  n_resultbad->SetMarkerSize(0.7);
+  n_result->SetMarkerSize(markersize);
+  n_resultbad->SetMarkerSize(markersize);
 
   TGraphAsymmErrors * b12_result = new TGraphAsymmErrors;
   TGraphAsymmErrors * b12_resultbad = new TGraphAsymmErrors;
@@ -524,8 +582,8 @@ void rhc(const char * const savedhistfile = NULL)
   b12_resultbad->SetMarkerColor(kRed);
   b12_result->SetName("b12_result");
   b12_resultbad->SetName("b12_resultbad");
-  b12_result->SetMarkerSize(0.7);
-  b12_resultbad->SetMarkerSize(0.7);
+  b12_result->SetMarkerSize(markersize);
+  b12_resultbad->SetMarkerSize(markersize);
 
   tcounts_fhc = new TH1D("tcounts_fhc", "", nbins_e, bins_e);
   tcounts_rhc = (TH1D *)tcounts_fhc->Clone("tcounts_rhc");
@@ -638,7 +696,8 @@ void rhc(const char * const savedhistfile = NULL)
   
   TCanvas * c3 = new TCanvas;
   dum3->GetYaxis()->SetTitle("B-12 per track");
-  dum3->GetYaxis()->SetRangeUser(0, 6);
+  c3->SetLogy();
+  dum3->GetYaxis()->SetRangeUser(0.001, 6);
   dum3->Draw();
   g_b12_rhc->Draw("pz");
   g_b12_rhc_bad->Draw("pz");
