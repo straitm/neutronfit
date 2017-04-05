@@ -47,10 +47,8 @@ const double n_lifetime_priorerr = 5.;
 const double n_diffusion_nominal = 400.;
 const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
 
-const double markersize = 0.5;
+const double markersize = 0.7;
 
-/*
-// Do I want to use this?
 struct PAR {
   char * name;
   int nc;
@@ -58,7 +56,7 @@ struct PAR {
   double start;
 };
 
-static PAR makepar(const char * const * name_, const int n, const double start_)
+static PAR makepar(const char * const name_, const int n, const double start_)
 {
   PAR p;
 
@@ -67,7 +65,7 @@ static PAR makepar(const char * const * name_, const int n, const double start_)
     exit(1);
   }
 
-  p.name = malloc(strlen(name_)+1);
+  p.name = (char *)malloc(strlen(name_)+1);
   strcpy(p.name, name_);
   
   p.nc = n;
@@ -77,10 +75,10 @@ static PAR makepar(const char * const * name_, const int n, const double start_)
 
   return p;
 }
-*/
 
-const int npar = 8;
-const char * const parnames[npar] = {
+const int npar    = 3 + 5*nbins_e;
+const int npar_ee = 3 + 5;
+const char * const ee_parnames[npar] = {
 "Tmich",
 "Tneut",
 "Aneut",
@@ -92,21 +90,15 @@ const char * const parnames[npar] = {
 "NMich",
 "pileup"
 };
-const double parinit[npar] = {
-2.1,
-n_lifetime_nominal,
-n_diffusion_nominal,
 
-1.5e5,
-2e4,
+const double tmich_start = 2.1;
+const double nneut_start = 1.5e5;
+const double nb12_start = 2e4;
+const double flat_start = 3;
+const double nmich_start = 1.5e5;
+const double pileup_start = 300;
 
-3,
-1.5e5,
-300
-};
-
-// parameter numbers, C numbering
-// for use with TMinuit functions
+// parameter numbers, C numbering, for use with TMinuit functions
 const int
   // Same for all histograms
   tmich_nc  = 0,
@@ -114,13 +106,13 @@ const int
   aneut_nc  = 2,
 
   // Parameters of interest, energy dependent
-  nneut_nc  = 3,
-  nb12_nc   = 4,
+  nneut_nc  = aneut_nc + 1,
+  nb12_nc   = nneut_nc + nbins_e,
 
   // Nuisance parameters, energy dependent
-  flat_nc   = 5,
-  nmich_nc  = 6,
-  pileup_nc = 7;
+  flat_nc   = nb12_nc  + nbins_e,
+  nmich_nc  = flat_nc  + nbins_e,
+  pileup_nc = nmich_nc + nbins_e;
 
 const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nmich_nf  = nmich_nc +1, // for use with native MINUIT
@@ -131,6 +123,30 @@ const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nb12_nf   = nb12_nc  +1,
           pileup_nf = pileup_nc+1;
 
+static std::vector<PAR> makeparameters()
+{
+  std::vector<PAR> p;
+  p.push_back(makepar("TMich", tmich_nc, tmich_start));
+  p.push_back(makepar("Tneut", tneut_nc, n_lifetime_nominal));
+  p.push_back(makepar("Aneut", aneut_nc, n_diffusion_nominal));
+  for(int i = 0; i < nbins_e; i++)
+    p.push_back(makepar(Form("Nneut%d", i), nneut_nc+i, nneut_start));
+  for(int i = 0; i < nbins_e; i++)
+    p.push_back(makepar(Form("NB12_%d", i), nb12_nc+i, nb12_start));
+  for(int i = 0; i < nbins_e; i++)
+    p.push_back(makepar(Form("flat%d", i), flat_nc+i, flat_start));
+  for(int i = 0; i < nbins_e; i++)
+    p.push_back(makepar(Form("NMich%d", i), nmich_nc+i, nmich_start));
+  for(int i = 0; i < nbins_e; i++)
+    p.push_back(makepar(Form("pileup%d", i), pileup_nc+i, pileup_start));
+
+  return p;
+}
+
+static std::vector<PAR> PARAMETERS = makeparameters();
+
+// TF1::Draw() has a lot of trouble with the discontinuity at zero, 
+// so split into the positive and negative parts
 static TF1 * ee_pos = new TF1("ee_pos",
   "abs([5]) + "
   "(x >= 0)*("
@@ -153,7 +169,7 @@ static TH2D * rhc_s = NULL;
 static TH1D * tcounts_fhc = NULL;
 static TH1D * tcounts_rhc = NULL;
 
-static TH1D * fithist = NULL;
+static TH2D * fithist = NULL;
 
 static TCanvas * c1 = new TCanvas("rhc1", "rhc1");
 static TCanvas * c2 = new TCanvas("rhc2", "rhc2");
@@ -257,27 +273,29 @@ void fcn(int & np, double * gin, double & like, double *par, int flag)
 {
   like = 0;
 
-  const double b12life = 29.1e3;
+  const double b12life = 29.14e3;
 
-  for(int i = 1; i <= fithist->GetNbinsX() && i <= maxfitt+nnegbins; i++){
-    const double x = fithist->GetBinCenter(i);
-    double model = 0;
-    if(x <= -1 || x >= 2) model += abs(par[flat_nc]);
+  for(int eb = 0; eb < fithist->GetNbinsY(); eb++){
+    for(int tb = 1; tb <= fithist->GetNbinsX() && tb <= maxfitt+nnegbins; tb++){
+      const double x = fithist->GetXaxis()->GetBinCenter(tb);
+      double model = 0;
+      if(x <= -1 || x >= 2) model += abs(par[flat_nc+eb]);
 
-    if(x >= 2)
-      model += fabs(par[nmich_nc])/par[tmich_nc] * exp(-x/par[tmich_nc]) +
-               fabs(par[nneut_nc])/par[tneut_nc] * exp(-x/par[tneut_nc])
-         *(erf(sqrt(par[aneut_nc]/x))
-           -2/sqrt(M_PI)*sqrt(par[aneut_nc]/x)*exp(-par[aneut_nc]/x))
-             + fabs(par[nb12_nc])/b12life * exp(-x/b12life);
+      if(x >= 2)
+        model += fabs(par[nmich_nc+eb])/par[tmich_nc] * exp(-x/par[tmich_nc]) +
+                 fabs(par[nneut_nc+eb])/par[tneut_nc] * exp(-x/par[tneut_nc])
+           *(erf(sqrt(par[aneut_nc]/x))
+             -2/sqrt(M_PI)*sqrt(par[aneut_nc]/x)*exp(-par[aneut_nc]/x))
+               + fabs(par[nb12_nc+eb])/b12life * exp(-x/b12life);
 
-    if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
-      model += fabs(par[pileup_nc])*fabs(fabs(x)-10);
+      if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
+        model += fabs(par[pileup_nc+eb])*fabs(fabs(x)-10);
 
-    const double data = fithist->GetBinContent(i);
+      const double data = fithist->GetBinContent(tb, eb+1 /* 0->1 index */);
 
-    like += model - data;
-    if(model > 0 && data > 0) like += data * log(data/model);
+      like += model - data;
+      if(model > 0 && data > 0) like += data * log(data/model);
+    }
   }
 
   const double tneut_penalty =
@@ -299,26 +317,35 @@ void make_mn()
   mn->SetFCN(fcn);
   mn->Command("SET ERR 0.5"); // log likelihood
 
-  for(int i = 0; i < npar; i++){
-    int mnparmerr = 0;
-    mn->mnparm(i, parnames[i], parinit[i], parinit[i]/100., 0., 0., mnparmerr);
-    ee_neg->SetParName(i, parnames[i]);
-    ee_pos->SetParName(i, parnames[i]);
-  }
+  int mnparmerr = 0;
+  for(int i = 0; i < npar; i++)
+    mn->mnparm(i, PARAMETERS[i].name,
+                  PARAMETERS[i].start,
+                  PARAMETERS[i].start/100., 0., 0., mnparmerr);
 }
 
-static void set_ee_to_mn()
+static void set_ee_to_mn(const int bin) // 0-indexed
 {
-  for(int i = 0; i < npar; i++){
+  const int nlock = 3;
+  for(int i = 0; i < nlock; i++){
     ee_neg->SetParameter(i, getpar(i));
-    ee_pos->SetParameter(i, getpar(i));
   }
+
+  for(int i = nlock; i < npar_ee; i++){
+    ee_neg->SetParameter(i, getpar(nlock + (i-nlock)*nbins_e + bin));
+  }
+
+  for(int i = 0; i < npar_ee; i++)
+    ee_pos->SetParameter(i, ee_neg->GetParameter(i));
 }
 
-static void draw_ee()
+static void draw_ee(const int bin) // 0-indexed
 {
+  c1->cd();
   static bool first = true;
-  set_ee_to_mn();
+  set_ee_to_mn(bin);
+  fithist->ProjectionX("x", bin+1, bin+1 /* 0->1 */)->Draw("e");
+  //x->GetYaxis()->SetRangeUser(min(0.5, ntrack*1e-5), ntrack*1e0);
   ee_neg->Draw("same");
   ee_pos->Draw("same");
   c1->SetLogy();
@@ -327,35 +354,71 @@ static void draw_ee()
   first = false;
 }
 
-static fitanswers dothefit(TH1D * hist, const bool is_rhc,
-                           const double ntrack)
+  /* Cheating for sensitivity study! */
+#if 0
+  // Assume that we look at cosmic trigger data or some such to get
+  // the noise level to high precision.
+  mn->Command(Form("FIX %d", flat_nf));
+
+  set_ee_to_mn(0 /* XXX */);
+
+  // Keep however many neutrons the fit above said.
+  // And put in how many B-12 there ought to be.
+  ee_pos->SetParameter(nb12_nc,
+    ntrack * (is_rhc? 0.2: 0.9) // mu- fraction
+           * 0.82  // atomic capture
+           * 0.077 // nuclear capture
+           * 0.177 // B-12 yield
+           * 0.4); // efficiency
+  printf("Generating fake data with B-12 = %f\n", ee_pos->GetParameter(nb12_nc));
+
+  for(int i = nnegbins + maxrealtime + 1; i <= hist->GetNbinsX(); i++)
+    hist->SetBinContent(i, gRandom->Poisson(ee->Eval(hist->GetBinCenter(i))));
+
+  maxfitt = maxrealtime + additional;
+
+  for(int i = 0; i < migrad_tries; i++)
+    if(0 == (status = mn->Command("MIGRAD")))
+      break;
+  if(!status)
+    for(int i = 0; i < 2; i++){
+      gMinuit->Command(Form("MINOS 30000 %d", nb12_nf));
+      gMinuit->Command(Form("MINOS 30000 %d", nneut_nf));
+    }
+
+  gMinuit->Command("show min");
+  for(int i = 0; i < nbins_e; i++) draw_ee(i);
+#endif
+  /* End cheating for sensitivity study! */
+
+static std::vector<fitanswers> dothefit(TH2D * hist, const bool is_rhc,
+                                        const std::vector<double> & ntrack)
 {
   maxfitt = maxrealtime; // modified later for sensitivity study
 
   // Start each fit with a clean MINUIT slate.  This is crucial!
   make_mn();
 
-  fitanswers ans;
   fithist = hist;
-  c1->cd();
-  hist->GetXaxis()->SetTitle(is_rhc?"RHC":"FHC");
-  hist->GetYaxis()->SetRangeUser(min(0.5, ntrack*1e-5), ntrack*1e0);
-  hist->Draw("e");
+
   int status = 0;
 
   // May as well set this to near the right value
   mn->Command(Form("SET PAR %d %f", flat_nf,
     hist->Integral(0, nnegbins-10)/(nnegbins - 10)));
 
-  // And this is a reasonable starting point for nmich
-  mn->Command(Form("SET PAR %d %f", nmich_nf, ntrack*0.8));
+  for(int bin = 0; bin < nbins_e; bin++){
+    // And this is a reasonable starting point for nmich
+    mn->Command(Form("SET PAR %d %f", nmich_nf+bin, ntrack[bin]*0.8));
 
-  // Ditto nneut
-  mn->Command(Form("SET PAR %d %f", nneut_nf, ntrack*0.1));
+    // Ditto nneut
+    mn->Command(Form("SET PAR %d %f", nneut_nf+bin, ntrack[bin]*0.1));
 
-  // Again, something reasonable based ont the data.
-  mn->Command(Form("SET PAR %d %f", pileup_nf,
-    hist->GetBinContent(nnegbins - 2)/8.));
+    // Again, something reasonable based ont the data.
+    mn->Command(Form("SET PAR %d %f", pileup_nf+bin,
+      hist->GetBinContent(nnegbins - 2, bin+1 /* 0->1 */)/8.));
+  }
+
 
   // Constraining neutron lifetime with a pull term, but also
   // set hard limits to hold it to something reasonable while
@@ -370,7 +433,9 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   // with the neutron lifetime.
   mn->Command(Form("FIX %d", tmich_nf));
 
-  for(int i = 0; i < 8; i++)
+  const int migrad_tries = 8;
+
+  for(int i = 0; i < migrad_tries; i++)
     if(0 == (status = mn->Command("MIGRAD")))
       break;
   status = mn->Command("HESSE");
@@ -390,78 +455,55 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   mn->Command(Form("SET LIM %d 1.6 2.6", tmich_nf));
 
   // MINOS errors are wrong if we used the abs trick, so limit
-  mn->Command(Form("SET PAR %d %f",  nb12_nf, getpar( nb12_nc)));
-  mn->Command(Form("SET PAR %d %f", nneut_nf, getpar(nneut_nc)));
-  mn->Command(Form("SET LIM %d 0 %f",  nb12_nf, max(1e6, 10*getpar( nb12_nc))));
-  mn->Command(Form("SET LIM %d 0 %f", nneut_nf, max(1e6, 10*getpar(nneut_nc))));
+  for(int bin = 0; bin < nbins_e; bin++){
+    mn->Command(Form("SET PAR %d %f",    nb12_nf+bin, getpar( nb12_nc+bin)));
+    mn->Command(Form("SET PAR %d %f",   nneut_nf+bin, getpar(nneut_nc+bin)));
+    mn->Command(Form("SET LIM %d 0 %f", 
+      nb12_nf+bin, max(1e6, 10*getpar( nb12_nc+bin))));
+    mn->Command(Form("SET LIM %d 0 %f",
+      nneut_nf+bin, max(1e6, 10*getpar(nneut_nc+bin))));
+  }
 
-  for(int i = 0; i < 8; i++)
+  for(int i = 0; i < migrad_tries; i++)
     if(0 == (status = mn->Command("MIGRAD")))
       break;
   status = mn->Command("HESSE");
 
   if(!status)
-    for(int i = 0; i < 2; i++){
-      gMinuit->Command(Form("MINOS 30000 %d", nneut_nf));
-      gMinuit->Command(Form("MINOS 30000 %d", nb12_nf));
+    for(int bin = 0; bin < nbins_e; bin++){
+      for(int i = 0; i < 2; i++){
+        gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+bin));
+        gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +bin));
+      }
     }
 
   gMinuit->Command("show min");
-  draw_ee();
+  for(int i = 0; i < nbins_e; i++) draw_ee(i);
 
-  /* Cheating for sensitivity study! */
-#if 0
-  // Assume that we look at cosmic trigger data or some such to get
-  // the noise level to high precision.
-  mn->Command(Form("FIX %d", flat_nf));
 
-  set_ee_to_mn();
+  std::vector<fitanswers> anses;
 
-  // Keep however many neutrons the fit above said.
-  // And put in how many B-12 there ought to be.
-  ee_pos->SetParameter(nb12_nc,
-    ntrack * (is_rhc? 0.2: 0.9) // mu- fraction
-           * 0.82  // atomic capture
-           * 0.077 // nuclear capture
-           * 0.177 // B-12 yield
-           * 0.4); // efficiency
-  printf("Generating fake data with B-12 = %f\n", ee_pos->GetParameter(nb12_nc));
+  for(int bin = 0; bin < nbins_e; bin++){
+    fitanswers ans;
+    ans.n_good =   onegoodminos(nneut_nc+bin, false);
+    ans.n_mag =          getpar(nneut_nc+bin);
+    ans.n_mage_up = getminerrup(nneut_nc+bin);
+    ans.n_mage_dn = getminerrdn(nneut_nc+bin);
 
-  for(int i = nnegbins + maxrealtime + 1; i <= hist->GetNbinsX(); i++)
-    hist->SetBinContent(i, gRandom->Poisson(ee->Eval(hist->GetBinCenter(i))));
+    ans.b12_good =   onegoodminos(nb12_nc+bin, true);
+    ans.b12mag =           getpar(nb12_nc+bin);
+    ans.b12mage_up =  getminerrup(nb12_nc+bin);
+    ans.b12mage_dn =
+      (getminerrdn(nb12_nc+bin) != 0 && getminerrdn(nb12_nc+bin) != 54321.0)?
+       getminerrdn(nb12_nc+bin): getpar(nb12_nc+bin);
 
-  maxfitt = maxrealtime + additional;
+    printf("b12mag = %f + %f - %f\n", ans.b12mag, ans.b12mage_up, ans.b12mage_dn);
+    printf("n_mag  = %f + %f - %f\n",  ans.n_mag,  ans.n_mage_up,  ans.n_mage_dn);
 
-  for(int i = 0; i < 8; i++)
-    if(0 == (status = mn->Command("MIGRAD")))
-      break;
-  if(!status)
-    for(int i = 0; i < 2; i++){
-      gMinuit->Command(Form("MINOS 30000 %d", nb12_nf));
-      gMinuit->Command(Form("MINOS 30000 %d", nneut_nf));
-    }
+    anses.push_back(ans);
+  }
 
-  gMinuit->Command("show min");
-  draw_ee();
-#endif
-  /* End cheating for sensitivity study! */
-
-  ans.n_good =   onegoodminos(nneut_nc, false);
-  ans.n_mag =          getpar(nneut_nc);
-  ans.n_mage_up = getminerrup(nneut_nc);
-  ans.n_mage_dn = getminerrdn(nneut_nc);
-
-  ans.b12_good =   onegoodminos(nb12_nc, true);
-  ans.b12mag =           getpar(nb12_nc);
-  ans.b12mage_up =  getminerrup(nb12_nc);
-  ans.b12mage_dn =
-    (getminerrdn(nb12_nc) != 0 && getminerrdn(nb12_nc) != 54321.0)?
-    getminerrdn(nb12_nc): getpar(nb12_nc);
-
-  printf("b12mag = %f + %f - %f\n", ans.b12mag, ans.b12mage_up, ans.b12mage_dn);
-  printf("n_mag  = %f + %f - %f\n",  ans.n_mag,  ans.n_mage_up,  ans.n_mage_dn);
-
-  return ans;
+  return anses;
 }
 
 static double ratio_error(const double x, const double y,
@@ -475,7 +517,7 @@ void mncommand()
   std::string command;
   while(true){
     printf("MINUIT> ");
-    if(!getline(cin, command)) break;
+    if(!getline(std::cin, command)) break;
     if(command == "exit") break;
     mn->Command(command.c_str());
   }
@@ -511,7 +553,7 @@ static void init_ee()
     e->SetNpx(400);
     e->SetLineColor(kRed);
     e->SetLineWidth(1);
-    for(int i = 0; i < npar; i++) e->SetParName(i, parnames[i]);
+    for(int i = 0; i < npar; i++) e->SetParName(i, ee_parnames[i]);
   }
 }
 
@@ -630,25 +672,27 @@ void rhc(const char * const savedhistfile = NULL)
     gROOT->Macro(savedhistfile);
   }
 
+  std::vector<double> rhc_scales, fhc_scales;
+
   for(int s = 1; s <= nbins_e; s++){
-    const double loslce = fhc_s->GetYaxis()->GetBinLowEdge(s);
-    const double hislce = fhc_s->GetYaxis()->GetBinLowEdge(s+1);
+    rhc_scales.push_back(tcounts_rhc->GetBinContent(s));
+    fhc_scales.push_back(tcounts_fhc->GetBinContent(s));
+  }
 
-    TH1D * rhc = rhc_s->ProjectionX("rhc", s, s);
-    TH1D * fhc = fhc_s->ProjectionX("fhc", s, s);
+  const std::vector<fitanswers> rhc_anses = dothefit(rhc_s, true , rhc_scales);
+  const std::vector<fitanswers> fhc_anses = dothefit(fhc_s, false, fhc_scales);
 
-    const double rhc_scale = tcounts_rhc->GetBinContent(s);
-    const double fhc_scale = tcounts_fhc->GetBinContent(s);
+  for(int s = 0; s < nbins_e; s++){
+    const double rhc_scale = rhc_scales[s];
+    const double fhc_scale = fhc_scales[s];
+    const fitanswers rhc_ans = rhc_anses[s];
+    const fitanswers fhc_ans = fhc_anses[s];
+
     const double scale = fhc_scale/rhc_scale;
     printf("N tracks %.0f, %.0f. Scale = %f\n", fhc_scale, rhc_scale, scale);
 
-    if(fhc->Integral() < 10 || rhc->Integral() < 10){
-      printf("Only %f, %f events, skipping\n", rhc->Integral(), fhc->Integral());
-      continue;
-    }
-
-    const fitanswers rhc_ans = dothefit(rhc, true , rhc_scale);
-    const fitanswers fhc_ans = dothefit(fhc, false, fhc_scale);
+    const double loslce = fhc_s->GetYaxis()->GetBinLowEdge(s+1);
+    const double hislce = fhc_s->GetYaxis()->GetBinLowEdge(s+2);
 
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
