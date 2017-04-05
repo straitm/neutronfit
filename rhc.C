@@ -76,16 +76,19 @@ static PAR makepar(const char * const name_, const int n, const double start_)
   return p;
 }
 
-const int npar    = 3 + 5*nbins_e;
-const int npar_ee = 3 + 5;
+const int ncommonpar = 2;
+const int nperbinpar = 6;
+
+const int npar    = ncommonpar + nperbinpar*nbins_e;
+const int npar_ee = ncommonpar + nperbinpar;
 const char * const ee_parnames[npar] = {
 "Tneut",
 "Aneut",
-"Tmich",
 
 "Nneut",
 "NB12",
 
+"Tmich",
 "flat",
 "NMich",
 "pileup"
@@ -103,14 +106,14 @@ const int
   // Same for all histograms
   tneut_nc  = 0,
   aneut_nc  = 1,
-  tmich_nc  = 2,
 
   // Parameters of interest, energy dependent
   nneut_nc  = aneut_nc + 1,
   nb12_nc   = nneut_nc + nbins_e,
 
   // Nuisance parameters, energy dependent
-  flat_nc   = nb12_nc  + nbins_e,
+  tmich_nc  = nb12_nc  + nbins_e,
+  flat_nc   = tmich_nc + nbins_e,
   nmich_nc  = flat_nc  + nbins_e,
   pileup_nc = nmich_nc + nbins_e;
 
@@ -128,11 +131,14 @@ static std::vector<PAR> makeparameters()
   std::vector<PAR> p;
   p.push_back(makepar("Tneut", tneut_nc, n_lifetime_nominal));
   p.push_back(makepar("Aneut", aneut_nc, n_diffusion_nominal));
-  p.push_back(makepar("TMich", tmich_nc, tmich_start));
+
   for(int i = 0; i < nbins_e; i++)
     p.push_back(makepar(Form("Nneut%d", i), nneut_nc+i, nneut_start));
   for(int i = 0; i < nbins_e; i++)
     p.push_back(makepar(Form("NB12_%d", i), nb12_nc+i, nb12_start));
+
+  for(int i = 0; i < nbins_e; i++)
+    p.push_back(makepar(Form("TMich%d", i), tmich_nc, tmich_start));
   for(int i = 0; i < nbins_e; i++)
     p.push_back(makepar(Form("flat%d", i), flat_nc+i, flat_start));
   for(int i = 0; i < nbins_e; i++)
@@ -150,10 +156,10 @@ static std::vector<PAR> PARAMETERS = makeparameters();
 static TF1 * ee_pos = new TF1("ee_pos",
   "abs([5]) + "
   "(x >= 0)*("
-   "abs([6])/[0] * exp(-x/[0]) + "
-   "abs([3])/[1] * exp(-x/[1]) "
-   "*(TMath::Erf(sqrt([2]/x))-2/sqrt(TMath::Pi())*sqrt([2]/x)*exp(-[2]/x))"
-   "+ abs([4])/29.14e3 * exp(-x/29.14e3)"
+   "abs([6])/[4] * exp(-x/[4]) + "
+   "abs([2])/[0] * exp(-x/[0]) "
+   "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
+   "+ abs([3])/29.14e3 * exp(-x/29.14e3)"
   ") + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
   0, maxrealtime+additional);
@@ -326,13 +332,12 @@ void make_mn()
 
 static void set_ee_to_mn(const int bin) // 0-indexed
 {
-  const int nlock = 3;
-  for(int i = 0; i < nlock; i++){
+  for(int i = 0; i < ncommonpar; i++){
     ee_neg->SetParameter(i, getpar(i));
   }
 
-  for(int i = nlock; i < npar_ee; i++){
-    ee_neg->SetParameter(i, getpar(nlock + (i-nlock)*nbins_e + bin));
+  for(int i = ncommonpar; i < npar_ee; i++){
+    ee_neg->SetParameter(i, getpar(ncommonpar + (i-ncommonpar)*nbins_e + bin));
   }
 
   for(int i = 0; i < npar_ee; i++)
@@ -417,8 +422,11 @@ static std::vector<fitanswers> dothefit(TH2D * hist, const bool is_rhc,
     // Again, something reasonable based ont the data.
     mn->Command(Form("SET PAR %d %f", pileup_nf+bin,
       hist->GetBinContent(nnegbins - 2, bin+1 /* 0->1 */)/8.));
-  }
 
+    // Start with the muon lifetime fixed so that it doesn't try to swap
+    // with the neutron lifetime.
+    mn->Command(Form("FIX %d", tmich_nf+bin));
+  }
 
   // Constraining neutron lifetime with a pull term, but also
   // set hard limits to hold it to something reasonable while
@@ -429,10 +437,6 @@ static std::vector<fitanswers> dothefit(TH2D * hist, const bool is_rhc,
   // so don't do that.
   mn->Command(Form("FIX %d", aneut_nf));
 
-  // Start with the muon lifetime fixed so that it doesn't try to swap
-  // with the neutron lifetime.
-  mn->Command(Form("FIX %d", tmich_nf));
-
   const int migrad_tries = 8;
 
   for(int i = 0; i < migrad_tries; i++)
@@ -441,7 +445,9 @@ static std::vector<fitanswers> dothefit(TH2D * hist, const bool is_rhc,
   status = mn->Command("HESSE");
 
   // Now that we're (hopefully) converged, let muon lifetime float
-  mn->Command(Form("REL %d", tmich_nf));
+  for(int bin = 0; bin < nbins_e; bin++)
+    mn->Command(Form("REL %d", tmich_nf+bin));
+
   // And the diffusion parameter
   mn->Command(Form("REL %d", aneut_nf));
 
@@ -452,7 +458,8 @@ static std::vector<fitanswers> dothefit(TH2D * hist, const bool is_rhc,
   // Hold the Michel lifetime to something reasonable. Among other
   // concerns, this prevents it from swapping with the neutron lifetime,
   // supposing we let that float.
-  mn->Command(Form("SET LIM %d 1.6 2.6", tmich_nf));
+  for(int bin = 0; bin < nbins_e; bin++)
+    mn->Command(Form("SET LIM %d 1.6 2.6", tmich_nf));
 
   // MINOS errors are wrong if we used the abs trick, so limit
   for(int bin = 0; bin < nbins_e; bin++){
