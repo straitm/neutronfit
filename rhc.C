@@ -47,6 +47,7 @@ const double n_lifetime_priorerr = 5.;
 const double n_diffusion_nominal = 400.;
 const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
 
+const double markersize = 0.5;
 
 const int npar = 8;
 const char * const parnames[npar] = {
@@ -70,14 +71,6 @@ const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nb12_nf   = nb12_nc  +1,
           pileup_nf = pileup_nc+1;
 
-static TH2D * fhc_s = NULL;
-static TH2D * rhc_s = NULL;
-
-static TH1D * tcounts_fhc = NULL;
-static TH1D * tcounts_rhc = NULL;
-
-static TH1D * fithist = NULL;
-
 static TF1 * ee = new TF1("ee",
   "abs([0]) + "
   "(x >= 0)*("
@@ -88,6 +81,14 @@ static TF1 * ee = new TF1("ee",
   ") + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
   -nnegbins, maxrealtime+additional);
+
+static TH2D * fhc_s = NULL;
+static TH2D * rhc_s = NULL;
+
+static TH1D * tcounts_fhc = NULL;
+static TH1D * tcounts_rhc = NULL;
+
+static TH1D * fithist = NULL;
 
 static TCanvas * c1 = new TCanvas;
 
@@ -247,6 +248,7 @@ static void draw_ee()
   static bool first = true;
   set_ee_to_mn();
   ee->Draw("same");
+  c1->SetLogy();
   c1->Print(Form("fit.pdf%s", first?"(":""));
   c1->Update(); c1->Modified();
   first = false;
@@ -334,7 +336,7 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   draw_ee();
 
   /* Cheating for sensitivity study! */
-#if 1
+#if 0
   // Assume that we look at cosmic trigger data or some such to get
   // the noise level to high precision.
   mn->Command(Form("FIX %d", flat_nf));
@@ -405,6 +407,29 @@ void mncommand()
   }
 }
 
+static TGraphAsymmErrors *
+newgraph(const int color, const int linestyle, const int marker,
+         const int linewidth)
+{
+  TGraphAsymmErrors * g = new TGraphAsymmErrors;
+  g->SetMarkerSize(markersize);
+
+  g->SetMarkerStyle(marker);
+  g->SetLineStyle(linestyle);
+  g->SetLineColor(color);
+  g->SetMarkerColor(color);
+  g->SetLineWidth(linewidth);
+  return g;
+}
+
+static void addpoint(TGraphAsymmErrors * g, const double x,
+                     const double y, const double xe,
+                     const double ye_down, const double ye_up)
+{
+  g->SetPoint(g->GetN(), x, y);
+  g->SetPointError(g->GetN()-1, xe, xe, ye_down, ye_up);
+}
+
 void rhc(const char * const savedhistfile = NULL)
 {
   TFile * fhcfile = new TFile(
@@ -428,10 +453,6 @@ void rhc(const char * const savedhistfile = NULL)
   ee->SetNpx(460);
   ee->SetLineColor(kRed);
   ee->SetLineWidth(1);
-
-  TH2D * dum = new TH2D("dum", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
-  TH2D * dum2 = (TH2D*) dum->Clone("dum2");
-  TH2D * dum3 = (TH2D*) dum->Clone("dum3");
 
   const char * const basecut = Form(
     "run != 11601" // noise at t = 106 in this run.
@@ -490,102 +511,27 @@ void rhc(const char * const savedhistfile = NULL)
   */
 
   fhc_s = new TH2D("fhc_s", "",
-  nnegbins + maxrealtime + additional, -nnegbins, maxrealtime + additional,
-  nbins_e, bins_e);
+                   nnegbins + maxrealtime + additional,
+                   -nnegbins, maxrealtime + additional,
+                   nbins_e, bins_e);
   rhc_s = (TH2D *)fhc_s->Clone("rhc_s");
 
-  c1->SetLogy();
+  // Square means RHC, solid means neutron, black means good fit
+  TGraphAsymmErrors
+    * g_n_rhc       = newgraph(kBlack, kSolid, kOpenSquare, 1),
+    * g_n_fhc       = newgraph(kBlack, kSolid, kOpenCircle, 1),
+    * g_b12_rhc     = newgraph(kBlack, kDashed,kOpenSquare, 1),
+    * g_b12_fhc     = newgraph(kBlack, kDashed,kOpenCircle, 1),
+    * g_n_rhc_bad   = newgraph(kRed,   kSolid, kOpenSquare, 1),
+    * g_n_fhc_bad   = newgraph(kRed,   kSolid, kOpenCircle, 1),
+    * g_b12_rhc_bad = newgraph(kRed,   kDashed,kOpenSquare, 1),
+    * g_b12_fhc_bad = newgraph(kRed,   kDashed,kOpenCircle, 1),
+    * n_result      = newgraph(kBlack, kSolid, kOpenCircle, 1),
+    * n_resultbad   = newgraph(kRed,   kSolid, kOpenCircle, 1),
+    * b12_result    = newgraph(kBlack, kDashed,kOpenCircle, 1),
+    * b12_resultbad = newgraph(kRed,   kDashed,kOpenCircle, 1);
 
-  TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
-  TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
-  TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
-  TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
-  g_n_rhc->SetMarkerStyle(kOpenSquare);
-  g_n_fhc->SetMarkerStyle(kOpenCircle);
-
-  g_b12_rhc->SetMarkerStyle(kOpenSquare);
-  g_b12_fhc->SetMarkerStyle(kOpenCircle);
-
-  g_b12_rhc->SetLineStyle(kDashed);
-  g_b12_fhc->SetLineStyle(kDashed);
-
-  g_n_rhc->SetLineWidth(1);
-  g_n_fhc->SetLineWidth(2);
-
-  const double markersize = 0.5;
-
-  g_n_rhc->SetMarkerSize(markersize);
-  g_n_fhc->SetMarkerSize(markersize);
-
-  g_b12_rhc->SetLineWidth(1);
-  g_b12_fhc->SetLineWidth(2);
-
-  TGraphAsymmErrors * g_n_rhc_bad = new TGraphAsymmErrors;
-  TGraphAsymmErrors * g_n_fhc_bad = new TGraphAsymmErrors;
-  TGraphAsymmErrors * g_b12_rhc_bad = new TGraphAsymmErrors;
-  TGraphAsymmErrors * g_b12_fhc_bad = new TGraphAsymmErrors;
-
-  g_n_rhc_bad->SetMarkerStyle(kOpenSquare);
-  g_n_fhc_bad->SetMarkerStyle(kOpenCircle);
-
-  g_b12_rhc_bad->SetMarkerStyle(kOpenSquare);
-  g_b12_fhc_bad->SetMarkerStyle(kOpenCircle);
-
-  g_b12_rhc_bad->SetLineStyle(kDashed);
-  g_b12_fhc_bad->SetLineStyle(kDashed);
-
-  g_n_rhc_bad->SetLineWidth(1);
-  g_n_fhc_bad->SetLineWidth(2);
-
-  g_n_rhc_bad->SetMarkerSize(markersize);
-  g_n_fhc_bad->SetMarkerSize(markersize);
-
-  g_b12_rhc_bad->SetLineWidth(1);
-  g_b12_fhc_bad->SetLineWidth(2);
-
-  g_n_rhc_bad->SetLineColor(kRed);
-  g_n_fhc_bad->SetLineColor(kRed);
-  g_b12_rhc_bad->SetLineColor(kRed);
-  g_b12_fhc_bad->SetLineColor(kRed);
-
-  g_n_rhc_bad->SetMarkerColor(kRed);
-  g_n_fhc_bad->SetMarkerColor(kRed);
-  g_b12_rhc_bad->SetMarkerColor(kRed);
-  g_b12_fhc_bad->SetMarkerColor(kRed);
-
-
-  g_n_rhc->SetMarkerSize(markersize);
-  g_n_rhc->SetMarkerSize(markersize);
-  g_b12_rhc->SetMarkerSize(markersize);
-  g_b12_rhc->SetMarkerSize(markersize);
-  g_n_rhc_bad->SetMarkerSize(markersize);
-  g_n_rhc_bad->SetMarkerSize(markersize);
-  g_b12_rhc_bad->SetMarkerSize(markersize);
-  g_b12_rhc_bad->SetMarkerSize(markersize);
-
-
-  TGraphAsymmErrors * n_result = new TGraphAsymmErrors;
-  TGraphAsymmErrors * n_resultbad = new TGraphAsymmErrors;
-  n_result->SetMarkerStyle(kOpenCircle);
-  n_resultbad->SetMarkerStyle(kOpenCircle);
-  n_resultbad->SetLineColor(kRed);
-  n_resultbad->SetMarkerColor(kRed);
-  n_result->SetMarkerSize(markersize);
-  n_resultbad->SetMarkerSize(markersize);
-
-  TGraphAsymmErrors * b12_result = new TGraphAsymmErrors;
-  TGraphAsymmErrors * b12_resultbad = new TGraphAsymmErrors;
   b12_result->SetLineStyle(kDashed);
-  b12_resultbad->SetLineStyle(kDashed);
-  b12_result->SetMarkerStyle(kOpenCircle);
-  b12_resultbad->SetMarkerStyle(kOpenCircle);
-  b12_resultbad->SetLineColor(kRed);
-  b12_resultbad->SetMarkerColor(kRed);
-  b12_result->SetName("b12_result");
-  b12_resultbad->SetName("b12_resultbad");
-  b12_result->SetMarkerSize(markersize);
-  b12_resultbad->SetMarkerSize(markersize);
-
   tcounts_fhc = new TH1D("tcounts_fhc", "", nbins_e, bins_e);
   tcounts_rhc = (TH1D *)tcounts_fhc->Clone("tcounts_rhc");
 
@@ -612,8 +558,7 @@ void rhc(const char * const savedhistfile = NULL)
     const double rhc_scale = tcounts_rhc->GetBinContent(s);
     const double fhc_scale = tcounts_fhc->GetBinContent(s);
     const double scale = fhc_scale/rhc_scale;
-    printf("Number of tracks %.0f, %.0f. Scale = %f\n",
-           fhc_scale, rhc_scale, scale);
+    printf("N tracks %.0f, %.0f. Scale = %f\n", fhc_scale, rhc_scale, scale);
 
     if(fhc->Integral() < 10 || rhc->Integral() < 10){
       printf("Only %f, %f events, skipping\n", rhc->Integral(), fhc->Integral());
@@ -623,36 +568,30 @@ void rhc(const char * const savedhistfile = NULL)
     const fitanswers rhc_ans = dothefit(rhc, true , rhc_scale);
     const fitanswers fhc_ans = dothefit(fhc, false, fhc_scale);
 
-    TGraphAsymmErrors * g_n_r = rhc_ans.n_good? g_n_rhc: g_n_rhc_bad;
-    TGraphAsymmErrors * g_n_f = fhc_ans.n_good? g_n_fhc: g_n_fhc_bad;
-    TGraphAsymmErrors * g_b12_r = rhc_ans.n_good? g_b12_rhc: g_b12_rhc_bad;
-    TGraphAsymmErrors * g_b12_f = fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad;
-
-    const double graph_x = (loslce+hislce)/2;
+    const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
 
-    g_n_r->SetPoint(g_n_r->GetN(), graph_x + graph_xe/10 /* visual offset */,
-      rhc_ans.n_mag/rhc_scale);
-    g_n_r->SetPointError(g_n_r->GetN()-1, graph_xe, graph_xe,
+    addpoint(rhc_ans.n_good? g_n_rhc: g_n_rhc_bad,
+      graph_x + graph_xe/10 /* visual offset */,
+      rhc_ans.n_mag/rhc_scale, graph_xe,
       rhc_ans.n_mage_dn/rhc_scale, rhc_ans.n_mage_up/rhc_scale);
 
-    g_n_f->SetPoint(g_n_f->GetN(), graph_x, fhc_ans.n_mag/fhc_scale);
-    g_n_f->SetPointError(g_n_f->GetN()-1, graph_xe, graph_xe,
+    addpoint(fhc_ans.n_good? g_n_fhc: g_n_fhc_bad,
+      graph_x, fhc_ans.n_mag/fhc_scale, graph_xe,
       fhc_ans.n_mage_dn/fhc_scale, fhc_ans.n_mage_up/fhc_scale);
 
-    g_b12_r->SetPoint(g_b12_r->GetN(), graph_x + graph_xe/10,
-      rhc_ans.b12mag/rhc_scale);
-    g_b12_r->SetPointError(g_b12_r->GetN()-1, graph_xe, graph_xe,
-      rhc_ans.b12mage_dn/rhc_scale, rhc_ans.b12mage_up/rhc_scale);
+    addpoint(rhc_ans.n_good? g_b12_rhc: g_b12_rhc_bad,
+      graph_x + graph_xe/10, rhc_ans.b12mag/rhc_scale,
+      graph_xe, rhc_ans.b12mage_dn/rhc_scale, rhc_ans.b12mage_up/rhc_scale);
 
-    g_b12_f->SetPoint(g_b12_f->GetN(), graph_x, fhc_ans.b12mag/fhc_scale);
-    g_b12_f->SetPointError(g_b12_f->GetN()-1, graph_xe, graph_xe,
+    addpoint(fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad,
+      graph_x, fhc_ans.b12mag/fhc_scale, graph_xe,
       fhc_ans.b12mage_dn/fhc_scale, fhc_ans.b12mage_up/fhc_scale);
 
-    const bool n_good = fhc_ans.n_good && rhc_ans.n_good;
+    const bool n_good   = fhc_ans.  n_good && rhc_ans.  n_good;
     const bool b12_good = fhc_ans.b12_good && rhc_ans.b12_good;
 
-    const double n_rat     = scale*rhc_ans.n_mag/fhc_ans.n_mag;
+    const double n_rat = scale*rhc_ans.n_mag/fhc_ans.n_mag;
     const double n_rat_err_up =
       ratio_error(scale*rhc_ans.n_mag, fhc_ans.n_mag,
                   scale*rhc_ans.n_mage_up, fhc_ans.n_mage_dn);
@@ -660,7 +599,7 @@ void rhc(const char * const savedhistfile = NULL)
       ratio_error(scale*rhc_ans.n_mag, fhc_ans.n_mag,
                   scale*rhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
-    const double b12_rat     = scale*rhc_ans.b12mag/fhc_ans.b12mag;
+    const double b12_rat = scale*rhc_ans.b12mag/fhc_ans.b12mag;
     const double b12_rat_err_up =
       ratio_error(scale*rhc_ans.b12mag, fhc_ans.b12mag,
                   scale*rhc_ans.b12mage_up, fhc_ans.b12mage_dn);
@@ -671,19 +610,22 @@ void rhc(const char * const savedhistfile = NULL)
     printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rhc_ans.n_good?"Good":"Bad", fhc_ans.n_good?"Good":"Bad", loslce, hislce,
       n_rat, n_rat_err_up, n_rat_err_dn);
-    TGraphAsymmErrors * addto = n_good?n_result:n_resultbad;
-    addto->SetPoint(addto->GetN(), graph_x, n_rat);
-    addto->SetPointError(addto->GetN()-1, graph_xe, graph_xe,
-      n_rat_err_dn, n_rat_err_up);
+
+    addpoint(n_good?n_result:n_resultbad,
+             graph_x, n_rat, graph_xe, n_rat_err_dn, n_rat_err_up);
 
     printf("%s/%s RHC/FHC B-12    (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rhc_ans.b12_good?"Good":"Bad", fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
       b12_rat, b12_rat_err_up, b12_rat_err_dn);
-    addto = b12_good?b12_result:b12_resultbad;
-    addto->SetPoint(addto->GetN(), graph_x + graph_xe/10, b12_rat);
-    addto->SetPointError(addto->GetN()-1, graph_xe, graph_xe,
-      b12_rat_err_dn, b12_rat_err_up);
+
+    addpoint(b12_good?b12_result:b12_resultbad,
+             graph_x + graph_xe/10, b12_rat,
+             graph_xe, b12_rat_err_dn, b12_rat_err_up);
   }
+
+  TH2D * dum = new TH2D("dum", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
+  TH2D * dum2 = (TH2D*) dum->Clone("dum2");
+  TH2D * dum3 = (TH2D*) dum->Clone("dum3");
 
   TCanvas * c2 = new TCanvas;
   dum2->GetYaxis()->SetTitle("Neutrons per track");
