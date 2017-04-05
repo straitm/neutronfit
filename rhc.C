@@ -49,19 +49,79 @@ const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
 
 const double markersize = 0.5;
 
+/*
+// Do I want to use this?
+struct PAR {
+  char * name;
+  int nc;
+  int nf;
+  double start;
+};
+
+static PAR makepar(const char * const * name_, const int n, const double start_)
+{
+  PAR p;
+
+  if(strlen(name_) > 30){
+    fprintf(stderr, "Your parameter name is out of control\n");
+    exit(1);
+  }
+
+  p.name = malloc(strlen(name_)+1);
+  strcpy(p.name, name_);
+  
+  p.nc = n;
+  p.nf = n+1;
+
+  p.start = start_;
+
+  return p;
+}
+*/
+
 const int npar = 8;
 const char * const parnames[npar] = {
-  "flat", "NMich", "Tmich", "Nneut", "Tneut", "Aneut", "NB12", "pileup" };
+"Tmich",
+"Tneut",
+"Aneut",
+
+"Nneut",
+"NB12",
+
+"flat",
+"NMich",
+"pileup"
+};
 const double parinit[npar] = {
-  3, 1.5e5, 2.1, 2e4, n_lifetime_nominal, n_diffusion_nominal, 1.5e5, 300 };
-const int flat_nc   = 0, // parameter numbers, C numbering
-          nmich_nc  = 1, // for use with TMinuit functions
-          tmich_nc  = 2,
-          nneut_nc  = 3,
-          tneut_nc  = 4,
-          aneut_nc  = 5,
-          nb12_nc   = 6,
-          pileup_nc = 7;
+2.1,
+n_lifetime_nominal,
+n_diffusion_nominal,
+
+1.5e5,
+2e4,
+
+3,
+1.5e5,
+300
+};
+
+// parameter numbers, C numbering
+// for use with TMinuit functions
+const int
+  // Same for all histograms
+  tmich_nc  = 0,
+  tneut_nc  = 1,
+  aneut_nc  = 2,
+
+  // Parameters of interest, energy dependent
+  nneut_nc  = 3,
+  nb12_nc   = 4,
+
+  // Nuisance parameters, energy dependent
+  flat_nc   = 5,
+  nmich_nc  = 6,
+  pileup_nc = 7;
+
 const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nmich_nf  = nmich_nc +1, // for use with native MINUIT
           tmich_nf  = tmich_nc +1, // commands through TMinuit::Command()
@@ -71,16 +131,21 @@ const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nb12_nf   = nb12_nc  +1,
           pileup_nf = pileup_nc+1;
 
-static TF1 * ee = new TF1("ee",
-  "abs([0]) + "
+static TF1 * ee_pos = new TF1("ee_pos",
+  "abs([5]) + "
   "(x >= 0)*("
-   "abs([1])/[2]    * exp(-x/[2]   ) + "
-   "abs([3])/[4]    * exp(-x/[4]   ) "
-   "*(TMath::Erf(sqrt([5]/x))-2/sqrt(TMath::Pi())*sqrt([5]/x)*exp(-[5]/x))"
-   "+ abs([6])/29.1e3 * exp(-x/29.1e3)"
+   "abs([6])/[0] * exp(-x/[0]) + "
+   "abs([3])/[1] * exp(-x/[1]) "
+   "*(TMath::Erf(sqrt([2]/x))-2/sqrt(TMath::Pi())*sqrt([2]/x)*exp(-[2]/x))"
+   "+ abs([4])/29.14e3 * exp(-x/29.14e3)"
   ") + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
-  -nnegbins, maxrealtime+additional);
+  0, maxrealtime+additional);
+
+static TF1 * ee_neg = new TF1("ee_neg",
+  "abs([5]) + "
+  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
+  -nnegbins, 0);
 
 static TH2D * fhc_s = NULL;
 static TH2D * rhc_s = NULL;
@@ -90,7 +155,10 @@ static TH1D * tcounts_rhc = NULL;
 
 static TH1D * fithist = NULL;
 
-static TCanvas * c1 = new TCanvas;
+static TCanvas * c1 = new TCanvas("rhc1", "rhc1");
+static TCanvas * c2 = new TCanvas("rhc2", "rhc2");
+static TCanvas * c3 = new TCanvas("rhc3", "rhc3");
+static TCanvas * c4 = new TCanvas("rhc4", "rhc4");
 
 double getminerrup(int i) // 0-indexed!
 {
@@ -234,20 +302,25 @@ void make_mn()
   for(int i = 0; i < npar; i++){
     int mnparmerr = 0;
     mn->mnparm(i, parnames[i], parinit[i], parinit[i]/100., 0., 0., mnparmerr);
-    ee->SetParName(i, parnames[i]);
+    ee_neg->SetParName(i, parnames[i]);
+    ee_pos->SetParName(i, parnames[i]);
   }
 }
 
 static void set_ee_to_mn()
 {
-  for(int i = 0; i < npar; i++) ee->SetParameter(i, getpar(i));
+  for(int i = 0; i < npar; i++){
+    ee_neg->SetParameter(i, getpar(i));
+    ee_pos->SetParameter(i, getpar(i));
+  }
 }
 
 static void draw_ee()
 {
   static bool first = true;
   set_ee_to_mn();
-  ee->Draw("same");
+  ee_neg->Draw("same");
+  ee_pos->Draw("same");
   c1->SetLogy();
   c1->Print(Form("fit.pdf%s", first?"(":""));
   c1->Update(); c1->Modified();
@@ -264,6 +337,7 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
 
   fitanswers ans;
   fithist = hist;
+  c1->cd();
   hist->GetXaxis()->SetTitle(is_rhc?"RHC":"FHC");
   hist->GetYaxis()->SetRangeUser(min(0.5, ntrack*1e-5), ntrack*1e0);
   hist->Draw("e");
@@ -345,13 +419,13 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
 
   // Keep however many neutrons the fit above said.
   // And put in how many B-12 there ought to be.
-  ee->SetParameter(nb12_nc,
+  ee_pos->SetParameter(nb12_nc,
     ntrack * (is_rhc? 0.2: 0.9) // mu- fraction
            * 0.82  // atomic capture
            * 0.077 // nuclear capture
            * 0.177 // B-12 yield
            * 0.4); // efficiency
-  printf("Generating fake data with B-12 = %f\n", ee->GetParameter(nb12_nc));
+  printf("Generating fake data with B-12 = %f\n", ee_pos->GetParameter(nb12_nc));
 
   for(int i = nnegbins + maxrealtime + 1; i <= hist->GetNbinsX(); i++)
     hist->SetBinContent(i, gRandom->Poisson(ee->Eval(hist->GetBinCenter(i))));
@@ -430,6 +504,17 @@ static void addpoint(TGraphAsymmErrors * g, const double x,
   g->SetPointError(g->GetN()-1, xe, xe, ye_down, ye_up);
 }
 
+static void init_ee()
+{
+  // Pretty sure this is punishable by public flogging
+  for(TF1 * e = ee_pos; e <= ee_neg; e += ee_neg - ee_pos){
+    e->SetNpx(400);
+    e->SetLineColor(kRed);
+    e->SetLineWidth(1);
+    for(int i = 0; i < npar; i++) e->SetParName(i, parnames[i]);
+  }
+}
+
 void rhc(const char * const savedhistfile = NULL)
 {
   TFile * fhcfile = new TFile(
@@ -450,9 +535,7 @@ void rhc(const char * const savedhistfile = NULL)
   // Let the TFile errors go to the screen, then suppress the rest
   gErrorIgnoreLevel = kError;
 
-  ee->SetNpx(460);
-  ee->SetLineColor(kRed);
-  ee->SetLineWidth(1);
+  init_ee();
 
   const char * const basecut = Form(
     "run != 11601" // noise at t = 106 in this run.
@@ -510,10 +593,9 @@ void rhc(const char * const savedhistfile = NULL)
      "&& !(t >= -1 && t < 2)", basecut, -nnegbins, maxrealtime);
   */
 
-  fhc_s = new TH2D("fhc_s", "",
-                   nnegbins + maxrealtime + additional,
-                   -nnegbins, maxrealtime + additional,
-                   nbins_e, bins_e);
+  fhc_s = new TH2D("fhc_s", "", nnegbins + maxrealtime + additional,
+                                -nnegbins, maxrealtime + additional,
+                                nbins_e, bins_e);
   rhc_s = (TH2D *)fhc_s->Clone("rhc_s");
 
   // Square means RHC, solid means neutron, black means good fit
@@ -627,7 +709,7 @@ void rhc(const char * const savedhistfile = NULL)
   TH2D * dum2 = (TH2D*) dum->Clone("dum2");
   TH2D * dum3 = (TH2D*) dum->Clone("dum3");
 
-  TCanvas * c2 = new TCanvas;
+  c2->cd();
   dum2->GetYaxis()->SetTitle("Neutrons per track");
   dum2->GetYaxis()->SetRangeUser(0, 0.29);
   dum2->Draw();
@@ -637,7 +719,7 @@ void rhc(const char * const savedhistfile = NULL)
   g_n_rhc_bad->Draw("pz");
   c2->Print("fit.pdf");
 
-  TCanvas * c3 = new TCanvas;
+  c3->cd();
   dum3->GetYaxis()->SetTitle("B-12 per track");
   c3->SetLogy();
   dum3->GetYaxis()->SetRangeUser(0.001, 6);
@@ -648,9 +730,7 @@ void rhc(const char * const savedhistfile = NULL)
   g_b12_rhc_bad->Draw("pz");
   c3->Print("fit.pdf");
 
-  c1->cd();
-  c1->SetLogy(0);
-
+  c4->cd();
   dum->GetYaxis()->SetTitle("Ratios");
   dum->GetYaxis()->SetRangeUser(0, 1.5);
   dum->Draw();
