@@ -8,10 +8,11 @@
 #include "TError.h"
 #include "TRandom.h"
 #include "TROOT.h"
+#include <fstream>
 
 /*
  * TODO: exclude neutron and B-12 candidates following a Michel.
- * 
+ *
  * TODO: joint fit that directly extracts the ratios of interest
  */
 
@@ -36,7 +37,7 @@ static TMinuit * mn = NULL;
 const double n_lifetime_nominal = 50.;
 const double n_lifetime_priorerr = 5.;
 
-/* 
+/*
    Based on my MC, 400us is reasonable for a mindist of 6, but more like
    25us for a mindist of 2. However, it's murky because we don't measure
    the capture point, but rather the position where the gammas compton,
@@ -187,32 +188,25 @@ void fcn(int & np, double * gin, double & like, double *par, int flag)
 {
   like = 0;
 
-  /*printf("%9f %9f %9f %9f %9f %9f %9f %9f\n",
-   par[0], par[1], par[2], par[3], par[4], par[5], par[6], par[7]);*/
-
-  /*
-  printf(".");  fflush(stdout);
-  ee->Draw("same");
-  c1->Update();
-  c1->Modified();
-  */
+  const double b12life = 29.1e3;
 
   for(int i = 1; i <= fithist->GetNbinsX() && i <= maxfitt+nnegbins; i++){
     const double x = fithist->GetBinCenter(i);
     double model = 0;
-    if(x <= -1 || x >= 2) model += abs(par[0]);
-    if(x >= 2){
-      model += fabs(par[1])/par[2]    * exp(-x/par[2]   ) + 
-               fabs(par[3])/par[4]    * exp(-x/par[4]   ) 
-         *(erf(sqrt(par[5]/x))-2/sqrt(M_PI)*sqrt(par[5]/x)*exp(-par[5]/x))
-             + fabs(par[6])/29.1e3 * exp(-x/29.1e3);
-    }
-    if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
-      model += fabs(par[7])*fabs(fabs(x)-10);
+    if(x <= -1 || x >= 2) model += abs(par[flat_nc]);
 
-    if(std::isnan(model)){ printf("Fail at %f\n", fithist->GetBinCenter(i)); continue; }
+    if(x >= 2)
+      model += fabs(par[nmich_nc])/par[tmich_nc] * exp(-x/par[tmich_nc]) +
+               fabs(par[nneut_nc])/par[tneut_nc] * exp(-x/par[tneut_nc])
+         *(erf(sqrt(par[aneut_nc]/x))
+           -2/sqrt(M_PI)*sqrt(par[aneut_nc]/x)*exp(-par[aneut_nc]/x))
+             + fabs(par[nb12_nc])/b12life * exp(-x/b12life);
+
+    if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
+      model += fabs(par[pileup_nc])*fabs(fabs(x)-10);
+
     const double data = fithist->GetBinContent(i);
-    
+
     like += model - data;
     if(model > 0 && data > 0) like += data * log(data/model);
   }
@@ -274,7 +268,7 @@ static fitanswers dothefit(TH1D * hist, const bool is_rhc,
   int status = 0;
 
   // May as well set this to near the right value
-  mn->Command(Form("SET PAR %d %f", flat_nf, 
+  mn->Command(Form("SET PAR %d %f", flat_nf,
     hist->Integral(0, nnegbins-10)/(nnegbins - 10)));
 
   // And this is a reasonable starting point for nmich
@@ -472,7 +466,7 @@ void rhc(const char * const savedhistfile = NULL)
     basecut);
   */
 
-  // a pretty strict, reasonable cut 
+  // a pretty strict, reasonable cut
   /*
   const std::string ccut = Form("%s"
      "&& t > %f && t < %f"
@@ -481,11 +475,11 @@ void rhc(const char * const savedhistfile = NULL)
      "&& pe > 70 && e < 20", basecut, -nnegbins, maxrealtime);
   */
 
-  // a fairly loose, reasonable cut 
+  // a fairly loose, reasonable cut
   const std::string ccut = Form("%s"
      "&& t > %f && t < %f"
      "&& !(t >= -1 && t < 2)"
-     "&& nhit >= 1 && mindist <= 6"
+     "&& nhit >= 1 && mindist <= 2"
      "&& pe > 35 && e < 20", basecut, -nnegbins, maxrealtime);
 
   // a loose cut
@@ -518,6 +512,11 @@ void rhc(const char * const savedhistfile = NULL)
   g_n_rhc->SetLineWidth(1);
   g_n_fhc->SetLineWidth(2);
 
+  const double markersize = 0.5;
+
+  g_n_rhc->SetMarkerSize(markersize);
+  g_n_fhc->SetMarkerSize(markersize);
+
   g_b12_rhc->SetLineWidth(1);
   g_b12_fhc->SetLineWidth(2);
 
@@ -538,6 +537,9 @@ void rhc(const char * const savedhistfile = NULL)
   g_n_rhc_bad->SetLineWidth(1);
   g_n_fhc_bad->SetLineWidth(2);
 
+  g_n_rhc_bad->SetMarkerSize(markersize);
+  g_n_fhc_bad->SetMarkerSize(markersize);
+
   g_b12_rhc_bad->SetLineWidth(1);
   g_b12_fhc_bad->SetLineWidth(2);
 
@@ -551,7 +553,6 @@ void rhc(const char * const savedhistfile = NULL)
   g_b12_rhc_bad->SetMarkerColor(kRed);
   g_b12_fhc_bad->SetMarkerColor(kRed);
 
-  const double markersize = 0.5;
 
   g_n_rhc->SetMarkerSize(markersize);
   g_n_rhc->SetMarkerSize(markersize);
@@ -604,7 +605,7 @@ void rhc(const char * const savedhistfile = NULL)
   for(int s = 1; s <= nbins_e; s++){
     const double loslce = fhc_s->GetYaxis()->GetBinLowEdge(s);
     const double hislce = fhc_s->GetYaxis()->GetBinLowEdge(s+1);
-  
+
     TH1D * rhc = rhc_s->ProjectionX("rhc", s, s);
     TH1D * fhc = fhc_s->ProjectionX("fhc", s, s);
 
@@ -686,14 +687,14 @@ void rhc(const char * const savedhistfile = NULL)
 
   TCanvas * c2 = new TCanvas;
   dum2->GetYaxis()->SetTitle("Neutrons per track");
-  dum2->GetYaxis()->SetRangeUser(0, 0.4);
+  dum2->GetYaxis()->SetRangeUser(0, 0.29);
   dum2->Draw();
   g_n_rhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
   g_n_fhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
   c2->Print("fit.pdf");
-  
+
   TCanvas * c3 = new TCanvas;
   dum3->GetYaxis()->SetTitle("B-12 per track");
   c3->SetLogy();
@@ -709,7 +710,7 @@ void rhc(const char * const savedhistfile = NULL)
   c1->SetLogy(0);
 
   dum->GetYaxis()->SetTitle("Ratios");
-  dum->GetYaxis()->SetRangeUser(0, 3);
+  dum->GetYaxis()->SetRangeUser(0, 1.5);
   dum->Draw();
   n_result->Draw("pz");
   n_resultbad->Draw("pz");
@@ -717,4 +718,13 @@ void rhc(const char * const savedhistfile = NULL)
   b12_resultbad->Draw("pz");
 
   c1->Print("fit.pdf)");
+
+  if(savedhistfile == NULL){
+    std::ofstream o("savedhists.C");
+
+    rhc_s->SavePrimitive(o);
+    fhc_s->SavePrimitive(o);
+    tcounts_fhc->SavePrimitive(o);
+    tcounts_rhc->SavePrimitive(o);
+  }
 }
