@@ -79,9 +79,9 @@ static PAR makepar(const char * const name_, const int n, const double start_)
 const int npar    = 3 + 5*nbins_e;
 const int npar_ee = 3 + 5;
 const char * const ee_parnames[npar] = {
-"Tmich",
 "Tneut",
 "Aneut",
+"Tmich",
 
 "Nneut",
 "NB12",
@@ -101,9 +101,9 @@ const double pileup_start = 300;
 // parameter numbers, C numbering, for use with TMinuit functions
 const int
   // Same for all histograms
-  tmich_nc  = 0,
-  tneut_nc  = 1,
-  aneut_nc  = 2,
+  tneut_nc  = 0,
+  aneut_nc  = 1,
+  tmich_nc  = 2,
 
   // Parameters of interest, energy dependent
   nneut_nc  = aneut_nc + 1,
@@ -126,9 +126,9 @@ const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
 static std::vector<PAR> makeparameters()
 {
   std::vector<PAR> p;
-  p.push_back(makepar("TMich", tmich_nc, tmich_start));
   p.push_back(makepar("Tneut", tneut_nc, n_lifetime_nominal));
   p.push_back(makepar("Aneut", aneut_nc, n_diffusion_nominal));
+  p.push_back(makepar("TMich", tmich_nc, tmich_start));
   for(int i = 0; i < nbins_e; i++)
     p.push_back(makepar(Form("Nneut%d", i), nneut_nc+i, nneut_start));
   for(int i = 0; i < nbins_e; i++)
