@@ -144,12 +144,17 @@ static std::vector<PAR> makeparameters()
 
   const char * const bname[nbeam] = { "R_", "F_" };
 
+  // first set means the number of neutrons or B-12 seen per track
+  // in RHC.  The second set means the ratio of that with the same
+  // for FHC.
+  const char * const ratname[nbeam] = { "RoF_", "F_" };
+
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sNneut%d", bname[b], i), nneut_start));
+      p.push_back(makepar(Form("%sNneut%d", ratname[b], i), nneut_start));
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sNB12_%d", bname[b], i), nb12_start));
+      p.push_back(makepar(Form("%sNB12_%d", ratname[b], i), nb12_start));
 
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
@@ -391,11 +396,20 @@ static void fcn(__attribute__((unused)) int & np, __attribute__((unused)) double
         if(x <= -1 || x >= 2) model += fabs(par[flat_nc+off_period]);
 
         if(x >= 2){
+          const double norm_n   =
+            beam == 0 /* RHC */? 
+            par[nneut_nc + nbins_e + eb]*par[nneut_nc+eb] /* R = F*(R/F) */:
+            par[nneut_nc + nbins_e + eb]; /*F*/ 
+          const double norm_b12 =
+            beam == 0? 
+            par[nb12_nc + nbins_e + eb]*par[nb12_nc+eb]:
+            par[nb12_nc + nbins_e + eb];
+
           model += fabs(par[nmich_nc+off_beam]*sca)/par[tmich_nc+off_beam]
                       * exp(-x/par[tmich_nc+off_beam]) +
 
-                   fabs(par[nneut_nc+off_beam]*sca) * nstuff
-                 + fabs(par[nb12_nc +off_beam]*sca) * exp_x_b12life;
+                   fabs(norm_n  *sca) * nstuff
+                 + fabs(norm_b12*sca) * exp_x_b12life;
         }
 
         if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
@@ -452,24 +466,43 @@ static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
     ee_neg->SetParameter(i, getpar(i));
   }
 
-  for(int i = ncommonpar; i < npar_ee-1; i++){
-    // walk forward through the blocks of parameters to the right place.
+  // walk forward through the blocks of parameters to the right place.
+  for(int i = ncommonpar; i < ncommonpar+nperbinpar; i++){
     ee_neg->SetParameter(i,
- 
-      (i==2||i==3||i==5? scales[periodi][bin]:1)* // scale counts to tracks
 
-      getpar(
-      ncommonpar +
-      (i < ncommonpar + nperbinpar?
-          nbeam*nbins_e*(i-ncommonpar)
-        + beam * nbins_e
-      :
-          nbeam*nbins_e*nperbinpar // end of per beam block
-        + nperiod*nbins_e * (i-ncommonpar-nperbinpar) // par block
-        + nbins_e*periodi
+      (i==2||i==3? scales[periodi][bin]:1)* // scale counts to tracks
+
+      ((i == 2 || i == 3) && beam == 0? // Check if this is a ratio
+       getpar(ncommonpar +
+              nbeam*nbins_e*(i-ncommonpar) +
+              nbins_e +
+              bin)
+       : 1) *
+      getpar(ncommonpar +
+             nbeam*nbins_e*(i-ncommonpar) +
+             beam * nbins_e +
+             bin
       )
-      + bin
-    ));
+    );
+  }
+
+  for(int i = ncommonpar+nperbinpar; i < npar_ee-1; i++){
+    ee_neg->SetParameter(i,
+      (i==5? scales[periodi][bin]:1)* // scale counts to tracks
+
+      (i == 5 && beam == 0? // is this a ratio?
+         getpar(ncommonpar +
+                nbeam*nbins_e*(i-ncommonpar) +
+                nbins_e +
+                bin)
+       : 1)*
+      getpar(ncommonpar +
+             nbeam*nbins_e*nperbinpar + // end of per beam block
+             nperiod*nbins_e * (i-ncommonpar-nperbinpar) + // par block
+             nbins_e*periodi +
+             bin
+      )
+    );
   }
 
   ee_neg->SetParameter(ee_scale_par, 1); // scale
@@ -601,7 +634,7 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
       mn->Command(Form("SET PAR %d %f", flat_nf+period*nbins_e + bin,
         fithist[period]->ProjectionX("x", bin+1, bin+1)
           ->Integral(0, nnegbins-10)/(nnegbins - 10)));
-      // Again, something reasonable based ont the data.
+      // Again, something reasonable based on the data.
       mn->Command(Form("SET PAR %d %f", pileup_nf+period*nbins_e + bin,
         fithist[period]->ProjectionX("x", bin+1, bin+1)
           ->GetBinContent(nnegbins - 2)/8.));
@@ -614,9 +647,12 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
       // And this is a reasonable starting point for nmich
       mn->Command(Form("SET PAR %d %f", nmich_nf+beam*nbins_e + bin,
                        0.8));
-      // Ditto nneut
+      // Ditto nneut and B-12
       mn->Command(Form("SET PAR %d %f", nneut_nf+beam*nbins_e + bin,
-                       0.1));
+                       beam == 0?0.2:0.1));
+
+      mn->Command(Form("SET PAR %d %f", nb12_nf+beam*nbins_e + bin,
+                       beam == 0?0.2:0.01));
 
       // Start with the muon lifetime fixed so that it doesn't try to swap
       // with the neutron lifetime.
@@ -667,8 +703,11 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
              nb12_nf+beam*nbins_e+bin, fabs(getpar( nb12_nc+beam*nbins_e+bin))));
       mn->Command(Form("SET PAR %d %f",
             nneut_nf+beam*nbins_e+bin, fabs(getpar(nneut_nc+beam*nbins_e+bin))));
-      mn->Command(Form("SET LIM %d 0 2", nb12_nf+beam*nbins_e+bin));
-      mn->Command(Form("SET LIM %d 0 1", nneut_nf+beam*nbins_e+bin));
+
+      // Half of these are observed probabilities and the other half are ratios.
+      // Same limits are reasonable at the moment.
+      mn->Command(Form("SET LIM %d 0 3", nb12_nf+beam*nbins_e+bin));
+      mn->Command(Form("SET LIM %d 0 3", nneut_nf+beam*nbins_e+bin));
     }
   }
 
@@ -679,14 +718,11 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
   status = mn->Command("HESSE");
 
   if(!status)
-    for(int beam = 0; beam < nbeam; beam++)
-      for(int bin = 0; bin < nbins_e; bin++)
-        for(int i = 0; i < 2; i++){
-          gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+beam*nbins_e+bin));
-          gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +beam*nbins_e+bin));
-        }
-
-  gMinuit->Command(Form("MINOS 30000 %d", tneut_nf)); // just curious
+    for(int bin = 0; bin < nbins_e; bin++)
+      for(int i = 0; i < 2; i++){
+        gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+bin));
+        gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +bin));
+      }
 
   gMinuit->Command("show min");
 
@@ -984,13 +1020,8 @@ void rhc(const char * const savedhistfile = NULL)
   const std::vector< std::vector<fitanswers> > anses = dothefit(scales);
 
   for(int s = 0; s < nbins_e; s++){
-    const double rhc_scale = 1;
-    const double fhc_scale = 1;
     const fitanswers rhc_ans = anses[0][s];
     const fitanswers fhc_ans = anses[1][s];
-
-    const double scale = fhc_scale/rhc_scale;
-    printf("N tracks %.0f, %.0f. Scale = %f\n", fhc_scale, rhc_scale, scale);
 
     const double loslce = period6_s->GetYaxis()->GetBinLowEdge(s+1);
     const double hislce = period6_s->GetYaxis()->GetBinLowEdge(s+2);
@@ -998,41 +1029,40 @@ void rhc(const char * const savedhistfile = NULL)
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
 
+    // XXX
     addpoint(rhc_ans.n_good? g_n_rhc: g_n_rhc_bad,
-      graph_x + graph_xe/10 /* visual offset */,
-      rhc_ans.n_mag/rhc_scale, graph_xe,
-      rhc_ans.n_mage_dn/rhc_scale, rhc_ans.n_mage_up/rhc_scale);
+      graph_x + graph_xe/10 /* visual offset */, rhc_ans.n_mag,
+      graph_xe, rhc_ans.n_mage_dn, rhc_ans.n_mage_up);
 
-    addpoint(fhc_ans.n_good? g_n_fhc: g_n_fhc_bad,
-      graph_x, fhc_ans.n_mag/fhc_scale, graph_xe,
-      fhc_ans.n_mage_dn/fhc_scale, fhc_ans.n_mage_up/fhc_scale);
+    addpoint(fhc_ans.n_good? g_n_fhc: g_n_fhc_bad, graph_x,
+      fhc_ans.n_mag, graph_xe, fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
     addpoint(rhc_ans.n_good? g_b12_rhc: g_b12_rhc_bad,
-      graph_x + graph_xe/10, rhc_ans.b12mag/rhc_scale,
-      graph_xe, rhc_ans.b12mage_dn/rhc_scale, rhc_ans.b12mage_up/rhc_scale);
+      graph_x + graph_xe/10, rhc_ans.b12mag,
+      graph_xe, rhc_ans.b12mage_dn, rhc_ans.b12mage_up);
 
     addpoint(fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad,
-      graph_x, fhc_ans.b12mag/fhc_scale, graph_xe,
-      fhc_ans.b12mage_dn/fhc_scale, fhc_ans.b12mage_up/fhc_scale);
+      graph_x, fhc_ans.b12mag, graph_xe,
+      fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
     const bool n_good   = fhc_ans.  n_good && rhc_ans.  n_good;
     const bool b12_good = fhc_ans.b12_good && rhc_ans.b12_good;
 
-    const double n_rat = scale*rhc_ans.n_mag/fhc_ans.n_mag;
+    const double n_rat = rhc_ans.n_mag/fhc_ans.n_mag;
     const double n_rat_err_up =
-      ratio_error(scale*rhc_ans.n_mag, fhc_ans.n_mag,
-                  scale*rhc_ans.n_mage_up, fhc_ans.n_mage_dn);
+      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
+                  rhc_ans.n_mage_up, fhc_ans.n_mage_dn);
     const double n_rat_err_dn =
-      ratio_error(scale*rhc_ans.n_mag, fhc_ans.n_mag,
-                  scale*rhc_ans.n_mage_dn, fhc_ans.n_mage_up);
+      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
+                  rhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
-    const double b12_rat = scale*rhc_ans.b12mag/fhc_ans.b12mag;
+    const double b12_rat = rhc_ans.b12mag/fhc_ans.b12mag;
     const double b12_rat_err_up =
-      ratio_error(scale*rhc_ans.b12mag, fhc_ans.b12mag,
-                  scale*rhc_ans.b12mage_up, fhc_ans.b12mage_dn);
+      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
+                  rhc_ans.b12mage_up, fhc_ans.b12mage_dn);
     const double b12_rat_err_dn =
-      ratio_error(scale*rhc_ans.b12mag, fhc_ans.b12mag,
-                  scale*rhc_ans.b12mage_dn, fhc_ans.b12mage_up);
+      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
+                  rhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
     printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rhc_ans.n_good?"Good":"Bad", fhc_ans.n_good?"Good":"Bad", loslce, hislce,
@@ -1098,7 +1128,7 @@ void rhc(const char * const savedhistfile = NULL)
   c3->Print("fit.pdf");
 
   c4->cd();
-  dum->GetYaxis()->SetTitle("Ratios");
+  dum->GetYaxis()->SetTitle("RHC/FHC");
   dum->GetXaxis()->SetTitle("E_{#nu} (GeV)");
   dum->GetYaxis()->CenterTitle();
   dum->GetXaxis()->CenterTitle();
