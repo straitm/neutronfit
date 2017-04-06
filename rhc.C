@@ -708,11 +708,14 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
   status = mn->Command("HESSE");
 
   if(!status)
-    for(int bin = 0; bin < nbins_e; bin++)
-      for(int i = 0; i < 2; i++){
-        gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+bin));
-        gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +bin));
-      }
+    // could skip MINOS errors for FHC and just do them for that ratio,
+    // but then I can't make plots of the raw amount of each with MINOS errors
+    for(int beam = 0; beam < nbeam; beam++)
+      for(int bin = 0; bin < nbins_e; bin++)
+        for(int i = 0; i < 2; i++){
+          gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+beam*nbins_e+bin));
+          gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +beam*nbins_e+bin));
+        }
 
   gMinuit->Command("show min");
 
@@ -752,6 +755,13 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
   return anses;
 }
 
+static double product_error(const double x, const double y,
+                            const double xe, const double ye)
+{
+  return sqrt(y*y*pow(xe, 2) + x*x*pow(ye, 2));
+}
+
+__attribute__((unused))
 static double ratio_error(const double x, const double y,
                           const double xe, const double ye)
 {
@@ -1010,7 +1020,7 @@ void rhc(const char * const savedhistfile = NULL)
   const std::vector< std::vector<fitanswers> > anses = dothefit(scales);
 
   for(int s = 0; s < nbins_e; s++){
-    const fitanswers rhc_ans = anses[0][s];
+    const fitanswers rof_ans = anses[0][s];
     const fitanswers fhc_ans = anses[1][s];
 
     const double loslce = period6_s->GetYaxis()->GetBinLowEdge(s+1);
@@ -1019,50 +1029,48 @@ void rhc(const char * const savedhistfile = NULL)
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
 
-    // XXX
-    addpoint(rhc_ans.n_good? g_n_rhc: g_n_rhc_bad,
-      graph_x + graph_xe/10 /* visual offset */, rhc_ans.n_mag,
-      graph_xe, rhc_ans.n_mage_dn, rhc_ans.n_mage_up);
-
+    // Directly fit for: easy
     addpoint(fhc_ans.n_good? g_n_fhc: g_n_fhc_bad, graph_x,
       fhc_ans.n_mag, graph_xe, fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
-    addpoint(rhc_ans.n_good? g_b12_rhc: g_b12_rhc_bad,
-      graph_x + graph_xe/10, rhc_ans.b12mag,
-      graph_xe, rhc_ans.b12mage_dn, rhc_ans.b12mage_up);
+    addpoint(fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad, graph_x,
+      fhc_ans.b12mag, graph_xe, fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
-    addpoint(fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad,
-      graph_x, fhc_ans.b12mag, graph_xe,
-      fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
+    // Indirect, harder
+    addpoint(rof_ans.n_good && fhc_ans.n_good? g_n_rhc: g_n_rhc_bad,
+      graph_x + graph_xe/10 /* visual offset */,
+      fhc_ans.n_mag * rof_ans.n_mag,
+      graph_xe,
+      product_error(fhc_ans.n_mag, rof_ans.n_mag, fhc_ans.n_mage_dn, rof_ans.n_mage_dn),
+      product_error(fhc_ans.n_mag, rof_ans.n_mag, fhc_ans.n_mage_up, rof_ans.n_mage_up));
 
-    const bool n_good   = fhc_ans.  n_good && rhc_ans.  n_good;
-    const bool b12_good = fhc_ans.b12_good && rhc_ans.b12_good;
+    addpoint(rof_ans.b12_good && fhc_ans.b12_good? g_b12_rhc: g_b12_rhc_bad,
+      graph_x + graph_xe/10,
+      fhc_ans.b12mag * rof_ans.b12mag, graph_xe,
+      product_error(fhc_ans.b12mag, rof_ans.b12mag, fhc_ans.b12mage_dn, rof_ans.b12mage_dn),
+      product_error(fhc_ans.b12mag, rof_ans.b12mag, fhc_ans.b12mage_up, rof_ans.b12mage_up));
 
-    const double n_rat = rhc_ans.n_mag/fhc_ans.n_mag;
-    const double n_rat_err_up =
-      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
-                  rhc_ans.n_mage_up, fhc_ans.n_mage_dn);
-    const double n_rat_err_dn =
-      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
-                  rhc_ans.n_mage_dn, fhc_ans.n_mage_up);
+    // direct again
+    const bool n_good   = rof_ans.  n_good;
+    const bool b12_good = rof_ans.b12_good;
 
-    const double b12_rat = rhc_ans.b12mag/fhc_ans.b12mag;
-    const double b12_rat_err_up =
-      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
-                  rhc_ans.b12mage_up, fhc_ans.b12mage_dn);
-    const double b12_rat_err_dn =
-      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
-                  rhc_ans.b12mage_dn, fhc_ans.b12mage_up);
+    const double n_rat = rof_ans.n_mag;
+    const double n_rat_err_up = rof_ans.n_mage_up;
+    const double n_rat_err_dn = rof_ans.n_mage_dn;
+
+    const double b12_rat = rof_ans.b12mag;
+    const double b12_rat_err_up = rof_ans.b12mage_up;
+    const double b12_rat_err_dn = rof_ans.b12mage_dn;
 
     printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
-      rhc_ans.n_good?"Good":"Bad", fhc_ans.n_good?"Good":"Bad", loslce, hislce,
+      rof_ans.n_good?"Good":"Bad", fhc_ans.n_good?"Good":"Bad", loslce, hislce,
       n_rat, n_rat_err_up, n_rat_err_dn);
 
     addpoint(n_good?n_result:n_resultbad,
              graph_x, n_rat, graph_xe, n_rat_err_dn, n_rat_err_up);
 
     printf("%s/%s RHC/FHC B-12    (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
-      rhc_ans.b12_good?"Good":"Bad", fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
+      rof_ans.b12_good?"Good":"Bad", fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
       b12_rat, b12_rat_err_up, b12_rat_err_dn);
 
     addpoint(b12_good?b12_result:b12_resultbad,
