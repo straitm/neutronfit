@@ -470,7 +470,7 @@ static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
   for(int i = ncommonpar; i < ncommonpar+nperbinpar; i++){
     ee_neg->SetParameter(i,
 
-      (i==2||i==3? scales[periodi][bin]:1)* // scale counts to tracks
+      (i==2||i==3||i==5? scales[periodi][bin]:1)* // scale counts to tracks
 
       ((i == 2 || i == 3) && beam == 0? // Check if this is a ratio
        getpar(ncommonpar +
@@ -488,21 +488,11 @@ static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
 
   for(int i = ncommonpar+nperbinpar; i < npar_ee-1; i++){
     ee_neg->SetParameter(i,
-      (i==5? scales[periodi][bin]:1)* // scale counts to tracks
-
-      (i == 5 && beam == 0? // is this a ratio?
-         getpar(ncommonpar +
-                nbeam*nbins_e*(i-ncommonpar) +
-                nbins_e +
-                bin)
-       : 1)*
       getpar(ncommonpar +
              nbeam*nbins_e*nperbinpar + // end of per beam block
              nperiod*nbins_e * (i-ncommonpar-nperbinpar) + // par block
              nbins_e*periodi +
-             bin
-      )
-    );
+             bin));
   }
 
   ee_neg->SetParameter(ee_scale_par, 1); // scale
