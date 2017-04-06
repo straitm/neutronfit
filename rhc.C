@@ -43,7 +43,7 @@ const double n_lifetime_priorerr = 5.;
    and that usually only in 2D. Assuming 2D, I get more like 80us. And
    of course the functional form isn't quite right for 2D...
 */
-const double n_diffusion_nominal = 400.;
+const double n_diffusion_nominal = 200.;
 const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
 
 const double markersize = 0.7;
@@ -64,7 +64,7 @@ static PAR makepar(const char * const name_, const double start_)
 
   p.name = (char *)malloc(strlen(name_)+1);
   strcpy(p.name, name_);
-  
+
   p.start = start_;
 
   return p;
@@ -158,7 +158,7 @@ static std::vector<PAR> makeparameters()
 
 static std::vector<PAR> PARAMETERS = makeparameters();
 
-// TF1::Draw() has a lot of trouble with the discontinuity at zero, 
+// TF1::Draw() has a lot of trouble with the discontinuity at zero,
 // so split into the positive and negative parts
 static TF1 * ee_pos = new TF1("ee_pos",
   "[8]*(abs([5]) + "
@@ -183,7 +183,7 @@ static TF1 * ee_mich =
   new TF1("ee_mich", "[8]*(abs([6])/[4] * exp(-x/[4]))", 0, maxrealtime+additional);
 
 static TF1 * ee_neut =
-  new TF1("ee_mich", 
+  new TF1("ee_mich",
    "[8]*(abs([2])/[0] * exp(-x/[0]) "
    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))"
    , 0, maxrealtime+additional);
@@ -364,6 +364,9 @@ void make_mn()
   mn->SetPrintLevel(print);
   mn->Command(Form("SET PRINT %d", print));
 
+  // Observed to help get MINOS errors out
+  mn->Command("SET STRATEGY 2");
+
   mn->SetFCN(fcn);
   mn->Command("SET ERR 0.5"); // log likelihood
 
@@ -531,8 +534,9 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
 
   const int migrad_tries = 8;
 
+  status = mn->Command("SIMPLEX 30000");
   for(int i = 0; i < migrad_tries; i++)
-    if(0 == (status = mn->Command("MIGRAD")))
+    if(0 == (status = mn->Command("MIGRAD 100000")))
       break;
   status = mn->Command("HESSE");
 
@@ -546,7 +550,7 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
 
   // This becomes badly behaved if allowed to wander too far, so limit
   mn->Command(Form("SET LIM %d %f %f", aneut_nf,
-    n_diffusion_nominal*0.5, n_diffusion_nominal*1.5));
+    n_diffusion_nominal*0.2, n_diffusion_nominal*5));
 
   // Hold the Michel lifetime to something reasonable. Among other
   // concerns, this prevents it from swapping with the neutron lifetime,
@@ -559,18 +563,19 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
   for(int beam = 0; beam < nbeam; beam++){
     for(int bin = 0; bin < nbins_e; bin++){
       mn->Command(Form("SET PAR %d %f",
-                       nb12_nf+beam*nbins_e+bin, getpar( nb12_nc+bin)));
+             nb12_nf+beam*nbins_e+bin, fabs(getpar( nb12_nc+beam*nbins_e+bin))));
       mn->Command(Form("SET PAR %d %f",
-                      nneut_nf+beam*nbins_e+bin, getpar(nneut_nc+bin)));
-      mn->Command(Form("SET LIM %d 0 %f", 
+            nneut_nf+beam*nbins_e+bin, fabs(getpar(nneut_nc+beam*nbins_e+bin))));
+      mn->Command(Form("SET LIM %d 0 %f",
         nb12_nf+bin, max(1e6, 10*getpar( nb12_nc+beam*nbins_e+bin))));
       mn->Command(Form("SET LIM %d 0 %f",
         nneut_nf+bin, max(1e6, 10*getpar(nneut_nc+beam*nbins_e+bin))));
     }
   }
 
+  status = mn->Command("SIMPLEX 30000");
   for(int i = 0; i < migrad_tries; i++)
-    if(0 == (status = mn->Command("MIGRAD")))
+    if(0 == (status = mn->Command("MIGRAD 100000")))
       break;
   status = mn->Command("HESSE");
 
@@ -583,7 +588,7 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
         }
 
   gMinuit->Command("show min");
-  
+
   for(int beam = 0; beam < nbeam; beam++)
     for(int i = 0; i < nbins_e; i++)
       draw_ee(beam, i, ntrack[beam][i]);
@@ -814,6 +819,10 @@ void rhc(const char * const savedhistfile = NULL)
   }
   else{
     gROOT->Macro(savedhistfile);
+    if(rhc_s->Integral() < 1 || fhc_s->Integral() < 1){
+      fprintf(stderr, "I don't like this input file\n");
+      exit(1);
+    }
   }
 
   std::vector<double> rhc_scales, fhc_scales;
