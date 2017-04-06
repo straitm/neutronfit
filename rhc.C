@@ -84,8 +84,8 @@ const char * const ee_parnames[npar_ee] = {
 "NB12",
 
 "Tmich",
-"flat",
 "NMich",
+"flat",
 "pileup",
 
 "scale"
@@ -112,9 +112,9 @@ const int
 
   // Nuisance parameters, energy dependent
   tmich_nc  = nb12_nc  + nbins_e*nbeam,
-  flat_nc   = tmich_nc + nbins_e*nbeam,
-  nmich_nc  = flat_nc  + nbins_e*nbeam,
-  pileup_nc = nmich_nc + nbins_e*nbeam;
+  nmich_nc  = tmich_nc + nbins_e*nbeam,
+  flat_nc   = nmich_nc + nbins_e*nbeam, // run dependent
+  pileup_nc = flat_nc  + nbins_e*nbeam; // run dependent
 
 const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nmich_nf  = nmich_nc +1, // for use with native MINUIT
@@ -145,10 +145,10 @@ static std::vector<PAR> makeparameters()
       p.push_back(makepar(Form("%sTMich%d", bname[b], i), tmich_start));
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sflat%d", bname[b], i), flat_start));
+      p.push_back(makepar(Form("%sNMich%d", bname[b], i), nmich_start));
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sNMich%d", bname[b], i), nmich_start));
+      p.push_back(makepar(Form("%sflat%d", bname[b], i), flat_start));
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
       p.push_back(makepar(Form("%spileup%d", bname[b], i), pileup_start));
@@ -161,9 +161,9 @@ static std::vector<PAR> PARAMETERS = makeparameters();
 // TF1::Draw() has a lot of trouble with the discontinuity at zero,
 // so split into the positive and negative parts
 static TF1 * ee_pos = new TF1("ee_pos",
-  "[8]*(abs([5]) + "
+  "[8]*(abs([6]) + "
   "(x >= 0)*("
-   "abs([6])/[4] * exp(-x/[4]) + "
+   "abs([5])/[4] * exp(-x/[4]) + "
    "abs([2])/[0] * exp(-x/[0]) "
    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
    "+ abs([3])/29.14e3 * exp(-x/29.14e3)"
@@ -172,15 +172,15 @@ static TF1 * ee_pos = new TF1("ee_pos",
   0, maxrealtime+additional);
 
 static TF1 * ee_neg = new TF1("ee_neg",
-  "[8]*(abs([5]) + "
+  "[8]*(abs([6]) + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
   -nnegbins, 0);
 
 static TF1 * ee_flat =
-  new TF1("ee_flat", "[8]*abs([5])", -nnegbins, maxrealtime+additional);
+  new TF1("ee_flat", "[8]*abs([6])", -nnegbins, maxrealtime+additional);
 
 static TF1 * ee_mich =
-  new TF1("ee_mich", "[8]*(abs([6])/[4] * exp(-x/[4]))", 0, maxrealtime+additional);
+  new TF1("ee_mich", "[8]*(abs([5])/[4] * exp(-x/[4]))", 0, maxrealtime+additional);
 
 static TF1 * ee_neut =
   new TF1("ee_mich",
@@ -189,7 +189,8 @@ static TF1 * ee_neut =
    , 0, maxrealtime+additional);
 
 static TF1 * ee_b12 =
-  new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))", 0, maxrealtime+additional);
+  new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))",
+          0, maxrealtime+additional);
 
 static TF1 * ee_pileup =
   new TF1("ee_b12", "[8]*((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
