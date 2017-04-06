@@ -8,6 +8,7 @@
 #include "TError.h"
 #include "TRandom.h"
 #include "TROOT.h"
+#include "TLegend.h"
 #include <fstream>
 
 /*
@@ -71,11 +72,18 @@ static PAR makepar(const char * const name_, const double start_)
 }
 
 const int ncommonpar = 2;
-const int nbeam      = 2;
-const int nperbinpar = 6;
+const int nbeam      = 2; // not really generalizable as it stands
+const int nperbinpar = 4; // number per energy bin parameters
+const int nperperpar = 2; // number per period parameters
 
-const int npar    = ncommonpar + nbeam*nperbinpar*nbins_e;
-const int npar_ee = ncommonpar + nperbinpar + 1;
+const int nperiod    = 4; // 2, 3, 5, 6
+const int nperiodrhc = 1; // 6
+const int nperiodfhc = 3; // 2, 3, 5
+
+const int npar = ncommonpar
+               + nbeam  *nperbinpar*nbins_e
+               + nperiod*nperperpar*nbins_e;
+const int npar_ee = ncommonpar + nperbinpar + nperperpar + 1;
 const char * const ee_parnames[npar_ee] = {
 "Tneut",
 "Aneut",
@@ -85,6 +93,7 @@ const char * const ee_parnames[npar_ee] = {
 
 "Tmich",
 "NMich",
+
 "flat",
 "pileup",
 
@@ -93,11 +102,11 @@ const char * const ee_parnames[npar_ee] = {
 
 const int ee_scale_par = npar_ee-1;
 
+const double nmich_start = 0.8;
+const double nneut_start = 0.05;
+const double nb12_start  = 0.001;
 const double tmich_start = 2.1;
-const double nneut_start = 1.5e5;
-const double nb12_start = 2e4;
 const double flat_start = 3;
-const double nmich_start = 1.5e5;
 const double pileup_start = 300;
 
 // parameter numbers, C numbering, for use with TMinuit functions
@@ -113,8 +122,10 @@ const int
   // Nuisance parameters, energy dependent
   tmich_nc  = nb12_nc  + nbins_e*nbeam,
   nmich_nc  = tmich_nc + nbins_e*nbeam,
-  flat_nc   = nmich_nc + nbins_e*nbeam, // run dependent
-  pileup_nc = flat_nc  + nbins_e*nbeam; // run dependent
+
+  // Nuisance parameters, energy and period dependent
+  flat_nc   = nmich_nc + nbins_e*nbeam,
+  pileup_nc = flat_nc  + nbins_e*nperiod;
 
 const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
           nmich_nf  = nmich_nc +1, // for use with native MINUIT
@@ -146,12 +157,13 @@ static std::vector<PAR> makeparameters()
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
       p.push_back(makepar(Form("%sNMich%d", bname[b], i), nmich_start));
-  for(int b = 0; b < nbeam; b++)
+
+  for(int ip = 0; ip < nperiod; ip++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sflat%d", bname[b], i), flat_start));
-  for(int b = 0; b < nbeam; b++)
+      p.push_back(makepar(Form("P%dflat%d", ip, i), flat_start));
+  for(int ip = 0; ip < nperiod; ip++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%spileup%d", bname[b], i), pileup_start));
+      p.push_back(makepar(Form("P%dpileup%d", ip, i), pileup_start));
 
   return p;
 }
@@ -200,13 +212,23 @@ const int ntf1s = 7;
 static TF1 * ees[ntf1s] =
   { ee_neg, ee_pos, ee_flat, ee_mich, ee_neut, ee_b12, ee_pileup };
 
-static TH2D * fhc_s = NULL;
-static TH2D * rhc_s = NULL;
+static const char * const ees_description[ntf1s] =
+  { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons", "^{12}B", "pileup" };
 
-static TH1D * tcounts_fhc = NULL;
-static TH1D * tcounts_rhc = NULL;
+static TH2D * period2_s = NULL;
+static TH2D * period3_s = NULL;
+static TH2D * period5_s = NULL;
+static TH2D * period6_s = NULL;
 
-static TH2D ** fithist = (TH2D**)malloc(nbeam*sizeof(TH2D*));
+static TH1D * tcounts_period2 = NULL;
+static TH1D * tcounts_period3 = NULL;
+static TH1D * tcounts_period5 = NULL;
+static TH1D * tcounts_period6 = NULL;
+
+std::vector< std::vector<double> > scales;
+
+static TH2D ** fithist     = (TH2D**)malloc(nperiod*sizeof(TH2D*));
+static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
 
 static TCanvas * c1 = new TCanvas("rhc1", "rhc1");
 static TCanvas * c2 = new TCanvas("rhc2", "rhc2");
@@ -286,7 +308,6 @@ static void fixatzero(int i) // 1-indexed!
   mn->Command(Form("FIX %d", i));
 }
 
-
 static bool onegoodminos(const int par, const bool no_low_ok)
 {
   if((!no_low_ok && getminerrdn(par) == 0) || getminerrup(par) == 0){
@@ -312,30 +333,42 @@ void fcn(int & np, double * gin, double & like, double *par, int flag)
 
   const double b12life = 29.14e3;
 
-  for(int beam = 0; beam < nbeam; beam++){
-    TH2D * h = fithist[beam];
-    for(int eb = 0; eb < h->GetNbinsY(); eb++){
-      for(int tb = 1; tb <= h->GetNbinsX() && tb <= maxfitt+nnegbins; tb++){
-        const int offset = beam*nbins_e + eb;
+  for(int period = 0; period < nperiod; period++){
+    TH2D * h = fithist[period];
 
-        const double x = h->GetXaxis()->GetBinCenter(tb);
+    int beam;
+    if(period < nperiodrhc) beam = 0;
+    else beam = 1;
+
+    const TAxis * xa = h->GetXaxis();
+
+    for(int tb = 1; tb <= h->GetNbinsX() && tb <= maxfitt+nnegbins; tb++){
+      const double x = xa->GetBinCenter(tb);
+      for(int eb = 0; eb < h->GetNbinsY(); eb++){
+        const int off_beam   = beam  *nbins_e + eb;
+        const int off_period = period*nbins_e + eb;
 
         double model = 0;
 
-        if(x <= -1 || x >= 2) model += abs(par[flat_nc+offset]);
+        const double sca = scales[period][eb];
 
-        if(x >= 2)
-          model += fabs(par[nmich_nc+offset])/par[tmich_nc+offset]
-                     * exp(-x/par[tmich_nc+offset]) +
+        if(x <= -1 || x >= 2) model += fabs(par[flat_nc+off_period]);
 
-                   fabs(par[nneut_nc+offset])/par[tneut_nc] * exp(-x/par[tneut_nc])
-             *(erf(sqrt(par[aneut_nc]/x))
-               -2/sqrt(M_PI)*sqrt(par[aneut_nc]/x)*exp(-par[aneut_nc]/x))
+        if(x >= 2){
+          const double sqrt_par_aneut_nc_x = sqrt(par[aneut_nc]/x);
+          model += fabs(par[nmich_nc+off_beam]*sca)/par[tmich_nc+off_beam]
+                      * exp(-x/par[tmich_nc+off_beam]) +
 
-                 + fabs(par[nb12_nc+offset])/b12life * exp(-x/b12life);
+                   fabs(par[nneut_nc+off_beam]*sca)/
+                       par[tneut_nc] * exp(-x/par[tneut_nc])
+             *(erf(sqrt_par_aneut_nc_x)
+               -M_2_SQRTPI*sqrt_par_aneut_nc_x*exp(-par[aneut_nc]/x))
+
+                 + fabs(par[nb12_nc+off_beam]*sca)/b12life * exp(-x/b12life);
+        }
 
         if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
-          model += fabs(par[pileup_nc+offset])*fabs(fabs(x)-10);
+          model += fabs(par[pileup_nc+off_period])*fabs(fabs(x)-10);
 
         const double data = h->GetBinContent(tb, eb+1 /* 0->1 index */);
 
@@ -378,17 +411,32 @@ void make_mn()
                   PARAMETERS[i].start/100., 0., 0., mnparmerr);
 }
 
-static void set_ee_to_mn(const int beami, const int bin) // 0-indexed
+static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
 {
+  int beam;
+  if(periodi < nperiodrhc) beam = 0;
+  else                     beam = 1;
+
   for(int i = 0; i < ncommonpar; i++){
     ee_neg->SetParameter(i, getpar(i));
   }
 
-  for(int i = ncommonpar; i < npar_ee; i++){
-    ee_neg->SetParameter(i, getpar(
-      ncommonpar
-      + nbeam*(i-ncommonpar)*nbins_e
-      + beami * nbins_e
+  for(int i = ncommonpar; i < npar_ee-1; i++){
+    // walk forward through the blocks of parameters to the right place.
+    ee_neg->SetParameter(i,
+ 
+      (i==2||i==3||i==5? scales[periodi][bin]:1)* // scale counts to tracks
+
+      getpar(
+      ncommonpar +
+      (i < ncommonpar + nperbinpar?
+          nbeam*nbins_e*(i-ncommonpar)
+        + beam * nbins_e
+      :
+          nbeam*nbins_e*nperbinpar // end of per beam block
+        + nperiod*nbins_e * (i-ncommonpar-nperbinpar) // par block
+        + nbins_e*periodi
+      )
       + bin
     ));
   }
@@ -415,14 +463,14 @@ static void sanitize_after_rebinning(TH1D * x)
   }
 }
 
-static void draw_ee(const int beami, const int bin, const double ntrack) // 0-indexed
+static void draw_ee(const int periodi, const int bin, const double ntrack) // 0-indexed
 {
   const int rebin = 1;
 
   c1->cd();
   static bool first = true;
-  set_ee_to_mn(beami, bin);
-  TH1D * x = fithist[beami]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
+  set_ee_to_mn(periodi, bin);
+  TH1D * x = fithist[periodi]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
   x->Rebin(rebin);
 
   sanitize_after_rebinning(x);
@@ -431,15 +479,35 @@ static void draw_ee(const int beami, const int bin, const double ntrack) // 0-in
     x->GetYaxis()->SetTitle("Delayed clusters/#mus");
   else
     x->GetYaxis()->SetTitle(Form("Delayed clusters/%d#mus", rebin));
-  x->GetXaxis()->SetTitle("Time since muon stop (#mus)");
+  x->GetYaxis()->CenterTitle();
+  x->GetXaxis()->CenterTitle();
+
+  const char * const periodnames[nperiod] =
+   { "Period 6 (RHC)",
+     "Period 2 (FHC)",
+     "Period 3 (FHC)",
+     "Period 5 (FHC)" };
+
+  x->GetXaxis()->SetTitle(
+    Form("%s E_{#nu} bin %d: Time since muon stop (#mus)",
+    periodnames[periodi],
+    bin));
   x->Draw("e");
 
   x->GetYaxis()->SetRangeUser(min(0.005, ntrack*1e-5)*rebin, ntrack*rebin*0.1);
 
+  TLegend * leg = new TLegend(0.63, 0.7, 0.93, 0.98);
+  leg->SetTextFont(42);
+  leg->SetBorderSize(1);
+  leg->SetFillStyle(0);
+
   for(int i = 0; i < ntf1s; i++){
     ees[i]->SetParameter(ee_scale_par, rebin);
     ees[i]->Draw("same");
+    if(i != 0 /*ee_neg*/) leg->AddEntry(ees[i], ees_description[i], "l");
   }
+
+  leg->Draw();
 
   c1->SetLogy();
   c1->Print(Form("fit.pdf%s", first?"(":""));
@@ -494,29 +562,30 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
   // Start each fit with a clean MINUIT slate.  This is crucial!
   make_mn();
 
-  fithist[0] = rhc_s;
-  fithist[1] = fhc_s;
-
   int status = 0;
+
+  for(int period = 0; period < nperiod; period++){
+    for(int bin = 0; bin < nbins_e; bin++){
+      // May as well set this to near the right value
+      mn->Command(Form("SET PAR %d %f", flat_nf+period*nbins_e + bin,
+        fithist[period]->ProjectionX("x", bin+1, bin+1)
+          ->Integral(0, nnegbins-10)/(nnegbins - 10)));
+      // Again, something reasonable based ont the data.
+      mn->Command(Form("SET PAR %d %f", pileup_nf+period*nbins_e + bin,
+        fithist[period]->ProjectionX("x", bin+1, bin+1)
+          ->GetBinContent(nnegbins - 2)/8.));
+    }
+  }
+
 
   for(int beam = 0; beam < nbeam; beam++){
     for(int bin = 0; bin < nbins_e; bin++){
-      // May as well set this to near the right value
-      mn->Command(Form("SET PAR %d %f", flat_nf,
-        fithist[beam]->ProjectionX("x", bin+1, bin+1)
-          ->Integral(0, nnegbins-10)/(nnegbins - 10)));
-
       // And this is a reasonable starting point for nmich
       mn->Command(Form("SET PAR %d %f", nmich_nf+beam*nbins_e + bin,
-                       ntrack[beam][bin]*0.8));
+                       0.8));
       // Ditto nneut
       mn->Command(Form("SET PAR %d %f", nneut_nf+beam*nbins_e + bin,
-                       ntrack[beam][bin]*0.1));
-
-      // Again, something reasonable based ont the data.
-      mn->Command(Form("SET PAR %d %f", pileup_nf+beam*nbins_e + bin,
-        fithist[beam]->ProjectionX("x", bin+1, bin+1)
-          ->GetBinContent(nnegbins - 2)/8.));
+                       0.1));
 
       // Start with the muon lifetime fixed so that it doesn't try to swap
       // with the neutron lifetime.
@@ -567,10 +636,8 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
              nb12_nf+beam*nbins_e+bin, fabs(getpar( nb12_nc+beam*nbins_e+bin))));
       mn->Command(Form("SET PAR %d %f",
             nneut_nf+beam*nbins_e+bin, fabs(getpar(nneut_nc+beam*nbins_e+bin))));
-      mn->Command(Form("SET LIM %d 0 %f",
-        nb12_nf+bin, max(1e6, 10*getpar( nb12_nc+beam*nbins_e+bin))));
-      mn->Command(Form("SET LIM %d 0 %f",
-        nneut_nf+bin, max(1e6, 10*getpar(nneut_nc+beam*nbins_e+bin))));
+      mn->Command(Form("SET LIM %d 0 2", nb12_nf+beam*nbins_e+bin));
+      mn->Command(Form("SET LIM %d 0 1", nneut_nf+beam*nbins_e+bin));
     }
   }
 
@@ -590,9 +657,9 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
 
   gMinuit->Command("show min");
 
-  for(int beam = 0; beam < nbeam; beam++)
+  for(int period = 0; period < nperiod; period++)
     for(int i = 0; i < nbins_e; i++)
-      draw_ee(beam, i, ntrack[beam][i]);
+      draw_ee(period, i, ntrack[period][i]);
 
 
   std::vector< std::vector<fitanswers> > anses;
@@ -709,29 +776,37 @@ static void init_ee()
 
 void rhc(const char * const savedhistfile = NULL)
 {
-  TFile * fhcfile = new TFile(
-  "/nova/ana/users/mstrait/ndcosmic/period235-type3.root", "Read");
-  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root", "Read");
-  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root", "Read");
-  //"/nova/ana/users/mstrait/ndcosmic/prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root", "Read");
-  TFile * rhcfile = new TFile("/nova/ana/users/mstrait/ndcosmic/prod_pid_S16-12-07_nd_period6_keepup/770-type3.root"                          , "Read");
+  TFile * fhc2file = new TFile("/nova/ana/users/mstrait/ndcosmic/"
+    "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root", "Read");
+  TFile * fhc3file = new TFile("/nova/ana/users/mstrait/ndcosmic/"
+    "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root", "Read");
+  TFile * fhc5file = new TFile("/nova/ana/users/mstrait/ndcosmic/"
+    "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root",
+    "Read");
+  TFile * rhcfile = new TFile("/nova/ana/users/mstrait/ndcosmic/"
+    "prod_pid_S16-12-07_nd_period6_keepup/770-type3.root", "Read");
 
-  TTree * fhc_tree = (TTree *)fhcfile->Get("t");
+  TTree * fhc2_tree = (TTree *)fhc2file->Get("t");
+  TTree * fhc3_tree = (TTree *)fhc3file->Get("t");
+  TTree * fhc5_tree = (TTree *)fhc5file->Get("t");
   TTree * rhc_tree = (TTree *)rhcfile->Get("t");
 
-  if(!fhc_tree || !rhc_tree || fhc_tree->IsZombie() || rhc_tree->IsZombie()){
+
+  if(!fhc2_tree || !fhc3_tree || !fhc5_tree || !rhc_tree ||
+      fhc2_tree->IsZombie() || fhc3_tree->IsZombie() ||
+      fhc5_tree->IsZombie() || rhc_tree->IsZombie()){
     fprintf(stderr, "Couldn't read something.  See above.\n");
     return;
   }
 
-  // Let the TFile errors go to the screen, then suppress the rest
   gErrorIgnoreLevel = kError;
 
   init_ee();
 
+  // Let the TFile errors go to the screen, then suppress the rest
   const char * const basecut = Form(
     "run != 11601" // noise at t = 106 in this run.
-                   // I have no idea how that's possible.
+                   // Will go away with a better run list.
     "&& primary && type == 3 && timeleft > %f && timeback > %f "
     "&& remid > 0.75 "
     "&& trklen > 200 " // standard
@@ -746,7 +821,7 @@ void rhc(const char * const savedhistfile = NULL)
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
     "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-    //"&& nslc <= 10" // reduce pileup
+    "&& nslc <= 6" // reduce pileup
     , maxrealtime, -nnegbins);
 
   // Attempt to agressively reduce neutrons while still getting B-12
@@ -775,7 +850,7 @@ void rhc(const char * const savedhistfile = NULL)
   const std::string ccut = Form("%s"
      "&& t > %f && t < %f"
      "&& !(t >= -1 && t < 2)"
-     "&& nhit >= 1 && mindist <= 0"
+     "&& nhit >= 1 && mindist <= 6"
      "&& pe > 35 && e < 20", basecut, -nnegbins, maxrealtime);
 
   // a loose cut
@@ -785,10 +860,12 @@ void rhc(const char * const savedhistfile = NULL)
      "&& !(t >= -1 && t < 2)", basecut, -nnegbins, maxrealtime);
   */
 
-  fhc_s = new TH2D("fhc_s", "", nnegbins + maxrealtime + additional,
-                                -nnegbins, maxrealtime + additional,
-                                nbins_e, bins_e);
-  rhc_s = (TH2D *)fhc_s->Clone("rhc_s");
+  period6_s = new TH2D("period6_s", "", nnegbins + maxrealtime + additional,
+                                       -nnegbins, maxrealtime + additional,
+                                        nbins_e, bins_e);
+  period2_s = (TH2D *)period6_s->Clone("period2_s");
+  period3_s = (TH2D *)period6_s->Clone("period3_s");
+  period5_s = (TH2D *)period6_s->Clone("period5_s");
 
   // Square means RHC, solid means neutron, black means good fit
   TGraphAsymmErrors
@@ -805,51 +882,85 @@ void rhc(const char * const savedhistfile = NULL)
     * b12_result    = newgraph(kBlack, kDashed,kOpenCircle, 1),
     * b12_resultbad = newgraph(kRed,   kDashed,kOpenCircle, 1);
 
-  b12_result->SetLineStyle(kDashed);
-  tcounts_fhc = new TH1D("tcounts_fhc", "", nbins_e, bins_e);
-  tcounts_rhc = (TH1D *)tcounts_fhc->Clone("tcounts_rhc");
+  tcounts_period2 = new TH1D("tcounts_period2", "", nbins_e, bins_e);
+  tcounts_period3 = (TH1D *)tcounts_period2->Clone("tcounts_period3");
+  tcounts_period5 = (TH1D *)tcounts_period2->Clone("tcounts_period5");
+  tcounts_period6 = (TH1D *)tcounts_period2->Clone("tcounts_period6");
+
+  fithist[0] = period6_s;
+  fithist[1] = period2_s;
+  fithist[2] = period3_s;
+  fithist[3] = period5_s;
+
+  all_tcounts[0] = tcounts_period6;
+  all_tcounts[1] = tcounts_period2;
+  all_tcounts[2] = tcounts_period3;
+  all_tcounts[3] = tcounts_period5;
 
   const std::string tcut = Form("i == 0 && %s", basecut);
 
   if(savedhistfile == NULL){
-    rhc_tree->Draw("slce:t >> rhc_s", ccut.c_str());
-    fhc_tree->Draw("slce:t >> fhc_s", ccut.c_str());
+    rhc_tree->Draw("slce:t >> period6_s", ccut.c_str());
+    printf("Got period6_s\n"); fflush(stdout);
+    fhc2_tree->Draw("slce:t >> period2_s", ccut.c_str());
+    printf("Got period2_s\n"); fflush(stdout);
+    fhc3_tree->Draw("slce:t >> period3_s", ccut.c_str());
+    printf("Got period3_s\n"); fflush(stdout);
+    fhc5_tree->Draw("slce:t >> period5_s", ccut.c_str());
+    printf("Got period5_s\n"); fflush(stdout);
 
-    fhc_tree->Draw("slce >> tcounts_fhc", tcut.c_str());
-    rhc_tree->Draw("slce >> tcounts_rhc", tcut.c_str());
+    rhc_tree ->Draw("slce >> tcounts_period6", tcut.c_str());
+    printf("Got tcounts_period6\n"); fflush(stdout);
+    fhc2_tree->Draw("slce >> tcounts_period2", tcut.c_str());
+    printf("Got tcounts_period2\n"); fflush(stdout);
+    fhc3_tree->Draw("slce >> tcounts_period3", tcut.c_str());
+    printf("Got tcounts_period3\n"); fflush(stdout);
+    fhc5_tree->Draw("slce >> tcounts_period5", tcut.c_str());
+    printf("Got tcounts_period5\n"); fflush(stdout);
+
+    std::ofstream o("savedhists.C");
+
+    for(int i = 0; i < nperiod; i++){
+      fithist[i]->SavePrimitive(o);
+      all_tcounts[i]->SavePrimitive(o);
+    }
   }
   else{
     gROOT->Macro(savedhistfile);
-    if(rhc_s->Integral() < 1 || fhc_s->Integral() < 1){
+    if(period6_s->Integral() < 1){
       fprintf(stderr, "I don't like this input file\n");
       exit(1);
     }
   }
 
-  std::vector<double> rhc_scales, fhc_scales;
+  std::vector<double> period6_scales, period2_scales,
+    period3_scales, period5_scales;
 
   for(int s = 1; s <= nbins_e; s++){
-    rhc_scales.push_back(tcounts_rhc->GetBinContent(s));
-    fhc_scales.push_back(tcounts_fhc->GetBinContent(s));
+    period2_scales.push_back(tcounts_period2->GetBinContent(s));
+    period3_scales.push_back(tcounts_period3->GetBinContent(s));
+    period5_scales.push_back(tcounts_period5->GetBinContent(s));
+    period6_scales.push_back(tcounts_period6->GetBinContent(s));
   }
 
-  std::vector< std::vector<double> > scales;
-  scales.push_back(rhc_scales);
-  scales.push_back(fhc_scales);
+  scales.push_back(period6_scales);
+  scales.push_back(period2_scales);
+  scales.push_back(period3_scales);
+  scales.push_back(period5_scales);
 
   const std::vector< std::vector<fitanswers> > anses = dothefit(scales);
 
   for(int s = 0; s < nbins_e; s++){
-    const double rhc_scale = rhc_scales[s];
-    const double fhc_scale = fhc_scales[s];
+    const double rhc_scale = 1;
+    const double fhc_scale = 1;
     const fitanswers rhc_ans = anses[0][s];
     const fitanswers fhc_ans = anses[1][s];
 
     const double scale = fhc_scale/rhc_scale;
     printf("N tracks %.0f, %.0f. Scale = %f\n", fhc_scale, rhc_scale, scale);
 
-    const double loslce = fhc_s->GetYaxis()->GetBinLowEdge(s+1);
-    const double hislce = fhc_s->GetYaxis()->GetBinLowEdge(s+2);
+    const double loslce = period6_s->GetYaxis()->GetBinLowEdge(s+1);
+    const double hislce = period6_s->GetYaxis()->GetBinLowEdge(s+2);
 
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
@@ -912,42 +1023,66 @@ void rhc(const char * const savedhistfile = NULL)
 
   c2->cd();
   dum2->GetYaxis()->SetTitle("Neutrons per track");
-  dum2->GetYaxis()->SetRangeUser(0, 0.29);
+  dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
+  dum2->GetYaxis()->CenterTitle();
+  dum2->GetXaxis()->CenterTitle();
+  dum2->GetYaxis()->SetRangeUser(0, 0.19);
   dum2->Draw();
   g_n_rhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
   g_n_fhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
+
+  TLegend * nleg = new TLegend(0.6, 0.2, 0.9, 0.3);
+  nleg->SetTextFont(42);
+  nleg->AddEntry(g_n_rhc, "RHC", "lpe");
+  nleg->AddEntry(g_n_fhc, "FHC", "lpe");
+  nleg->SetBorderSize(1);
+  nleg->SetFillStyle(0);
+  nleg->Draw();
+
+
   c2->Print("fit.pdf");
 
   c3->cd();
-  dum3->GetYaxis()->SetTitle("B-12 per track");
-  c3->SetLogy();
-  dum3->GetYaxis()->SetRangeUser(0.001, 6);
+  dum3->GetYaxis()->SetTitle("^{12}B per track");
+  dum3->GetXaxis()->SetTitle("E_{#nu} (GeV)");
+  dum3->GetYaxis()->SetRangeUser(0, 2);
+  dum3->GetYaxis()->CenterTitle();
+  dum3->GetXaxis()->CenterTitle();
   dum3->Draw();
   g_b12_rhc->Draw("pz");
   g_b12_rhc_bad->Draw("pz");
   g_b12_fhc->Draw("pz");
   g_b12_rhc_bad->Draw("pz");
+  TLegend * b12leg = new TLegend(0.6, 0.2, 0.9, 0.3);
+  b12leg->SetTextFont(42);
+  b12leg->AddEntry(g_b12_rhc, "RHC", "lpe");
+  b12leg->AddEntry(g_b12_fhc, "FHC", "lpe");
+  b12leg->SetBorderSize(1);
+  b12leg->SetFillStyle(0);
+  b12leg->Draw();
   c3->Print("fit.pdf");
 
   c4->cd();
   dum->GetYaxis()->SetTitle("Ratios");
+  dum->GetXaxis()->SetTitle("E_{#nu} (GeV)");
+  dum->GetYaxis()->CenterTitle();
+  dum->GetXaxis()->CenterTitle();
   dum->GetYaxis()->SetRangeUser(0, 1.5);
   dum->Draw();
   n_result->Draw("pz");
   n_resultbad->Draw("pz");
   b12_result->Draw("pz");
   b12_resultbad->Draw("pz");
+  TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.35);
+  ratleg->SetTextFont(42);
+  ratleg->AddEntry(n_result, "Neutrons", "lpe");
+  ratleg->AddEntry(b12_result, "^{12}B", "lpe");
+  ratleg->SetBorderSize(1);
+  ratleg->SetFillStyle(0);
+  ratleg->Draw();
 
   c4->Print("fit.pdf)");
 
-  if(savedhistfile == NULL){
-    std::ofstream o("savedhists.C");
-
-    rhc_s->SavePrimitive(o);
-    fhc_s->SavePrimitive(o);
-    tcounts_fhc->SavePrimitive(o);
-    tcounts_rhc->SavePrimitive(o);
-  }
 }
