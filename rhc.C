@@ -80,8 +80,8 @@ const int ncommonpar = 2;
 const int nperbinpar = 6;
 
 const int npar    = ncommonpar + nperbinpar*nbins_e;
-const int npar_ee = ncommonpar + nperbinpar;
-const char * const ee_parnames[npar] = {
+const int npar_ee = ncommonpar + nperbinpar + 1;
+const char * const ee_parnames[npar_ee] = {
 "Tneut",
 "Aneut",
 
@@ -91,8 +91,12 @@ const char * const ee_parnames[npar] = {
 "Tmich",
 "flat",
 "NMich",
-"pileup"
+"pileup",
+
+"scale"
 };
+
+const int ee_scale_par = npar_ee-1;
 
 const double tmich_start = 2.1;
 const double nneut_start = 1.5e5;
@@ -154,20 +158,43 @@ static std::vector<PAR> PARAMETERS = makeparameters();
 // TF1::Draw() has a lot of trouble with the discontinuity at zero, 
 // so split into the positive and negative parts
 static TF1 * ee_pos = new TF1("ee_pos",
-  "abs([5]) + "
+  "[8]*(abs([5]) + "
   "(x >= 0)*("
    "abs([6])/[4] * exp(-x/[4]) + "
    "abs([2])/[0] * exp(-x/[0]) "
    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
    "+ abs([3])/29.14e3 * exp(-x/29.14e3)"
   ") + "
-  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
+  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
   0, maxrealtime+additional);
 
 static TF1 * ee_neg = new TF1("ee_neg",
-  "abs([5]) + "
-  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
+  "[8]*(abs([5]) + "
+  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
   -nnegbins, 0);
+
+static TF1 * ee_flat =
+  new TF1("ee_flat", "[8]*abs([5])", -nnegbins, maxrealtime+additional);
+
+static TF1 * ee_mich =
+  new TF1("ee_mich", "[8]*(abs([6])/[4] * exp(-x/[4]))", 0, maxrealtime+additional);
+
+static TF1 * ee_neut =
+  new TF1("ee_mich", 
+   "[8]*(abs([2])/[0] * exp(-x/[0]) "
+   "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))"
+   , 0, maxrealtime+additional);
+
+static TF1 * ee_b12 =
+  new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))", 0, maxrealtime+additional);
+
+static TF1 * ee_pileup =
+  new TF1("ee_b12", "[8]*((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
+         -nnegbins, maxrealtime+additional);
+
+const int ntf1s = 7;
+static TF1 * ees[ntf1s] =
+  { ee_neg, ee_pos, ee_flat, ee_mich, ee_neut, ee_b12, ee_pileup };
 
 static TH2D * fhc_s = NULL;
 static TH2D * rhc_s = NULL;
@@ -340,19 +367,54 @@ static void set_ee_to_mn(const int bin) // 0-indexed
     ee_neg->SetParameter(i, getpar(ncommonpar + (i-ncommonpar)*nbins_e + bin));
   }
 
-  for(int i = 0; i < npar_ee; i++)
-    ee_pos->SetParameter(i, ee_neg->GetParameter(i));
+  ee_neg->SetParameter(ee_scale_par, 1); // scale
+
+  for(int f = 0; f < ntf1s; f++)
+    for(int i = 0; i < npar_ee; i++)
+      ees[f]->SetParameter(i, ee_neg->GetParameter(i));
 }
 
-static void draw_ee(const int bin) // 0-indexed
+// Have to get rid of any bins that have partial contents.
+// Just for drawing.
+static void sanitize_after_rebinning(TH1D * x)
 {
+  // if the bin contains the range [-1,2], zero it
+  for(int b = 0; b <= x->GetNbinsX(); b++){
+    if(-1.0 > x->GetBinLowEdge(b) &&
+       -1.0 < x->GetBinLowEdge(b+1)) x->SetBinContent(b, 0);
+    if(2 > x->GetBinLowEdge(b) &&
+       2 < x->GetBinLowEdge(b+1)) x->SetBinContent(b, 0);
+    // does not consider the case that the bin is entirely
+    // inside of the range, because then it will be zero anyway
+  }
+}
+
+static void draw_ee(const int bin, const double ntrack) // 0-indexed
+{
+  const int rebin = 2;
+
   c1->cd();
   static bool first = true;
   set_ee_to_mn(bin);
-  fithist->ProjectionX("x", bin+1, bin+1 /* 0->1 */)->Draw("e");
-  //x->GetYaxis()->SetRangeUser(min(0.5, ntrack*1e-5), ntrack*1e0);
-  ee_neg->Draw("same");
-  ee_pos->Draw("same");
+  TH1D * x = fithist->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
+  x->Rebin(rebin);
+
+  sanitize_after_rebinning(x);
+
+  if(rebin == 1)
+    x->GetYaxis()->SetTitle("Delayed clusters/#mus");
+  else
+    x->GetYaxis()->SetTitle(Form("Delayed clusters/%d#mus", rebin));
+  x->GetXaxis()->SetTitle("Time since muon stop (#mus)");
+  x->Draw("e");
+
+  x->GetYaxis()->SetRangeUser(min(0.5, ntrack*1e-5)*rebin, ntrack*rebin*0.1);
+
+  for(int i = 0; i < ntf1s; i++){
+    ees[i]->SetParameter(ee_scale_par, rebin);
+    ees[i]->Draw("same");
+  }
+
   c1->SetLogy();
   c1->Print(Form("fit.pdf%s", first?"(":""));
   c1->Update(); c1->Modified();
@@ -392,7 +454,7 @@ static void draw_ee(const int bin) // 0-indexed
     }
 
   gMinuit->Command("show min");
-  for(int i = 0; i < nbins_e; i++) draw_ee(i);
+  for(int i = 0; i < nbins_e; i++) draw_ee(i, ntrack[i]);
 #endif
   /* End cheating for sensitivity study! */
 
@@ -485,7 +547,7 @@ static std::vector<fitanswers> dothefit(TH2D * hist, const bool is_rhc,
     }
 
   gMinuit->Command("show min");
-  for(int i = 0; i < nbins_e; i++) draw_ee(i);
+  for(int i = 0; i < nbins_e; i++) draw_ee(i, ntrack[i]);
 
 
   std::vector<fitanswers> anses;
@@ -555,12 +617,42 @@ static void addpoint(TGraphAsymmErrors * g, const double x,
 
 static void init_ee()
 {
-  // Pretty sure this is punishable by public flogging
-  for(TF1 * e = ee_pos; e <= ee_neg; e += ee_neg - ee_pos){
-    e->SetNpx(400);
-    e->SetLineColor(kRed);
-    e->SetLineWidth(1);
-    for(int i = 0; i < npar; i++) e->SetParName(i, ee_parnames[i]);
+  for(int i = 0; i < ntf1s; i++){
+    TF1 * e = ees[i];
+    switch(i){
+      case 0: case 1:
+        e->SetLineColor(kRed);
+        e->SetLineWidth(2);
+        e->SetNpx(400);
+        break;
+      case 2:
+        e->SetLineStyle(kDashed);
+        e->SetLineColor(kBlack);
+        e->SetLineWidth(1);
+        break;
+      case 3:
+        e->SetLineStyle(kDashed);
+        e->SetLineColor(kBlue);
+        e->SetLineWidth(1);
+        break;
+      case 4:
+        e->SetLineStyle(kDashed);
+        e->SetLineColor(kViolet);
+        e->SetLineWidth(2);
+        break;
+      case 5:
+        e->SetLineStyle(kDashed);
+        e->SetLineColor(kGreen+2);
+        e->SetLineWidth(2);
+        break;
+      case 6:
+        e->SetLineStyle(kDashed);
+        e->SetNpx(400);
+        e->SetLineColor(kOrange+2);
+        e->SetLineWidth(1);
+        break;
+    }
+    for(int p = 0; p < npar_ee; p++) e->SetParName(p, ee_parnames[p]);
   }
 }
 
@@ -632,7 +724,7 @@ void rhc(const char * const savedhistfile = NULL)
   const std::string ccut = Form("%s"
      "&& t > %f && t < %f"
      "&& !(t >= -1 && t < 2)"
-     "&& nhit >= 1 && mindist <= 2"
+     "&& nhit >= 1 && mindist <= 0"
      "&& pe > 35 && e < 20", basecut, -nnegbins, maxrealtime);
 
   // a loose cut
@@ -790,7 +882,7 @@ void rhc(const char * const savedhistfile = NULL)
   b12_result->Draw("pz");
   b12_resultbad->Draw("pz");
 
-  c1->Print("fit.pdf)");
+  c4->Print("fit.pdf)");
 
   if(savedhistfile == NULL){
     std::ofstream o("savedhists.C");
