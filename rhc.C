@@ -14,7 +14,7 @@
 /*
  * TODO: exclude neutron and B-12 candidates following a Michel.
  *
- * TODO: joint fit that directly extracts the ratios of interest
+ * TODO: Directly extracts the NC and numu fractions
  */
 
 struct fitanswers{
@@ -198,11 +198,11 @@ static TF1 * ee_neut =
   new TF1("ee_mich",
    "[8]*(abs([2])/[0] * exp(-x/[0]) "
    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))"
-   , 0, maxrealtime+additional);
+   , 2 /* rough visual correctness */, maxrealtime+additional);
 
 static TF1 * ee_b12 =
   new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))",
-          0, maxrealtime+additional);
+          2 /* rough visual correctness */, maxrealtime+additional);
 
 static TF1 * ee_pileup =
   new TF1("ee_b12", "[8]*((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
@@ -274,7 +274,7 @@ double geterr(int i) // 0-indexed!
   return err;
 }
 
-static double getlimlo(int i) // 0-indexed!
+__attribute__((unused)) static double getlimlo(int i) // 0-indexed!
 {
   double answer, dum;
   int idum;
@@ -292,7 +292,7 @@ static double getlimup(int i) // 0-indexed!
   return answer;
 }
 
-static void fixat(int i, float v) // 1-indexed!
+__attribute__((unused)) static void fixat(int i, float v) // 1-indexed!
 {
   mn->Command(Form("REL %d", i));
   if(getlimup(i-1)) mn->Command(Form("SET LIM %d", i));
@@ -300,7 +300,7 @@ static void fixat(int i, float v) // 1-indexed!
   mn->Command(Form("FIX %d", i));
 }
 
-static void fixatzero(int i) // 1-indexed!
+__attribute__((unused)) static void fixatzero(int i) // 1-indexed!
 {
   mn->Command(Form("REL %d", i));
   mn->Command(Form("SET LIM %d", i));
@@ -322,29 +322,65 @@ static double min(const double a, const double b)
   return a < b? a: b;
 }
 
-static double max(const double a, const double b)
+__attribute__((unused)) static double max(const double a, const double b)
 {
   return a > b? a: b;
 }
 
-void fcn(int & np, double * gin, double & like, double *par, int flag)
+static void fcn(__attribute__((unused)) int & np, __attribute__((unused)) double * gin,
+                double & like, double *par, __attribute__((unused)) int flag)
 {
   like = 0;
 
   const double b12life = 29.14e3;
 
-  for(int period = 0; period < nperiod; period++){
-    TH2D * h = fithist[period];
+  // Assumption: all histograms have the same dimensions and it don't change
+  const int nxbins = fithist[0]->GetNbinsX();
+  const int nybins = fithist[0]->GetNbinsY();
+  const int maxtb = min(nxbins, maxfitt+nnegbins);
 
-    int beam;
-    if(period < nperiodrhc) beam = 0;
-    else beam = 1;
+  // Cache all the bin contents.  Yes, this is measured to make it faster (~15%)
+  // as compared to calling GetBinContents in the inner loop.
+  static std::vector< std::vector< std::vector<double> > > alldata;
+  if(alldata.empty()){
+    for(int period = 0; period < nperiod; period++){
+      std::vector< std::vector<double> > vv;
+      std::vector< double > emptyv;
+      vv.push_back(emptyv); // 0->1
+      for(int tb = 1; tb <= maxtb; tb++){
+        std::vector<double> v;
+        for(int eb = 0; eb < nybins; eb++)
+          v.push_back(fithist[period]->GetBinContent(tb, eb+1));
+        vv.push_back(v);
+      }
+      alldata.push_back(vv);
+    }
+  }
 
-    const TAxis * xa = h->GetXaxis();
+  static std::vector<double> xs;
+  if(xs.empty()){
+    xs.push_back(0); // 0->1
+    for(int tb = 1; tb <= maxtb; tb++)
+      xs.push_back(fithist[0]->GetXaxis()->GetBinCenter(tb));
+  }
 
-    for(int tb = 1; tb <= h->GetNbinsX() && tb <= maxfitt+nnegbins; tb++){
-      const double x = xa->GetBinCenter(tb);
-      for(int eb = 0; eb < h->GetNbinsY(); eb++){
+  // nesting these loops in this order is the fastest
+  // Found to reduce time by 15% over other orders
+  for(int tb = 1; tb <= maxtb; tb++){
+
+    // loop invariants.  Who knows if ACLIC can optimize them?
+    // Experimentally it would seem that it doesn't.
+    const double x = xs[tb];
+    const double sqrt_par_aneut_nc_x = sqrt(par[aneut_nc]/x);
+    const double nstuff = 1/par[tneut_nc] * exp(-x/par[tneut_nc])
+      *(erf(sqrt_par_aneut_nc_x)
+          -M_2_SQRTPI*sqrt_par_aneut_nc_x*exp(-par[aneut_nc]/x));
+    const double exp_x_b12life = exp(-x/b12life)/b12life;
+
+    for(int period = 0; period < nperiod; period++){
+      const int beam = period < nperiodrhc? 0: 1; // resist urge to make cleverer
+
+      for(int eb = 0; eb < nybins; eb++){
         const int off_beam   = beam  *nbins_e + eb;
         const int off_period = period*nbins_e + eb;
 
@@ -355,22 +391,17 @@ void fcn(int & np, double * gin, double & like, double *par, int flag)
         if(x <= -1 || x >= 2) model += fabs(par[flat_nc+off_period]);
 
         if(x >= 2){
-          const double sqrt_par_aneut_nc_x = sqrt(par[aneut_nc]/x);
           model += fabs(par[nmich_nc+off_beam]*sca)/par[tmich_nc+off_beam]
                       * exp(-x/par[tmich_nc+off_beam]) +
 
-                   fabs(par[nneut_nc+off_beam]*sca)/
-                       par[tneut_nc] * exp(-x/par[tneut_nc])
-             *(erf(sqrt_par_aneut_nc_x)
-               -M_2_SQRTPI*sqrt_par_aneut_nc_x*exp(-par[aneut_nc]/x))
-
-                 + fabs(par[nb12_nc+off_beam]*sca)/b12life * exp(-x/b12life);
+                   fabs(par[nneut_nc+off_beam]*sca) * nstuff
+                 + fabs(par[nb12_nc +off_beam]*sca) * exp_x_b12life;
         }
 
         if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
-          model += fabs(par[pileup_nc+off_period])*fabs(fabs(x)-10);
+          model += fabs(par[pileup_nc+off_period])*(10-fabs(x));
 
-        const double data = h->GetBinContent(tb, eb+1 /* 0->1 index */);
+        const double data = alldata[period][tb][eb];
 
         like += model - data;
         if(model > 0 && data > 0) like += data * log(data/model);
@@ -654,6 +685,8 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
           gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+beam*nbins_e+bin));
           gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +beam*nbins_e+bin));
         }
+
+  gMinuit->Command(Form("MINOS 30000 %d", tneut_nf)); // just curious
 
   gMinuit->Command("show min");
 
