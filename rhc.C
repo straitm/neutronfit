@@ -17,6 +17,30 @@
  * TODO: Directly extracts the NC and numu fractions
  */
 
+
+const char * const clustercut = 
+// Attempt to agressively reduce neutrons while still getting B-12
+/*
+  "nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
+  "&& nhitx <= 2 && nhity <= 2"
+  "&& nhit <= 3"
+  "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
+  "&& pe > 35 && e > 8*0.62 && e < 25*0.62";
+*/
+
+// a pretty strict, reasonable cut
+/*
+   "nhitx >= 1 && nhity >= 1 && mindist <= 6"
+   "&& pe > 70 && e < 20";
+*/
+
+// a fairly loose, reasonable cut
+  "nhit >= 1 && mindist <= 6"
+  "&& pe > 35 && e < 20";
+
+// a very loose cut
+// "";
+
 struct fitanswers{
   bool n_good, b12_good;
   double  n_mag,  n_mage_up,  n_mage_dn,
@@ -220,25 +244,15 @@ static TF1 * ees[ntf1s] =
 static const char * const ees_description[ntf1s] =
   { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons", "^{12}B", "pileup" };
 
-static TH2D * period2_s = NULL;
-static TH2D * period3_s = NULL;
-static TH2D * period5_s = NULL;
-static TH2D * period6_s = NULL;
-
-static TH1D * tcounts_period2 = NULL;
-static TH1D * tcounts_period3 = NULL;
-static TH1D * tcounts_period5 = NULL;
-static TH1D * tcounts_period6 = NULL;
-
 std::vector< std::vector<double> > scales;
 
 static TH2D ** fithist     = (TH2D**)malloc(nperiod*sizeof(TH2D*));
 static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
 
-static TCanvas * c1 = new TCanvas("rhc1", "rhc1");
-static TCanvas * c2 = new TCanvas("rhc2", "rhc2");
-static TCanvas * c3 = new TCanvas("rhc3", "rhc3");
-static TCanvas * c4 = new TCanvas("rhc4", "rhc4");
+static TCanvas * c1 = new TCanvas("rhc1", "rhc1"); // hist
+static TCanvas * c2 = new TCanvas("rhc2", "rhc2"); // neutrons
+static TCanvas * c3 = new TCanvas("rhc3", "rhc3"); // B-12
+static TCanvas * c4 = new TCanvas("rhc4", "rhc4"); // ratios
 
 double getminerrup(int i) // 0-indexed!
 {
@@ -262,7 +276,7 @@ double getminerrdn(int i) // 0-indexed!
   for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
     if(mn->fIpfix[fixpar] < i+1)
       wherearewe--;
-  return -mn->fErn[wherearewe];
+  return -mn->fErn[wherearewe]; // define all errors as positive
 }
 
 double getpar(int i) // 0-indexed!
@@ -313,13 +327,30 @@ __attribute__((unused)) static void fixatzero(int i) // 1-indexed!
   mn->Command(Form("FIX %d", i));
 }
 
-static bool onegoodminos(const int par, const bool no_low_ok)
+static bool onegoodminosup(const int par) // 0-indexed
 {
-  if((!no_low_ok && getminerrdn(par) == 0) || getminerrup(par) == 0){
-    printf("Incomplete MINOS errors for free par %d\n", par);
-    return false;
-  }
-  return true;
+  return getminerrup(par) > 0 && getminerrup(par) != 54321.0;
+}
+
+static bool onegoodminosdn(const int par) // 0-indexed
+{ // I define all errors as positive
+  return getminerrdn(par) > 0 && getminerrdn(par) != 54321.0;
+}
+
+static bool onegoodminos(const int par, const bool no_low_ok) // 0-indexed
+{
+  return (no_low_ok || onegoodminosdn(par)) && onegoodminosup(par);
+}
+
+// Get the MINOS error if present (regardless of whether, otherwise the MIGRAD/HESSE error
+static double getbesterrup(const int par) // 0-indexed
+{
+  return onegoodminosup(par)? getminerrup(par): geterr(par);
+}
+
+static double getbesterrdn(const int par) // 0-indexed
+{
+  return onegoodminosdn(par)? getminerrdn(par): geterr(par);
 }
 
 static double min(const double a, const double b)
@@ -502,8 +533,7 @@ static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
       ees[f]->SetParameter(i, ee_neg->GetParameter(i));
 }
 
-// Have to get rid of any bins that have partial contents.
-// Just for drawing.
+// Have to get rid of any bins that have partial contents.  Just for drawing.
 static void sanitize_after_rebinning(TH1D * x)
 {
   // if the bin contains the range [-1,2], zero it
@@ -548,7 +578,7 @@ static void draw_ee(const int periodi, const int bin, const double ntrack) // 0-
     bin));
   x->Draw("e");
 
-  x->GetYaxis()->SetRangeUser(min(0.005, ntrack*1e-5)*rebin, ntrack*rebin*0.1);
+  x->GetYaxis()->SetRangeUser(ntrack*1e-5*rebin, ntrack*rebin*0.1);
 
   TLegend * leg = new TLegend(0.63, 0.7, 0.93, 0.98);
   leg->SetTextFont(42);
@@ -696,8 +726,8 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
 
       // Half of these are observed probabilities and the other half are ratios.
       // Same limits are reasonable at the moment.
-      mn->Command(Form("SET LIM %d 0 3", nb12_nf+beam*nbins_e+bin));
-      mn->Command(Form("SET LIM %d 0 3", nneut_nf+beam*nbins_e+bin));
+      mn->Command(Form("SET LIM %d 0 5", nb12_nf+beam*nbins_e+bin));
+      mn->Command(Form("SET LIM %d 0 5", nneut_nf+beam*nbins_e+bin));
     }
   }
 
@@ -719,8 +749,8 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
 
   gMinuit->Command("show min");
 
-  for(int period = 0; period < nperiod; period++)
-    for(int i = 0; i < nbins_e; i++)
+  for(int i = 0; i < nbins_e; i++)
+    for(int period = 0; period < nperiod; period++)
       draw_ee(period, i, ntrack[period][i]);
 
 
@@ -732,17 +762,13 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
       fitanswers ans;
       ans.n_good =   onegoodminos(nneut_nc+beam*nbins_e+bin, false);
       ans.n_mag =          getpar(nneut_nc+beam*nbins_e+bin);
-      ans.n_mage_up = getminerrup(nneut_nc+beam*nbins_e+bin);
-      ans.n_mage_dn = getminerrdn(nneut_nc+beam*nbins_e+bin);
+      ans.n_mage_up = getbesterrup(nneut_nc+beam*nbins_e+bin);
+      ans.n_mage_dn = getbesterrdn(nneut_nc+beam*nbins_e+bin);
 
       ans.b12_good =   onegoodminos(nb12_nc+beam*nbins_e+bin, true);
       ans.b12mag =           getpar(nb12_nc+beam*nbins_e+bin);
-      ans.b12mage_up =  getminerrup(nb12_nc+beam*nbins_e+bin);
-      ans.b12mage_dn =
-        (getminerrdn(nb12_nc+beam*nbins_e+bin) != 0 &&
-         getminerrdn(nb12_nc+beam*nbins_e+bin) != 54321.0)?
-         getminerrdn(nb12_nc+beam*nbins_e+bin):
-         getpar(     nb12_nc+beam*nbins_e+bin);
+      ans.b12mage_up = getbesterrup(nb12_nc+beam*nbins_e+bin);
+      ans.b12mage_dn = getbesterrdn(nb12_nc+beam*nbins_e+bin);
 
       printf("b12mag = %f + %f - %f\n", ans.b12mag, ans.b12mage_up, ans.b12mage_dn);
       printf("n_mag  = %f + %f - %f\n",  ans.n_mag,  ans.n_mage_up,  ans.n_mage_dn);
@@ -843,32 +869,49 @@ static void init_ee()
   }
 }
 
+static double gdrawmax(const TGraphAsymmErrors * const g)
+{
+  double max = -1e300;
+  for(int i = 0; i < g->GetN(); i++){
+    const double y = g->GetY()[i] + g->GetErrorYhigh(i);
+    if(y > max) max = y;
+  }
+  return max;
+}
+
 void rhc(const char * const savedhistfile = NULL)
 {
-  TFile * fhc2file = new TFile("/nova/ana/users/mstrait/ndcosmic/"
-    "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root", "Read");
-  TFile * fhc3file = new TFile("/nova/ana/users/mstrait/ndcosmic/"
-    "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root", "Read");
-  TFile * fhc5file = new TFile("/nova/ana/users/mstrait/ndcosmic/"
-    "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root",
-    "Read");
-  TFile * rhcfile = new TFile("/nova/ana/users/mstrait/ndcosmic/"
-    "prod_pid_S16-12-07_nd_period6_keepup/770-type3.root", "Read");
+  const char * const inputfiles[nperiod] = {
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "S16-12-07_nd_period6_keepup/770-type3.root",
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root",
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root",
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+  };
 
-  TTree * fhc2_tree = (TTree *)fhc2file->Get("t");
-  TTree * fhc3_tree = (TTree *)fhc3file->Get("t");
-  TTree * fhc5_tree = (TTree *)fhc5file->Get("t");
-  TTree * rhc_tree = (TTree *)rhcfile->Get("t");
+  const char * const periodnames[nperiod] =
+    { "period6", "period2", "period3", "period5" };
 
+  TFile * inputTFiles[nperiod] = { NULL };
+  TTree * trees[nperiod] = { NULL };
 
-  if(!fhc2_tree || !fhc3_tree || !fhc5_tree || !rhc_tree ||
-      fhc2_tree->IsZombie() || fhc3_tree->IsZombie() ||
-      fhc5_tree->IsZombie() || rhc_tree->IsZombie()){
-    fprintf(stderr, "Couldn't read something.  See above.\n");
-    return;
+  for(int i = 0; i < nperiod; i++){
+    inputTFiles[i] = new TFile(inputfiles[i], "read");
+    if(!inputTFiles[i] || inputTFiles[i]->IsZombie()){
+      fprintf(stderr, "Couldn't read a file.  See above.\n");
+      return;
+    }
+    trees[i] = dynamic_cast<TTree *>(inputTFiles[i]->Get("t"));
+    if(!trees[i]){
+      fprintf(stderr, "Couldn't read a tree.  See above.\n");
+      return;
+    }
   }
 
-  gErrorIgnoreLevel = kError;
+  gErrorIgnoreLevel = kError; // after reads above
 
   init_ee();
 
@@ -893,48 +936,14 @@ void rhc(const char * const savedhistfile = NULL)
     "&& nslc <= 6" // reduce pileup
     , maxrealtime, -nnegbins);
 
-  // Attempt to agressively reduce neutrons while still getting B-12
-  /*
-  const std::string ccut = Form("%s"
-    "&& t > %f && t < %f"
-    "&& !(t >= -1 && t < 2)"
-    "&& nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
-    "&& nhitx <= 2 && nhity <= 2"
-    "&& nhit <= 3"
-    "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
-    "&& pe > 35 && e > 8*0.62 && e < 25*0.62", -nnegbins, maxrealtime,
-    basecut);
-  */
+  for(int i = 0; i < nperiod; i++)
+    fithist[i] = new TH2D(Form("%s_s", periodnames[i]), "",
+      nnegbins + maxrealtime + additional,
+      -nnegbins, maxrealtime + additional,
+      nbins_e, bins_e);
 
-  // a pretty strict, reasonable cut
-  /*
-  const std::string ccut = Form("%s"
-     "&& t > %f && t < %f"
-     "&& !(t >= -1 && t < 2)"
-     "&& nhitx >= 1 && nhity >= 1 && mindist <= 6"
-     "&& pe > 70 && e < 20", basecut, -nnegbins, maxrealtime);
-  */
-
-  // a fairly loose, reasonable cut
-  const std::string ccut = Form("%s"
-     "&& t > %f && t < %f"
-     "&& !(t >= -1 && t < 2)"
-     "&& nhit >= 1 && mindist <= 6"
-     "&& pe > 35 && e < 20", basecut, -nnegbins, maxrealtime);
-
-  // a loose cut
-  /*
-  const std::string ccut = Form("%s"
-     "&& t > %f && t < %f"
-     "&& !(t >= -1 && t < 2)", basecut, -nnegbins, maxrealtime);
-  */
-
-  period6_s = new TH2D("period6_s", "", nnegbins + maxrealtime + additional,
-                                       -nnegbins, maxrealtime + additional,
-                                        nbins_e, bins_e);
-  period2_s = (TH2D *)period6_s->Clone("period2_s");
-  period3_s = (TH2D *)period6_s->Clone("period3_s");
-  period5_s = (TH2D *)period6_s->Clone("period5_s");
+  for(int i = 0; i < nperiod; i++)
+    all_tcounts[i] = new TH1D(Form("tcounts_%s", periodnames[i]), "", nbins_e, bins_e);
 
   // Square means RHC, solid means neutron, black means good fit
   TGraphAsymmErrors
@@ -946,76 +955,43 @@ void rhc(const char * const savedhistfile = NULL)
     * g_n_fhc_bad   = newgraph(kRed,   kSolid, kOpenCircle, 1),
     * g_b12_rhc_bad = newgraph(kRed,   kDashed,kOpenSquare, 1),
     * g_b12_fhc_bad = newgraph(kRed,   kDashed,kOpenCircle, 1),
-    * n_result      = newgraph(kBlack, kSolid, kOpenCircle, 1),
-    * n_resultbad   = newgraph(kRed,   kSolid, kOpenCircle, 1),
+    * n_result      = newgraph(kBlack, kSolid, kFullCircle, 1),
+    * n_resultbad   = newgraph(kRed,   kSolid, kFullCircle, 1),
     * b12_result    = newgraph(kBlack, kDashed,kOpenCircle, 1),
     * b12_resultbad = newgraph(kRed,   kDashed,kOpenCircle, 1);
 
-  tcounts_period2 = new TH1D("tcounts_period2", "", nbins_e, bins_e);
-  tcounts_period3 = (TH1D *)tcounts_period2->Clone("tcounts_period3");
-  tcounts_period5 = (TH1D *)tcounts_period2->Clone("tcounts_period5");
-  tcounts_period6 = (TH1D *)tcounts_period2->Clone("tcounts_period6");
-
-  fithist[0] = period6_s;
-  fithist[1] = period2_s;
-  fithist[2] = period3_s;
-  fithist[3] = period5_s;
-
-  all_tcounts[0] = tcounts_period6;
-  all_tcounts[1] = tcounts_period2;
-  all_tcounts[2] = tcounts_period3;
-  all_tcounts[3] = tcounts_period5;
-
   const std::string tcut = Form("i == 0 && %s", basecut);
 
+  const std::string cut = Form(
+   "%s && %s"
+   "&& t > %f && t < %f && !(t >= -1 && t < 2)",
+    basecut, clustercut, -nnegbins, maxrealtime);
+
   if(savedhistfile == NULL){
-    rhc_tree->Draw("slce:t >> period6_s", ccut.c_str());
-    printf("Got period6_s\n"); fflush(stdout);
-    fhc2_tree->Draw("slce:t >> period2_s", ccut.c_str());
-    printf("Got period2_s\n"); fflush(stdout);
-    fhc3_tree->Draw("slce:t >> period3_s", ccut.c_str());
-    printf("Got period3_s\n"); fflush(stdout);
-    fhc5_tree->Draw("slce:t >> period5_s", ccut.c_str());
-    printf("Got period5_s\n"); fflush(stdout);
-
-    rhc_tree ->Draw("slce >> tcounts_period6", tcut.c_str());
-    printf("Got tcounts_period6\n"); fflush(stdout);
-    fhc2_tree->Draw("slce >> tcounts_period2", tcut.c_str());
-    printf("Got tcounts_period2\n"); fflush(stdout);
-    fhc3_tree->Draw("slce >> tcounts_period3", tcut.c_str());
-    printf("Got tcounts_period3\n"); fflush(stdout);
-    fhc5_tree->Draw("slce >> tcounts_period5", tcut.c_str());
-    printf("Got tcounts_period5\n"); fflush(stdout);
-
     std::ofstream o("savedhists.C");
-
     for(int i = 0; i < nperiod; i++){
+      trees[i]->Draw(Form("slce:t >> %s_s", periodnames[i]), cut.c_str());
+      trees[i]->Draw(Form("slce >> tcounts_%s", periodnames[i]), tcut.c_str());
+      printf("Got %s_s\n", periodnames[i]);
+      fflush(stdout);
       fithist[i]->SavePrimitive(o);
       all_tcounts[i]->SavePrimitive(o);
     }
   }
   else{
     gROOT->Macro(savedhistfile);
-    if(period6_s->Integral() < 1){
-      fprintf(stderr, "I don't like this input file\n");
-      exit(1);
-    }
+    // XXX
+    //if(period6_s->Integral() < 1){
+      //fprintf(stderr, "I don't like this input file\n");
+      //exit(1);
+    //}
   }
 
-  std::vector<double> period6_scales, period2_scales,
-    period3_scales, period5_scales;
-
-  for(int s = 1; s <= nbins_e; s++){
-    period2_scales.push_back(tcounts_period2->GetBinContent(s));
-    period3_scales.push_back(tcounts_period3->GetBinContent(s));
-    period5_scales.push_back(tcounts_period5->GetBinContent(s));
-    period6_scales.push_back(tcounts_period6->GetBinContent(s));
-  }
-
-  scales.push_back(period6_scales);
-  scales.push_back(period2_scales);
-  scales.push_back(period3_scales);
-  scales.push_back(period5_scales);
+  scales.resize(nperiod);
+      
+  for(int s = 1; s <= nbins_e; s++)
+    for(int p = 0; p < nperiod; p++)
+      scales[p].push_back(all_tcounts[p]->GetBinContent(s));
 
   const std::vector< std::vector<fitanswers> > anses = dothefit(scales);
 
@@ -1023,8 +999,8 @@ void rhc(const char * const savedhistfile = NULL)
     const fitanswers rof_ans = anses[0][s];
     const fitanswers fhc_ans = anses[1][s];
 
-    const double loslce = period6_s->GetYaxis()->GetBinLowEdge(s+1);
-    const double hislce = period6_s->GetYaxis()->GetBinLowEdge(s+2);
+    const double loslce = fithist[0]->GetYaxis()->GetBinLowEdge(s+1);
+    const double hislce = fithist[0]->GetYaxis()->GetBinLowEdge(s+2);
 
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
@@ -1087,7 +1063,10 @@ void rhc(const char * const savedhistfile = NULL)
   dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
-  dum2->GetYaxis()->SetRangeUser(0, 0.19);
+  dum2->GetYaxis()->SetRangeUser(0, 
+    1.05*max(max(gdrawmax(g_n_rhc), gdrawmax(g_n_rhc_bad)),
+             max(gdrawmax(g_n_fhc), gdrawmax(g_n_rhc_bad)))
+  );
   dum2->Draw();
   g_n_rhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
@@ -1096,8 +1075,8 @@ void rhc(const char * const savedhistfile = NULL)
 
   TLegend * nleg = new TLegend(0.6, 0.2, 0.9, 0.3);
   nleg->SetTextFont(42);
-  nleg->AddEntry(g_n_rhc, "RHC", "lpe");
   nleg->AddEntry(g_n_fhc, "FHC", "lpe");
+  nleg->AddEntry(g_n_rhc, "RHC", "lpe");
   nleg->SetBorderSize(1);
   nleg->SetFillStyle(0);
   nleg->Draw();
@@ -1108,7 +1087,10 @@ void rhc(const char * const savedhistfile = NULL)
   c3->cd();
   dum3->GetYaxis()->SetTitle("^{12}B per track");
   dum3->GetXaxis()->SetTitle("E_{#nu} (GeV)");
-  dum3->GetYaxis()->SetRangeUser(0, 2);
+  dum3->GetYaxis()->SetRangeUser(0, 
+    1.05*max(max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_rhc_bad)),
+             max(gdrawmax(g_b12_fhc), gdrawmax(g_b12_rhc_bad)))
+  );
   dum3->GetYaxis()->CenterTitle();
   dum3->GetXaxis()->CenterTitle();
   dum3->Draw();
@@ -1118,8 +1100,8 @@ void rhc(const char * const savedhistfile = NULL)
   g_b12_rhc_bad->Draw("pz");
   TLegend * b12leg = new TLegend(0.6, 0.2, 0.9, 0.3);
   b12leg->SetTextFont(42);
-  b12leg->AddEntry(g_b12_rhc, "RHC", "lpe");
   b12leg->AddEntry(g_b12_fhc, "FHC", "lpe");
+  b12leg->AddEntry(g_b12_rhc, "RHC", "lpe");
   b12leg->SetBorderSize(1);
   b12leg->SetFillStyle(0);
   b12leg->Draw();
@@ -1132,6 +1114,10 @@ void rhc(const char * const savedhistfile = NULL)
   dum->GetXaxis()->CenterTitle();
   dum->GetYaxis()->SetRangeUser(0, 1.5);
   dum->Draw();
+  dum->GetYaxis()->SetRangeUser(0, 
+    1.05*max(max(gdrawmax(  n_result), gdrawmax(  n_resultbad)),
+             max(gdrawmax(b12_result), gdrawmax(b12_resultbad)))
+  );
   n_result->Draw("pz");
   n_resultbad->Draw("pz");
   b12_result->Draw("pz");
