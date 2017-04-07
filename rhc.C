@@ -17,6 +17,32 @@
  * TODO: Directly extracts the NC and numu fractions
  */
 
+const double nnegbins = 209;
+const double maxrealtime = 269;
+const double additional = 0;
+
+double maxfitt = maxrealtime; // varies
+
+const char * const basecut = Form(
+  "run != 11601" // noise at t = 106 in this run.
+                 // Will go away with a better run list.
+  "&& primary && type == 3 && timeleft > %f && timeback > %f "
+  "&& remid > 0.75 "
+  "&& trklen > 200 " // standard
+  //"&& trklen > 600 " // longer -- drops nearly all NC background
+  // standard numu ND containment cuts, except for some muon-catcher
+  // track checks which are irrelevant because I'm about to cut
+  // those in the next line anyhow. I need the track ends to be more
+  // contained than the standard cuts.
+  "&& contained"
+
+  // Sufficient to catch all neutrons within 6 cell widths. Maybe not
+  // conservative enough, since neutrons that spill out into the air
+  // probably don't ever come back? Or do they?
+  "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
+  "&& nslc <= 6" // reduce pileup
+  , maxrealtime, -nnegbins);
+
 
 const char * const clustercut = 
 // Attempt to agressively reduce neutrons while still getting B-12
@@ -47,14 +73,8 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-const double nnegbins = 209;
-const double maxrealtime = 269;
-const double additional = 0;
-
-double maxfitt = maxrealtime; // varies
-
-const int nbins_e = 4;
-const double bins_e[nbins_e+1] = {0.5, 1.25, 2.0, 3.0, 6.0 };
+const int nbins_e = 6;
+const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2.0, 2.5, 3.0, 6.0 };
 
 static TMinuit * mn = NULL;
 
@@ -842,11 +862,13 @@ static void init_ee()
         e->SetLineStyle(kDashed);
         e->SetLineColor(kBlack);
         e->SetLineWidth(1);
+        e->SetNpx(400);
         break;
       case 3:
         e->SetLineStyle(kDashed);
         e->SetLineColor(kBlue);
         e->SetLineWidth(1);
+        e->SetNpx(400);
         break;
       case 4:
         e->SetLineStyle(kDashed);
@@ -881,69 +903,16 @@ static double gdrawmax(const TGraphAsymmErrors * const g)
 
 void rhc(const char * const savedhistfile = NULL)
 {
-  const char * const inputfiles[nperiod] = {
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "S16-12-07_nd_period6_keepup/770-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
-  };
-
   const char * const periodnames[nperiod] =
     { "period6", "period2", "period3", "period5" };
 
-  TFile * inputTFiles[nperiod] = { NULL };
-  TTree * trees[nperiod] = { NULL };
+  const std::string tcut = Form("i == 0 && %s", basecut);
 
-  for(int i = 0; i < nperiod; i++){
-    inputTFiles[i] = new TFile(inputfiles[i], "read");
-    if(!inputTFiles[i] || inputTFiles[i]->IsZombie()){
-      fprintf(stderr, "Couldn't read a file.  See above.\n");
-      return;
-    }
-    trees[i] = dynamic_cast<TTree *>(inputTFiles[i]->Get("t"));
-    if(!trees[i]){
-      fprintf(stderr, "Couldn't read a tree.  See above.\n");
-      return;
-    }
-  }
-
-  gErrorIgnoreLevel = kError; // after reads above
+  const std::string cut = Form(
+   "%s && %s && t > %f && t < %f && !(t >= -1 && t < 2)",
+    basecut, clustercut, -nnegbins, maxrealtime);
 
   init_ee();
-
-  // Let the TFile errors go to the screen, then suppress the rest
-  const char * const basecut = Form(
-    "run != 11601" // noise at t = 106 in this run.
-                   // Will go away with a better run list.
-    "&& primary && type == 3 && timeleft > %f && timeback > %f "
-    "&& remid > 0.75 "
-    "&& trklen > 200 " // standard
-    //"&& trklen > 600 " // longer -- drops nearly all NC background
-    // standard numu ND containment cuts, except for some muon-catcher
-    // track checks which are irrelevant because I'm about to cut
-    // those in the next line anyhow. I need the track ends to be more
-    // contained than the standard cuts.
-    "&& contained"
-
-    // Sufficient to catch all neutrons within 6 cell widths. Maybe not
-    // conservative enough, since neutrons that spill out into the air
-    // probably don't ever come back? Or do they?
-    "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-    "&& nslc <= 6" // reduce pileup
-    , maxrealtime, -nnegbins);
-
-  for(int i = 0; i < nperiod; i++)
-    fithist[i] = new TH2D(Form("%s_s", periodnames[i]), "",
-      nnegbins + maxrealtime + additional,
-      -nnegbins, maxrealtime + additional,
-      nbins_e, bins_e);
-
-  for(int i = 0; i < nperiod; i++)
-    all_tcounts[i] = new TH1D(Form("tcounts_%s", periodnames[i]), "", nbins_e, bins_e);
 
   // Square means RHC, solid means neutron, black means good fit
   TGraphAsymmErrors
@@ -960,16 +929,41 @@ void rhc(const char * const savedhistfile = NULL)
     * b12_result    = newgraph(kBlack, kDashed,kOpenCircle, 1),
     * b12_resultbad = newgraph(kRed,   kDashed,kOpenCircle, 1);
 
-  const std::string tcut = Form("i == 0 && %s", basecut);
-
-  const std::string cut = Form(
-   "%s && %s"
-   "&& t > %f && t < %f && !(t >= -1 && t < 2)",
-    basecut, clustercut, -nnegbins, maxrealtime);
+  const char * const inputfiles[nperiod] = {
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "S16-12-07_nd_period6_keepup/770-type3.root",
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1/all-type3.root",
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1/all-type3.root",
+  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
+    "R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+  };
 
   if(savedhistfile == NULL){
-    std::ofstream o("savedhists.C");
+    TFile * inputTFiles[nperiod] = { NULL };
+    TTree * trees[nperiod] = { NULL };
+
     for(int i = 0; i < nperiod; i++){
+      inputTFiles[i] = new TFile(inputfiles[i], "read");
+      if(!inputTFiles[i] || inputTFiles[i]->IsZombie()){
+        fprintf(stderr, "Couldn't read a file.  See above.\n");
+        return;
+      }
+      trees[i] = dynamic_cast<TTree *>(inputTFiles[i]->Get("t"));
+      if(!trees[i]){
+        fprintf(stderr, "Couldn't read a tree.  See above.\n");
+        return;
+      }
+    }
+
+    std::ofstream o("savedhists.C");
+    o << "{\n";
+    for(int i = 0; i < nperiod; i++){
+      all_tcounts[i] = new TH1D(Form("tcounts_%s", periodnames[i]), "", nbins_e, bins_e);
+      fithist[i] = new TH2D(Form("%s_s", periodnames[i]), "",
+        nnegbins + maxrealtime + additional,
+        -nnegbins, maxrealtime + additional, nbins_e, bins_e);
       trees[i]->Draw(Form("slce:t >> %s_s", periodnames[i]), cut.c_str());
       trees[i]->Draw(Form("slce >> tcounts_%s", periodnames[i]), tcut.c_str());
       printf("Got %s_s\n", periodnames[i]);
@@ -977,15 +971,27 @@ void rhc(const char * const savedhistfile = NULL)
       fithist[i]->SavePrimitive(o);
       all_tcounts[i]->SavePrimitive(o);
     }
+    o << "}\n";
   }
   else{
     gROOT->Macro(savedhistfile);
-    // XXX
-    //if(period6_s->Integral() < 1){
-      //fprintf(stderr, "I don't like this input file\n");
-      //exit(1);
-    //}
+    for(int i = 0; i < nperiod; i++){
+      if(NULL == (all_tcounts[i] = dynamic_cast<TH1D*>(
+        gROOT->FindObject(Form("tcounts_%s", periodnames[i]))))){
+        fprintf(stderr, "Could not read %s from %s\n",
+               Form("tcounts_%s", periodnames[i]), savedhistfile);
+        exit(1);
+      }
+      if(NULL == (fithist[i] = dynamic_cast<TH2D*>(
+        gROOT->FindObject(Form("%s_s", periodnames[i]))))){
+        fprintf(stderr, "Could not read %s from %s\n",
+               Form("%s_s", periodnames[i]), savedhistfile);
+        exit(1);
+      }
+    }
   }
+
+  gErrorIgnoreLevel = kError; // after new TFile and Get above
 
   scales.resize(nperiod);
       
@@ -1023,8 +1029,10 @@ void rhc(const char * const savedhistfile = NULL)
     addpoint(rof_ans.b12_good && fhc_ans.b12_good? g_b12_rhc: g_b12_rhc_bad,
       graph_x + graph_xe/10,
       fhc_ans.b12mag * rof_ans.b12mag, graph_xe,
-      product_error(fhc_ans.b12mag, rof_ans.b12mag, fhc_ans.b12mage_dn, rof_ans.b12mage_dn),
-      product_error(fhc_ans.b12mag, rof_ans.b12mag, fhc_ans.b12mage_up, rof_ans.b12mage_up));
+      product_error(fhc_ans.b12mag, rof_ans.b12mag,
+                    fhc_ans.b12mage_dn, rof_ans.b12mage_dn),
+      product_error(fhc_ans.b12mag, rof_ans.b12mag,
+                    fhc_ans.b12mage_up, rof_ans.b12mage_up));
 
     // direct again
     const bool n_good   = rof_ans.  n_good;
@@ -1038,14 +1046,14 @@ void rhc(const char * const savedhistfile = NULL)
     const double b12_rat_err_up = rof_ans.b12mage_up;
     const double b12_rat_err_dn = rof_ans.b12mage_dn;
 
-    printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
+    printf("%s/%s RoF/FHC neutron (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rof_ans.n_good?"Good":"Bad", fhc_ans.n_good?"Good":"Bad", loslce, hislce,
       n_rat, n_rat_err_up, n_rat_err_dn);
 
     addpoint(n_good?n_result:n_resultbad,
              graph_x, n_rat, graph_xe, n_rat_err_dn, n_rat_err_up);
 
-    printf("%s/%s RHC/FHC B-12    (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
+    printf("%s/%s RoF/FHC B-12    (%4.2f-%4.2f)GeV: %.3f + %.3f - %.3f\n",
       rof_ans.b12_good?"Good":"Bad", fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
       b12_rat, b12_rat_err_up, b12_rat_err_dn);
 
@@ -1064,8 +1072,8 @@ void rhc(const char * const savedhistfile = NULL)
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
   dum2->GetYaxis()->SetRangeUser(0, 
-    1.05*max(max(gdrawmax(g_n_rhc), gdrawmax(g_n_rhc_bad)),
-             max(gdrawmax(g_n_fhc), gdrawmax(g_n_rhc_bad)))
+    min(2.5, 1.05*max(max(gdrawmax(g_n_rhc), gdrawmax(g_n_rhc_bad)),
+                  max(gdrawmax(g_n_fhc), gdrawmax(g_n_rhc_bad))))
   );
   dum2->Draw();
   g_n_rhc->Draw("pz");
@@ -1081,15 +1089,14 @@ void rhc(const char * const savedhistfile = NULL)
   nleg->SetFillStyle(0);
   nleg->Draw();
 
-
   c2->Print("fit.pdf");
 
   c3->cd();
   dum3->GetYaxis()->SetTitle("^{12}B per track");
   dum3->GetXaxis()->SetTitle("E_{#nu} (GeV)");
   dum3->GetYaxis()->SetRangeUser(0, 
-    1.05*max(max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_rhc_bad)),
-             max(gdrawmax(g_b12_fhc), gdrawmax(g_b12_rhc_bad)))
+    min(2.5, 1.05*max(max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_rhc_bad)),
+                  max(gdrawmax(g_b12_fhc), gdrawmax(g_b12_rhc_bad))))
   );
   dum3->GetYaxis()->CenterTitle();
   dum3->GetXaxis()->CenterTitle();
@@ -1115,14 +1122,14 @@ void rhc(const char * const savedhistfile = NULL)
   dum->GetYaxis()->SetRangeUser(0, 1.5);
   dum->Draw();
   dum->GetYaxis()->SetRangeUser(0, 
-    1.05*max(max(gdrawmax(  n_result), gdrawmax(  n_resultbad)),
-             max(gdrawmax(b12_result), gdrawmax(b12_resultbad)))
+    min(2.5, 1.05*max(max(gdrawmax(  n_result), gdrawmax(  n_resultbad)),
+             max(gdrawmax(b12_result), gdrawmax(b12_resultbad))))
   );
   n_result->Draw("pz");
   n_resultbad->Draw("pz");
   b12_result->Draw("pz");
   b12_resultbad->Draw("pz");
-  TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.35);
+  TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.3);
   ratleg->SetTextFont(42);
   ratleg->AddEntry(n_result, "Neutrons", "lpe");
   ratleg->AddEntry(b12_result, "^{12}B", "lpe");
@@ -1131,5 +1138,4 @@ void rhc(const char * const savedhistfile = NULL)
   ratleg->Draw();
 
   c4->Print("fit.pdf)");
-
 }
