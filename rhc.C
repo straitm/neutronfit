@@ -73,8 +73,8 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-const int nbins_e = 6;
-const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2.0, 2.5, 3.0, 6.0 };
+const int nbins_e = 4;
+const double bins_e[nbins_e+1] = {0.5, 1.25, 2.0, 3.0, 6.0 };
 
 static TMinuit * mn = NULL;
 
@@ -614,7 +614,7 @@ static void draw_ee(const int periodi, const int bin, const double ntrack) // 0-
   leg->Draw();
 
   c1->SetLogy();
-  c1->Print(Form("fit.pdf%s", first?"(":""));
+  c1->Print("fit.pdf");
   c1->Update(); c1->Modified();
   first = false;
 }
@@ -658,8 +658,7 @@ static void draw_ee(const int periodi, const int bin, const double ntrack) // 0-
 #endif
   /* End cheating for sensitivity study! */
 
-static std::vector< std::vector<fitanswers> >
-dothefit(const std::vector< std::vector<double> > & ntrack)
+static std::vector< std::vector<fitanswers> > dothefit()
 {
   maxfitt = maxrealtime; // modified later for sensitivity study
 
@@ -768,11 +767,6 @@ dothefit(const std::vector< std::vector<double> > & ntrack)
         }
 
   gMinuit->Command("show min");
-
-  for(int i = 0; i < nbins_e; i++)
-    for(int period = 0; period < nperiod; period++)
-      draw_ee(period, i, ntrack[period][i]);
-
 
   std::vector< std::vector<fitanswers> > anses;
 
@@ -926,8 +920,8 @@ void rhc(const char * const savedhistfile = NULL)
     * g_b12_fhc_bad = newgraph(kRed,   kDashed,kOpenCircle, 1),
     * n_result      = newgraph(kBlack, kSolid, kFullCircle, 1),
     * n_resultbad   = newgraph(kRed,   kSolid, kFullCircle, 1),
-    * b12_result    = newgraph(kBlack, kDashed,kOpenCircle, 1),
-    * b12_resultbad = newgraph(kRed,   kDashed,kOpenCircle, 1);
+    * b12_result    = newgraph(kGray+1,kDashed,kOpenCircle, 1),
+    * b12_resultbad = newgraph(kRed-10,kDashed,kOpenCircle, 1);
 
   const char * const inputfiles[nperiod] = {
   "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
@@ -999,7 +993,7 @@ void rhc(const char * const savedhistfile = NULL)
     for(int p = 0; p < nperiod; p++)
       scales[p].push_back(all_tcounts[p]->GetBinContent(s));
 
-  const std::vector< std::vector<fitanswers> > anses = dothefit(scales);
+  const std::vector< std::vector<fitanswers> > anses = dothefit();
 
   for(int s = 0; s < nbins_e; s++){
     const fitanswers rof_ans = anses[0][s];
@@ -1065,7 +1059,7 @@ void rhc(const char * const savedhistfile = NULL)
   TH2D * dum = new TH2D("dum", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
   TH2D * dum2 = (TH2D*) dum->Clone("dum2");
   TH2D * dum3 = (TH2D*) dum->Clone("dum3");
-
+ 
   c2->cd();
   dum2->GetYaxis()->SetTitle("Neutrons per track");
   dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
@@ -1079,7 +1073,7 @@ void rhc(const char * const savedhistfile = NULL)
   g_n_rhc->Draw("pz");
   g_n_rhc_bad->Draw("pz");
   g_n_fhc->Draw("pz");
-  g_n_rhc_bad->Draw("pz");
+  g_n_fhc_bad->Draw("pz");
 
   TLegend * nleg = new TLegend(0.6, 0.2, 0.9, 0.3);
   nleg->SetTextFont(42);
@@ -1089,7 +1083,7 @@ void rhc(const char * const savedhistfile = NULL)
   nleg->SetFillStyle(0);
   nleg->Draw();
 
-  c2->Print("fit.pdf");
+  c2->Print("fit.pdf(");
 
   c3->cd();
   dum3->GetYaxis()->SetTitle("^{12}B per track");
@@ -1136,6 +1130,11 @@ void rhc(const char * const savedhistfile = NULL)
   ratleg->SetBorderSize(1);
   ratleg->SetFillStyle(0);
   ratleg->Draw();
+  c4->Print("fit.pdf");
 
-  c4->Print("fit.pdf)");
+  for(int i = 0; i < nbins_e; i++)
+    for(int period = 0; period < nperiod; period++)
+      draw_ee(period, i, scales[period][i]);
+
+  c4->Print("fit.pdf]");
 }
