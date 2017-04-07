@@ -73,8 +73,8 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-const int nbins_e = 4;
-const double bins_e[nbins_e+1] = {0.5, 1.25, 2.0, 3.0, 6.0 };
+const int nbins_e = 1;
+const double bins_e[nbins_e+1] = {0.5, /*1.25, 2.0, 3.0, */6.0 };
 
 static TMinuit * mn = NULL;
 
@@ -103,7 +103,8 @@ static PAR makepar(const char * const name_, const double start_)
   PAR p;
 
   if(strlen(name_) > 30){
-    fprintf(stderr, "Your parameter name is out of control\n");
+    fprintf(stderr, "Your parameter name %s of length %d is out of control\n",
+           name_, (int)strlen(name_));
     exit(1);
   }
 
@@ -124,6 +125,9 @@ const int nperiodrhc = 2; // 4, 6
 const int nperiodfhc = 4; // 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
 
+const char * const Speriodnames[nperiod] =
+    { "P6", "P4", "P1", "P2", "P3", "P5" };
+
 const char * const inputfiles[nperiod] = {
 "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
   "S16-12-07_nd_period6_keepup/985-type3.root",
@@ -140,16 +144,13 @@ const char * const inputfiles[nperiod] = {
   "R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
 };
 
-const char * const Lperiodnames[nperiod] =
-   { "Period 6 (RHC)",
+const char * const Lperiodnames[nperiod] = {
+     "Period 6 (RHC)",
      "Period 4 (RHC)",
      "Period 1 (FHC)",
      "Period 2 (FHC)",
      "Period 3 (FHC)",
      "Period 5 (FHC)" };
-
-const char * const Speriodnames[nperiod] =
-    { "P6", "P4", "P1", "P2", "P3", "P5" };
 
 const int npar = ncommonpar
                + nbeam  *nperbinpar*nbins_e
@@ -235,10 +236,10 @@ static std::vector<PAR> makeparameters()
 
   for(int ip = 0; ip < nperiod; ip++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sflat%d", Speriodnames[i], i), flat_start));
+      p.push_back(makepar(Form("%sflat%d", Speriodnames[ip], i), flat_start));
   for(int ip = 0; ip < nperiod; ip++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%spileup%d", Speriodnames[i], i), pileup_start));
+      p.push_back(makepar(Form("%spileup%d", Speriodnames[ip], i), pileup_start));
 
   return p;
 }
@@ -292,7 +293,7 @@ static const char * const ees_description[ntf1s] =
   { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons",
     "^{12}B", "pileup" };
 
-std::vector< std::vector<double> > scales;
+static std::vector< std::vector<double> > scales;
 
 static TH2D ** fithist     = (TH2D**)malloc(nperiod*sizeof(TH2D*));
 static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
@@ -603,24 +604,20 @@ static void draw_ee(const int per, const int bin, const double ntrack)
   const int rebin = 1;
 
   c1->cd();
-  static bool first = true;
   set_ee_to_mn(per, bin);
   TH1D * x = fithist[per]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
   x->Rebin(rebin);
 
   sanitize_after_rebinning(x);
 
-  if(rebin == 1)
-    x->GetYaxis()->SetTitle("Delayed clusters/#mus");
-  else
-    x->GetYaxis()->SetTitle(Form("Delayed clusters/%d#mus", rebin));
+  x->GetYaxis()->SetTitle(rebin== 1?"Delayed clusters/#mus":
+                          Form("Delayed clusters/%d#mus", rebin));
+  x->GetXaxis()->SetTitle(
+    Form("%s E_{#nu} bin %d: Time since muon stop (#mus)",
+    Lperiodnames[per], bin));
   x->GetYaxis()->CenterTitle();
   x->GetXaxis()->CenterTitle();
 
-  x->GetXaxis()->SetTitle(
-    Form("%s E_{#nu} bin %d: Time since muon stop (#mus)",
-    Lperiodnames[per],
-    bin));
   x->Draw("e");
 
   x->GetYaxis()->SetRangeUser(ntrack*1e-5*rebin, ntrack*rebin*0.1);
@@ -641,7 +638,6 @@ static void draw_ee(const int per, const int bin, const double ntrack)
   c1->SetLogy();
   c1->Print("fit.pdf");
   c1->Update(); c1->Modified();
-  first = false;
 }
 
   /* Cheating for sensitivity study! */
@@ -976,7 +972,7 @@ void rhc(const char * const savedhistfile = NULL)
       fflush(stdout);
       fithist[i]->SavePrimitive(o);
       all_tcounts[i]->SavePrimitive(o);
-      inputTFiles[i]->Close();
+      //inputTFiles[i]->Close(); // XXX why does this seg fault?
     }
     o << "}\n";
     o.close();
@@ -1018,6 +1014,8 @@ void rhc(const char * const savedhistfile = NULL)
 
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
+    const double graph_xoff = // visual offset
+      graph_x + min(graph_xe/10, (bins_e[nbins_e]-bins_e[0])*0.02);
 
     // Directly fit for: easy
     addpoint(fhc_ans.n_good? g_n_fhc: g_n_fhc_bad, graph_x,
@@ -1038,7 +1036,7 @@ void rhc(const char * const savedhistfile = NULL)
 
     // Indirect, harder
     addpoint(rof_ans.n_good && fhc_ans.n_good? g_n_rhc: g_n_rhc_bad,
-      graph_x + graph_xe/10 /* visual offset */,
+      graph_xoff,
       fhc_ans.n_mag * rof_ans.n_mag, graph_xe,
       product_error(fhc_ans.n_mag, rof_ans.n_mag,
                     fhc_ans.n_mage_dn, rof_ans.n_mage_dn),
@@ -1046,7 +1044,7 @@ void rhc(const char * const savedhistfile = NULL)
                     fhc_ans.n_mage_up, rof_ans.n_mage_up));
 
     addpoint(rof_ans.b12_good && fhc_ans.b12_good? g_b12_rhc: g_b12_rhc_bad,
-      graph_x + graph_xe/10,
+      graph_xoff,
       fhc_ans.b12mag * rof_ans.b12mag, graph_xe,
       product_error(fhc_ans.b12mag, rof_ans.b12mag,
                     fhc_ans.b12mage_dn, rof_ans.b12mage_dn),
@@ -1057,13 +1055,37 @@ void rhc(const char * const savedhistfile = NULL)
       rof_ans.n_mag, graph_xe, rof_ans.n_mage_dn, rof_ans.n_mage_up);
 
     addpoint(rof_ans.b12_good?b12_result:b12_resultbad,
-      graph_x + graph_xe/10, rof_ans.b12mag,
+      graph_xoff, rof_ans.b12mag,
       graph_xe, rof_ans.b12mage_dn, rof_ans.b12mage_up);
   }
 
   TH2D * dum = new TH2D("dm", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
   TH2D * dum3 = (TH2D*) dum->Clone("dm3");
+
+  c4->cd();
+  dum->GetYaxis()->SetTitle("RHC/FHC");
+  dum->GetXaxis()->SetTitle("E_{#nu} (GeV)");
+  dum->GetYaxis()->CenterTitle();
+  dum->GetXaxis()->CenterTitle();
+  dum->GetYaxis()->SetRangeUser(0, 1.5);
+  dum->Draw();
+  dum->GetYaxis()->SetRangeUser(0, 
+    min(2.5, 1.05*max(max(gdrawmax(  n_result), gdrawmax(  n_resultbad)),
+             max(gdrawmax(b12_result), gdrawmax(b12_resultbad))))
+  );
+  n_result->Draw("pz");
+  n_resultbad->Draw("pz");
+  b12_result->Draw("pz");
+  b12_resultbad->Draw("pz");
+  TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.3);
+  ratleg->SetTextFont(42);
+  ratleg->AddEntry(n_result, "Neutrons", "lpe");
+  ratleg->AddEntry(b12_result, "^{12}B", "lpe");
+  ratleg->SetBorderSize(1);
+  ratleg->SetFillStyle(0);
+  ratleg->Draw();
+  c4->Print("fit.pdf(");
  
   c2->cd();
   dum2->GetYaxis()->SetTitle("Neutrons per track");
@@ -1088,7 +1110,7 @@ void rhc(const char * const savedhistfile = NULL)
   nleg->SetFillStyle(0);
   nleg->Draw();
 
-  c2->Print("fit.pdf(");
+  c2->Print("fit.pdf");
 
   c3->cd();
   dum3->GetYaxis()->SetTitle("^{12}B per track");
@@ -1112,30 +1134,6 @@ void rhc(const char * const savedhistfile = NULL)
   b12leg->SetFillStyle(0);
   b12leg->Draw();
   c3->Print("fit.pdf");
-
-  c4->cd();
-  dum->GetYaxis()->SetTitle("RHC/FHC");
-  dum->GetXaxis()->SetTitle("E_{#nu} (GeV)");
-  dum->GetYaxis()->CenterTitle();
-  dum->GetXaxis()->CenterTitle();
-  dum->GetYaxis()->SetRangeUser(0, 1.5);
-  dum->Draw();
-  dum->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(max(gdrawmax(  n_result), gdrawmax(  n_resultbad)),
-             max(gdrawmax(b12_result), gdrawmax(b12_resultbad))))
-  );
-  n_result->Draw("pz");
-  n_resultbad->Draw("pz");
-  b12_result->Draw("pz");
-  b12_resultbad->Draw("pz");
-  TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.3);
-  ratleg->SetTextFont(42);
-  ratleg->AddEntry(n_result, "Neutrons", "lpe");
-  ratleg->AddEntry(b12_result, "^{12}B", "lpe");
-  ratleg->SetBorderSize(1);
-  ratleg->SetFillStyle(0);
-  ratleg->Draw();
-  c4->Print("fit.pdf");
 
   for(int i = 0; i < nbins_e; i++)
     for(int period = 0; period < nperiod; period++)
