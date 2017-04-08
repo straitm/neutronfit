@@ -14,7 +14,7 @@
 /*
  * TODO: exclude neutron and B-12 candidates following a Michel.
  *
- * TODO: Directly extracts the NC and numu fractions
+ * TODO: Directly extract the NC and numu fractions
  */
 
 const double nnegbins = 209;
@@ -73,8 +73,9 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-const int nbins_e = 1;
-const double bins_e[nbins_e+1] = {0.5, /*1.25, 2.0, 3.0, */6.0 };
+const int nbins_e = 3;
+//const double bins_e[nbins_e+1] = {0.5, /*1.25, 2.0, 3.0, */6.0 };
+const double bins_e[nbins_e+1] = {0.5, 1.25, 2.75, 6.0 };
 
 static TMinuit * mn = NULL;
 
@@ -156,6 +157,9 @@ const int npar = ncommonpar
                + nbeam  *nperbinpar*nbins_e
                + nperiod*nperperpar*nbins_e;
 const int npar_ee = ncommonpar + nperbinpar + nperperpar + 1;
+
+// Woe betide you if you rearrange these, since the positions are
+// hardcoded in various places.
 const char * const ee_parnames[npar_ee] = {
 "Tneut",
 "Aneut",
@@ -584,6 +588,29 @@ static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
       ees[f]->SetParameter(i, ee_neg->GetParameter(i));
 }
 
+// Set the drawing functions for the sum of all periods in a beam type
+static void set_ee_to_mn_beam(const int beam, const int bin)
+{
+  // Oh so hacky!
+  double pars[npar_ee];
+  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
+    const int idx = i + (beam == 1)*nperiodrhc;
+    set_ee_to_mn(idx, bin);
+    if(i == 0)
+      for(int p = 0; p < npar_ee; p++)
+        pars[p] = ee_pos->GetParameter(p);
+    else
+      for(int p = 0; p < npar_ee; p++)
+        // Only the additive parameters
+        if(p == 2 || p == 3 || p == 5 || p == 6 || p == 7 || p == 8)
+          pars[p] += ee_pos->GetParameter(p);
+  }
+
+  for(int f = 0; f < ntf1s; f++)
+    for(int i = 0; i < npar_ee; i++)
+      ees[f]->SetParameter(i, pars[i]);
+}
+
 // Get rid of any bins that have partial contents.  Just for drawing.
 static void sanitize_after_rebinning(TH1D * x)
 {
@@ -598,46 +625,92 @@ static void sanitize_after_rebinning(TH1D * x)
   }
 }
 
-// 0-indexed
-static void draw_ee(const int per, const int bin, const double ntrack)
+static double beam_scale(const int beam, const int bin)
 {
-  const int rebin = 1;
+  double ans = 0;
+  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
+    const int idx = i + (beam == 1)*nperiodrhc;
+    ans += scales[i][bin];
+  }
+  return ans;
+}
 
-  c1->cd();
-  set_ee_to_mn(per, bin);
-  TH1D * x = fithist[per]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
+static void draw_ee_common(TH1D * x, const int rebin)
+{
   x->Rebin(rebin);
-
   sanitize_after_rebinning(x);
 
   x->GetYaxis()->SetTitle(rebin== 1?"Delayed clusters/#mus":
                           Form("Delayed clusters/%d#mus", rebin));
-  x->GetXaxis()->SetTitle(
-    Form("%s E_{#nu} bin %d: Time since muon stop (#mus)",
-    Lperiodnames[per], bin));
   x->GetYaxis()->CenterTitle();
   x->GetXaxis()->CenterTitle();
 
   x->Draw("e");
 
-  x->GetYaxis()->SetRangeUser(ntrack*1e-5*rebin, ntrack*rebin*0.1);
-
   TLegend * leg = new TLegend(0.63, 0.7, 0.93, 0.98);
-  leg->SetTextFont(42);
-  leg->SetBorderSize(1);
-  leg->SetFillStyle(0);
-
   for(int i = 0; i < ntf1s; i++){
     ees[i]->SetParameter(ee_scale_par, rebin);
     ees[i]->Draw("same");
     if(i != 0 /*ee_neg*/) leg->AddEntry(ees[i], ees_description[i], "l");
   }
 
+  leg->SetTextFont(42);
+  leg->SetBorderSize(1);
+  leg->SetFillStyle(0);
   leg->Draw();
+
 
   c1->SetLogy();
   c1->Print("fit.pdf");
   c1->Update(); c1->Modified();
+}
+
+// Draw the sum of the fit histograms for a beam type and energy bin.
+// 0-indexed
+static void draw_ee_beam(const int beam, const int bin)
+{
+  c1->cd();
+
+  const int rebin = 10;
+
+  set_ee_to_mn_beam(beam, bin);
+
+  // Get the form of the histogram and zero it
+  TH1D * x = fithist[0]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
+  x->Reset();
+
+  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
+    const int idx = i + (beam == 1)*nperiodrhc;
+    TH1D * tmp = fithist[idx]->ProjectionX("tmp", bin+1, bin+1);
+    x->Add(tmp);
+  }
+
+  x->GetXaxis()->SetTitle(
+    Form("All %s E_{#nu} bin %d: Time since muon stop (#mus)",
+    beam == 0?"RHC":"FHC", bin));
+  x->GetYaxis()->SetRangeUser(beam_scale(beam, bin)*1e-5*rebin,
+                              beam_scale(beam, bin)* 0.1*rebin);
+
+  draw_ee_common(x, rebin);
+}
+
+// Draw the fit histogram for a period and energy bin. 0-indexed bins
+static void draw_ee(const int per, const int bin)
+{
+  c1->cd();
+
+  const int rebin = 10;
+
+  set_ee_to_mn(per, bin);
+
+  TH1D * x = fithist[per]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
+
+  x->GetXaxis()->SetTitle(
+    Form("%s E_{#nu} bin %d: Time since muon stop (#mus)",
+    Lperiodnames[per], bin));
+  x->GetYaxis()->SetRangeUser(scales[per][bin]*1e-5*rebin,
+                              scales[per][bin]* 0.1*rebin);
+  draw_ee_common(x, rebin);
 }
 
   /* Cheating for sensitivity study! */
@@ -984,13 +1057,13 @@ void rhc(const char * const savedhistfile = NULL)
         gROOT->FindObject(Form("tcounts_%s", Speriodnames[i]))))){
         fprintf(stderr, "Could not read %s from %s\n",
                Form("tcounts_%s", Speriodnames[i]), savedhistfile);
-        exit(1);
+        _exit(1);
       }
       if(NULL == (fithist[i] = dynamic_cast<TH2D*>(
         gROOT->FindObject(Form("%s_s", Speriodnames[i]))))){
         fprintf(stderr, "Could not read %s from %s\n",
                Form("%s_s", Speriodnames[i]), savedhistfile);
-        exit(1);
+        _exit(1);
       }
     }
   }
@@ -1136,8 +1209,12 @@ void rhc(const char * const savedhistfile = NULL)
   c3->Print("fit.pdf");
 
   for(int i = 0; i < nbins_e; i++)
+    for(int beam = 0; beam < nbeam; beam++)
+      draw_ee_beam(beam, i);
+
+  for(int i = 0; i < nbins_e; i++)
     for(int period = 0; period < nperiod; period++)
-      draw_ee(period, i, scales[period][i]);
+      draw_ee(period, i);
 
   c4->Print("fit.pdf]");
 }
