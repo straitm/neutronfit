@@ -73,9 +73,9 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-const int nbins_e = 3;
-//const double bins_e[nbins_e+1] = {0.5, /*1.25, 2.0, 3.0, */6.0 };
-const double bins_e[nbins_e+1] = {0.5, 1.25, 2.75, 6.0 };
+const int nbins_e = 6;
+const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2.0, 2.5, 3.0, 6.0 };
+//const double bins_e[nbins_e+1] = {0.5, 3, 6.0 };
 
 static TMinuit * mn = NULL;
 
@@ -83,16 +83,41 @@ const double n_lifetime_nominal = 50.;
 const double n_lifetime_priorerr = 5.;
 
 /*
-   Based on my MC, 400us is reasonable for a mindist of 6, but more like
-   25us for a mindist of 2. However, it's murky because we don't measure
-   the capture point, but rather the position where the gammas compton,
-   and that usually only in 2D. Assuming 2D, I get more like 80us. And
-   of course the functional form isn't quite right for 2D...
+  Based on my MC, 400us is reasonable for a mindist of 6, but more like
+  25us for a mindist of 2. However, it's murky because we don't measure
+  the capture point, but rather the position where the gammas compton,
+  and that usually only in 2D. Assuming 2D, I get more like 80us. And
+  of course the functional form isn't quite right for 2D...
 */
 const double n_diffusion_nominal = 200.;
 const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
 
-const double markersize = 0.7;
+// I am modeling the time of neutron captures as the convolution of
+// two exponentials. This comes from two effects. (1) Neutrons are not
+// produced until the muon captures, so if the muon lifetime and neutron
+// capture time were simple exponential, you'd already get the sum of
+// two exponentials. In fact, the captures that give neutrons are mostly
+// on chlorine, but with lots of of titanium and carbon too, so it is
+// the sum of several convolutions of exponentials. (2) The neutrons
+// have to thermalize before capturing. It is roughly correct to model
+// this as another convolution of two exponentials. Art gives 0.65us as
+// the rising exponential. All of this put together looks close to just
+// the convolution of two exponentials, and since it is all hidden under
+// Michel decays, we have no power to fit for the details. This constant
+// gives the effective approximate rising exponential. For just muons it
+// is 1.6us.
+//
+// Note, though, that if half of the neutrons are from *pion* capture,
+// this is more like 0.9us. If that number is used, you get a 1.4%
+// increase in the number of neutrons inferred, i.e. for a fixed number
+// here, the "efficiency" for pion-produced neutrons is about 1.4% lower
+// than muon-produced mpared to muons.
+//
+// I'll try to get the shape right, and just note this efficiency
+// difference.
+static const double n_start_conv_time = (1.60 + 0.9)/2;
+
+static const double markersize = 0.7;
 
 struct PAR {
   char * name;
@@ -250,44 +275,51 @@ static std::vector<PAR> makeparameters()
 
 static std::vector<PAR> PARAMETERS = makeparameters();
 
-// TF1::Draw() has a lot of trouble with the discontinuity at zero,
-// so split into the positive and negative parts
-static TF1 * ee_pos = new TF1("ee_pos",
-  "[8]*(abs([6]) + "
-  "(x >= 0)*("
-    "abs([5])/[4] * exp(-x/[4]) + "
-    "abs([2])/[0] * exp(-x/[0]) "
-    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
-    "+ abs([3])/29.14e3 * exp(-x/29.14e3)"
-  ") + "
-  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
-  0, maxrealtime+additional);
-
-static TF1 * ee_neg = new TF1("ee_neg",
-  "[8]*(abs([6]) + "
-  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
-  -nnegbins, 0);
-
 static TF1 * ee_flat =
   new TF1("ee_flat", "[8]*abs([6])", -nnegbins, maxrealtime+additional);
 
 static TF1 * ee_mich =
   new TF1("ee_mich", "[8]*(abs([5])/[4] * exp(-x/[4]))",
-          0, maxrealtime+additional);
+          2, maxrealtime+additional);
 
 static TF1 * ee_neut =
   new TF1("ee_mich",
-   "[8]*(abs([2])/[0] * exp(-x/[0]) "
-   "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))"
-   , 2 /* rough visual correctness */, maxrealtime+additional);
+   Form(
+   // Convolution of muon lifetime and neutron lifetime
+   "[8]*(abs([2])/([0]-%f) * (exp(-x/[0]) - exp(-x/%f))"
+
+   // Neutron diffusion for a spherical cut.  Approximate for an 
+   // intersection-of-two-cylinders cut
+   "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))",
+  n_start_conv_time, n_start_conv_time),
+   2, maxrealtime+additional);
 
 static TF1 * ee_b12 =
   new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))",
-          2 /* rough visual correctness */, maxrealtime+additional);
+          2, maxrealtime+additional);
 
 static TF1 * ee_pileup = new TF1("ee_b12",
   "[8]*((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
   -nnegbins, maxrealtime+additional);
+
+// The sum of all the above. TF1::Draw() has a lot of trouble with the
+// discontinuity at zero, so split into the positive and negative parts.
+static TF1 * ee_pos = new TF1("ee_pos",
+  Form("[8]*(abs([6]) + "
+  "(x >= 0)*("
+    "abs([5])/[4] * exp(-x/[4]) + "
+    "abs([2])/([0]-%f) * (exp(-x/[0]) - exp(-x/%f))"
+    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
+    "+ abs([3])/29.14e3 * exp(-x/29.14e3)"
+  ") + "
+  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
+  n_start_conv_time, n_start_conv_time),
+  2, maxrealtime+additional);
+
+static TF1 * ee_neg = new TF1("ee_neg",
+  "[8]*(abs([6]) + "
+  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
+  -nnegbins, -1);
 
 const int ntf1s = 7;
 static TF1 * ees[ntf1s] =
@@ -463,7 +495,13 @@ static void fcn(__attribute__((unused)) int & np,
     // Experimentally it would seem that it doesn't.
     const double x = xs[tb];
     const double sqrt_par_aneut_nc_x = sqrt(par[aneut_nc]/x);
-    const double nstuff = 1/par[tneut_nc] * exp(-x/par[tneut_nc])
+    const double nstuff =
+      // Neutron lifetime convolved with muon lifetime. Various mu-
+      // capture times, plus thermalization, messed up by detector
+      // effects
+      1/(par[tneut_nc]-n_start_conv_time)
+      * (exp(-x/par[tneut_nc]) - exp(-x/n_start_conv_time))
+      // Diffusion
       *(erf(sqrt_par_aneut_nc_x)
           -M_2_SQRTPI*sqrt_par_aneut_nc_x*exp(-par[aneut_nc]/x));
     const double exp_x_b12life = exp(-x/b12life)/b12life;
@@ -491,11 +529,13 @@ static void fcn(__attribute__((unused)) int & np,
             par[nb12_nc + nbins_e + eb]*par[nb12_nc+eb]:
             par[nb12_nc + nbins_e + eb];
 
+          // Michel lifetime - ~average of mu+ and mu-, messed up by
+          // detector effects
           model += fabs(par[nmich_nc+off_beam]*sca)/par[tmich_nc+off_beam]
-                      * exp(-x/par[tmich_nc+off_beam]) +
+                    * exp(-x/par[tmich_nc+off_beam]) +
 
                    fabs(norm_n  *sca) * nstuff
-                 + fabs(norm_b12*sca) * exp_x_b12life;
+                + fabs(norm_b12*sca) * exp_x_b12life;
         }
 
         if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
@@ -603,7 +643,7 @@ static void set_ee_to_mn_beam(const int beam, const int bin)
       for(int p = 0; p < npar_ee; p++)
         // Only the additive parameters
         if(p == 2 || p == 3 || p == 5 || p == 6 || p == 7 || p == 8)
-          pars[p] += ee_pos->GetParameter(p);
+          pars[p] += fabs(ee_pos->GetParameter(p));
   }
 
   for(int f = 0; f < ntf1s; f++)
@@ -671,7 +711,7 @@ static void draw_ee_beam(const int beam, const int bin)
 {
   c1->cd();
 
-  const int rebin = 10;
+  const int rebin = 5;
 
   set_ee_to_mn_beam(beam, bin);
 
@@ -699,7 +739,7 @@ static void draw_ee(const int per, const int bin)
 {
   c1->cd();
 
-  const int rebin = 10;
+  const int rebin = 5;
 
   set_ee_to_mn(per, bin);
 
@@ -798,8 +838,9 @@ static std::vector< std::vector<fitanswers> > dothefit()
   // the rest of the fit settles.
   mn->Command(Form("SET LIM %d 30 80", tneut_nf));
 
-  // Letting the diffusion parameter float makes the fit not converge,
+  // Letting the neutron parameters float makes the fit not converge,
   // so don't do that.
+  mn->Command(Form("FIX %d", tneut_nf));
   mn->Command(Form("FIX %d", aneut_nf));
 
   const int migrad_tries = 8;
@@ -815,7 +856,8 @@ static std::vector< std::vector<fitanswers> > dothefit()
     for(int bin = 0; bin < nbins_e; bin++)
       mn->Command(Form("REL %d", tmich_nf+beam*nbins_e+bin));
 
-  // And the diffusion parameter
+  // And the neutron parameters
+  mn->Command(Form("REL %d", tneut_nf));
   mn->Command(Form("REL %d", aneut_nf));
 
   // This becomes badly behaved if allowed to wander too far, so limit
@@ -837,10 +879,10 @@ static std::vector< std::vector<fitanswers> > dothefit()
       mn->Command(Form("SET PAR %d %f",
             nneut_nf+beam*nbins_e+bin, fabs(getpar(nneut_nc+beam*nbins_e+bin))));
 
-      // Half of these are observed probabilities and the other half   .
-      // are ratios Same limits are reasonable at the moment           .
-      mn->Command(Form("SET LIM %d 0 5", nb12_nf+beam*nbins_e+bin));
-      mn->Command(Form("SET LIM %d 0 5", nneut_nf+beam*nbins_e+bin));
+      // Half of these are observed probabilities and the other half
+      // are ratios. Same limits are reasonable at the moment.
+      mn->Command(Form("SET LIM %d 0 10",  nb12_nf+beam*nbins_e+bin));
+      mn->Command(Form("SET LIM %d 0 10", nneut_nf+beam*nbins_e+bin));
     }
   }
 
@@ -854,11 +896,10 @@ static std::vector< std::vector<fitanswers> > dothefit()
     // could skip MINOS errors for FHC and just do them for that ratio,
     // but then I can't make plots of the raw amount of each with MINOS errors
     for(int beam = 0; beam < nbeam; beam++)
-      for(int bin = 0; bin < nbins_e; bin++)
-        for(int i = 0; i < 2; i++){
-          gMinuit->Command(Form("MINOS 30000 %d", nneut_nf+beam*nbins_e+bin));
-          gMinuit->Command(Form("MINOS 30000 %d", nb12_nf +beam*nbins_e+bin));
-        }
+      for(int bin = 0; bin < nbins_e; bin++){
+        gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
+        gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));
+      }
 
   gMinuit->Command("show min");
 
