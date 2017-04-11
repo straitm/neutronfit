@@ -1,3 +1,4 @@
+#include "TMarker.h"
 #include "TMinuit.h"
 #include "TH2.h"
 #include "TGraphAsymmErrors.h"
@@ -13,10 +14,12 @@
 #include <fstream>
 
 static TMinuit * mn = NULL;
-const int npar = 3;
 
-const int nbins_e = 6;
-const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2.0, 2.5, 3.0, 6.0 };
+#include "common.C"
+
+static const double tsize = 0.04;
+
+const int npar = 3;
 
 // Take the neutron yield from pions to be 2.5 times that of muons,
 // and they all capture. (R. Madey, et al. Neutrons from nuclear
@@ -43,6 +46,54 @@ TH1D * doublerat_b12complications = NULL;
 TGraphAsymmErrors * n_result = new TGraphAsymmErrors;
 TGraphAsymmErrors * b12_result = new TGraphAsymmErrors;
 
+// For drawing
+TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
+TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
+
+// For drawing later
+//TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
+//TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
+
+// Out here so we can draw them
+TH1D * rhc_neutrons = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons");
+TH1D * fhc_neutrons = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons");
+TH1D * rhc_b12 = (TH1D*)rhc_reco_numu->Clone("rhc_b12");
+TH1D * fhc_b12 = (TH1D*)fhc_reco_numu->Clone("fhc_b12");
+
+// Exist just for drawing
+TH1D * rhc_neutrons_nc = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons_nc");
+TH1D * rhc_neutrons_numu = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons_numu");
+TH1D * rhc_neutrons_numubar = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons_numubar");
+TH1D * fhc_neutrons_nc = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons_nc");
+TH1D * fhc_neutrons_numu = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons_numu");
+TH1D * fhc_neutrons_numubar = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons_numubar");
+TH1D * rhc_b12_nc = (TH1D*)rhc_reco_numu->Clone("rhc_b12_nc");
+TH1D * rhc_b12_numu = (TH1D*)rhc_reco_numu->Clone("rhc_b12_numu");
+TH1D * rhc_b12_numubar = (TH1D*)rhc_reco_numu->Clone("rhc_b12_numubar");
+TH1D * fhc_b12_nc = (TH1D*)fhc_reco_numu->Clone("fhc_b12_nc");
+TH1D * fhc_b12_numu = (TH1D*)fhc_reco_numu->Clone("fhc_b12_numu");
+TH1D * fhc_b12_numubar = (TH1D*)fhc_reco_numu->Clone("fhc_b12_numubar");
+
+static void reset_hists()
+{
+  rhc_neutrons->Reset();
+  fhc_neutrons->Reset();
+  rhc_b12->Reset();
+  fhc_b12->Reset();
+  rhc_neutrons_nc->Reset();
+  fhc_neutrons_nc->Reset();
+  rhc_b12_nc->Reset();
+  fhc_b12_nc->Reset();
+  rhc_neutrons_numu->Reset();
+  fhc_neutrons_numu->Reset();
+  rhc_b12_numu->Reset();
+  fhc_b12_numu->Reset();
+  rhc_neutrons_numubar->Reset();
+  fhc_neutrons_numubar->Reset();
+  rhc_b12_numubar->Reset();
+  fhc_b12_numubar->Reset();
+}
+
 static void update_hists(const double npimu, const double nmscale, const double ncscale)
 {
   // Probability of getting a neutron from a mu- and a mu+
@@ -59,20 +110,34 @@ static void update_hists(const double npimu, const double nmscale, const double 
   /* We're going to ignore the corner case of pi+ -> mu+ Michel decays
      making a neutron, since we've fudged lots of other bigger stuff. */
 
-  TH1D * rhc_neutrons = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons");
-  rhc_neutrons->Reset();
-  rhc_neutrons->Add(reco_nc, ncscale*piminus_frac*piminus_relative_nyield*mum_nyield);
-  rhc_neutrons->Add(rhc_reco_numu,    mum_nyield * nmscale /* note */);
-  rhc_neutrons->Add(rhc_reco_numubar, mup_nyield);
+  reset_hists();
+
+  rhc_neutrons_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_nyield*mum_nyield);
+  rhc_neutrons_numu->Add(rhc_reco_numu,    mum_nyield * nmscale /* note */);
+  rhc_neutrons_numubar->Add(rhc_reco_numubar, mup_nyield);
+
+  rhc_neutrons->Add(rhc_neutrons_nc);
+  rhc_neutrons->Add(rhc_neutrons_numu);
+  rhc_neutrons->Add(rhc_neutrons_numubar);
+
   rhc_neutrons->Divide(rhc);
+  rhc_neutrons_nc->Divide(rhc);
+  rhc_neutrons_numu->Divide(rhc);
+  rhc_neutrons_numubar->Divide(rhc);
 
   // Estimate of number of neutrons from FHC per muon
-  TH1D * fhc_neutrons = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons");
-  fhc_neutrons->Reset();
-  fhc_neutrons->Add(reco_nc, ncscale*piminus_frac*piminus_relative_nyield*mum_nyield);
-  fhc_neutrons->Add(fhc_reco_numu,    mum_nyield);
-  fhc_neutrons->Add(fhc_reco_numubar, mup_nyield);
+  fhc_neutrons_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_nyield*mum_nyield);
+  fhc_neutrons_numu->Add(fhc_reco_numu,    mum_nyield);
+  fhc_neutrons_numubar->Add(fhc_reco_numubar, mup_nyield);
+
+  fhc_neutrons->Add(fhc_neutrons_nc);
+  fhc_neutrons->Add(fhc_neutrons_numu);
+  fhc_neutrons->Add(fhc_neutrons_numubar);
+
   fhc_neutrons->Divide(fhc);
+  fhc_neutrons_nc->Divide(fhc);
+  fhc_neutrons_numu->Divide(fhc);
+  fhc_neutrons_numubar->Divide(fhc);
 
   // My toy mc atomic cap frac, nucl cap frac on C-12, and Double Chooz!
   const double mum_b12yield = 0.82 * 0.077 * 0.177;
@@ -89,20 +154,32 @@ static void update_hists(const double npimu, const double nmscale, const double 
   const double piminus_relative_b12yield = 1/30./muminus_capture_frac;
 
   // Estimate of number of B-12 from FHC per muon
-  TH1D * rhc_b12 = (TH1D*)rhc_reco_numu->Clone("rhc_b12");
-  rhc_b12->Reset();
-  rhc_b12->Add(reco_nc, ncscale*piminus_frac*piminus_relative_b12yield*mum_b12yield);
-  rhc_b12->Add(rhc_reco_numu,    mum_b12yield);
-  rhc_b12->Add(rhc_reco_numubar, mup_b12yield);
+  rhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_b12yield*mum_b12yield);
+  rhc_b12_numu->Add(rhc_reco_numu,    mum_b12yield);
+  rhc_b12_numubar->Add(rhc_reco_numubar, mup_b12yield);
+
+  rhc_b12->Add(rhc_b12_nc);
+  rhc_b12->Add(rhc_b12_numu);
+  rhc_b12->Add(rhc_b12_numubar);
+
   rhc_b12->Divide(rhc);
+  rhc_b12_nc->Divide(rhc);
+  rhc_b12_numu->Divide(rhc);
+  rhc_b12_numubar->Divide(rhc);
 
   // Estimate of number of b12 from FHC per muon
-  TH1D * fhc_b12 = (TH1D*)fhc_reco_numu->Clone("fhc_b12");
-  fhc_b12->Reset();
-  fhc_b12->Add(reco_nc, ncscale*piminus_frac*piminus_relative_b12yield*mum_b12yield);
-  fhc_b12->Add(fhc_reco_numu,    mum_b12yield);
-  fhc_b12->Add(fhc_reco_numubar, mup_b12yield);
+  fhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_b12yield*mum_b12yield);
+  fhc_b12_numu->Add(fhc_reco_numu,    mum_b12yield);
+  fhc_b12_numubar->Add(fhc_reco_numubar, mup_b12yield);
+
+  fhc_b12->Add(fhc_b12_nc);
+  fhc_b12->Add(fhc_b12_numu);
+  fhc_b12->Add(fhc_b12_numubar);
+
   fhc_b12->Divide(fhc);
+  fhc_b12_nc->Divide(fhc);
+  fhc_b12_numu->Divide(fhc);
+  fhc_b12_numubar->Divide(fhc);
 
   doublerat_ncomplications = (TH1D*)rhc_neutrons->Clone("doublerat_ncomplications");
   doublerat_ncomplications->Divide(rhc_neutrons, fhc_neutrons);
@@ -360,11 +437,90 @@ void set_leo_hists()
   rhc_reco_numubar->SetBinContent(52,2);
   rhc_reco_numubar->SetBinContent(54,2);
 
-  // very fake data
-  // Eyeballed from numu PRL
-  const double peaknc = fhc_reco_numu->GetMaximum() * 0.015;
-  for(int i = 1; i < reco_nc->GetNbinsX(); i++)
-    reco_nc->SetBinContent(i, peaknc*TMath::Gaus(reco_nc->GetBinCenter(i), 1.3, 1));
+  // From a small sample of MC.  I don't yet know how to count POTs.
+  // For that matter, I don't know how many POTs are above.  Actually, if
+  // I did everything on my own, I wouldn't need to since ratios would be good 
+  // enough(?).
+  reco_nc->SetBinContent(7,8);
+  reco_nc->SetBinContent(8,16);
+  reco_nc->SetBinContent(9,14);
+  reco_nc->SetBinContent(10,15);
+  reco_nc->SetBinContent(11,24);
+  reco_nc->SetBinContent(12,34);
+  reco_nc->SetBinContent(13,23);
+  reco_nc->SetBinContent(14,21);
+  reco_nc->SetBinContent(15,18);
+  reco_nc->SetBinContent(16,28);
+  reco_nc->SetBinContent(17,20);
+  reco_nc->SetBinContent(18,23);
+  reco_nc->SetBinContent(19,18);
+  reco_nc->SetBinContent(20,12);
+  reco_nc->SetBinContent(21,11);
+  reco_nc->SetBinContent(22,16);
+  reco_nc->SetBinContent(23,16);
+  reco_nc->SetBinContent(24,14);
+  reco_nc->SetBinContent(25,9);
+  reco_nc->SetBinContent(26,9);
+  reco_nc->SetBinContent(27,5);
+  reco_nc->SetBinContent(28,6);
+  reco_nc->SetBinContent(29,3);
+  reco_nc->SetBinContent(30,1);
+  reco_nc->SetBinContent(31,5);
+  reco_nc->SetBinContent(32,5);
+  reco_nc->SetBinContent(33,6);
+  reco_nc->SetBinContent(34,3);
+  reco_nc->SetBinContent(35,5);
+  reco_nc->SetBinContent(36,5);
+  reco_nc->SetBinContent(37,7);
+  reco_nc->SetBinContent(38,2);
+  reco_nc->SetBinContent(39,3);
+  reco_nc->SetBinContent(40,2);
+  reco_nc->SetBinContent(41,5);
+  reco_nc->SetBinContent(42,4);
+  reco_nc->SetBinContent(43,1);
+  reco_nc->SetBinContent(44,1);
+  reco_nc->SetBinContent(45,3);
+  reco_nc->SetBinContent(46,3);
+  reco_nc->SetBinContent(47,2);
+  reco_nc->SetBinContent(48,2);
+  reco_nc->SetBinContent(49,1);
+  reco_nc->SetBinContent(50,5);
+  reco_nc->SetBinContent(51,2);
+  reco_nc->SetBinContent(52,2);
+  reco_nc->SetBinContent(53,3);
+  reco_nc->SetBinContent(54,3);
+  reco_nc->SetBinContent(55,3);
+  reco_nc->SetBinContent(56,2);
+  reco_nc->SetBinContent(57,2);
+  reco_nc->SetBinContent(58,1);
+  reco_nc->SetBinContent(59,1);
+  reco_nc->SetBinContent(60,1);
+  reco_nc->SetBinContent(61,3);
+  reco_nc->SetBinContent(63,1);
+  reco_nc->SetBinContent(65,1);
+  reco_nc->SetBinContent(69,1);
+  reco_nc->SetBinContent(71,1);
+  reco_nc->SetBinContent(72,2);
+  reco_nc->SetBinContent(73,2);
+  reco_nc->SetBinContent(77,1);
+  reco_nc->SetBinContent(79,1);
+  reco_nc->SetBinContent(80,1);
+  reco_nc->SetBinContent(81,1);
+  reco_nc->SetBinContent(84,2);
+  reco_nc->SetBinContent(85,1);
+  reco_nc->SetBinContent(87,1);
+  reco_nc->SetBinContent(88,2);
+  reco_nc->SetBinContent(91,3);
+  reco_nc->SetBinContent(92,1);
+  reco_nc->SetBinContent(93,1);
+  reco_nc->SetBinContent(94,2);
+  reco_nc->SetBinContent(95,2);
+  reco_nc->SetBinContent(96,2);
+  reco_nc->SetBinContent(98,2);
+
+  // Eyeballed from PRL plot
+  const double rescale_nc = fhc_reco_numu->GetMaximum()/reco_nc->GetMaximum() * 0.05;
+  reco_nc->Scale(rescale_nc);
 
   rhc_reco_numubar = (TH1D*)rhc_reco_numubar->Rebin(nbins_e, "rhc_reco_numubar", bins_e);
   rhc_reco_numu    = (TH1D*)rhc_reco_numu   ->Rebin(nbins_e, "rhc_reco_numu"   , bins_e);
@@ -372,6 +528,24 @@ void set_leo_hists()
   fhc_reco_numu    = (TH1D*)fhc_reco_numu   ->Rebin(nbins_e, "fhc_reco_numu"   , bins_e);
 
   reco_nc    = (TH1D*)reco_nc   ->Rebin(nbins_e, "reco_nc"   , bins_e);
+
+  rhc_neutrons = (TH1D*)rhc_neutrons->Rebin(nbins_e, "rhc_neutrons", bins_e);
+  rhc_neutrons_nc = (TH1D*)rhc_neutrons_nc->Rebin(nbins_e, "rhc_neutrons_nc", bins_e);
+  rhc_neutrons_numu = (TH1D*)rhc_neutrons_numu->Rebin(nbins_e, "rhc_neutrons_numu", bins_e);
+  rhc_neutrons_numubar = (TH1D*)rhc_neutrons_numubar->Rebin(nbins_e, "rhc_neutrons_numubar", bins_e);
+  fhc_neutrons = (TH1D*)fhc_neutrons->Rebin(nbins_e, "fhc_neutrons", bins_e);
+  fhc_neutrons_nc = (TH1D*)fhc_neutrons_nc->Rebin(nbins_e, "fhc_neutrons_nc", bins_e);
+  fhc_neutrons_numu = (TH1D*)fhc_neutrons_numu->Rebin(nbins_e, "fhc_neutrons_numu", bins_e);
+  fhc_neutrons_numubar = (TH1D*)fhc_neutrons_numubar->Rebin(nbins_e, "fhc_neutrons_numubar", bins_e);
+  rhc_b12 = (TH1D*)rhc_b12->Rebin(nbins_e, "rhc_b12", bins_e);
+  rhc_b12_nc = (TH1D*)rhc_b12_nc->Rebin(nbins_e, "rhc_b12_nc", bins_e);
+  rhc_b12_numu = (TH1D*)rhc_b12_numu->Rebin(nbins_e, "rhc_b12_numu", bins_e);
+  rhc_b12_numubar = (TH1D*)rhc_b12_numubar->Rebin(nbins_e, "rhc_b12_numubar", bins_e);
+  fhc_b12 = (TH1D*)fhc_b12->Rebin(nbins_e, "fhc_b12", bins_e);
+  fhc_b12_nc = (TH1D*)fhc_b12_nc->Rebin(nbins_e, "fhc_b12_nc", bins_e);
+  fhc_b12_numu = (TH1D*)fhc_b12_numu->Rebin(nbins_e, "fhc_b12_numu", bins_e);
+  fhc_b12_numubar = (TH1D*)fhc_b12_numubar->Rebin(nbins_e, "fhc_b12_numubar", bins_e);
+
 
   // Total numu+numubar in RHC
   rhc = (TH1D*)rhc_reco_numu->Clone("rhc");
@@ -405,25 +579,196 @@ void make_mn()
   mn->mnparm(2, "npimu", npimu_nominal, 0.025, 0, 0, mnparmerr);
 }
 
+// I believe that TGraph::Integral does a different thing
+static double getscale(TGraphAsymmErrors * g, TH1D * h)
+{
+  g->Fit("pol0", "q0", "");
+  const double gscale = g->GetFunction("pol0")->GetParameter(0);
+
+  for(int i = 1; i <= h->GetNbinsX(); i++)
+    h->SetBinError(i, g->GetErrorYhigh(i));
+  h->Fit("pol0", "q0", "");
+  const double hscale = h->GetFunction("pol0")->GetParameter(0);
+  for(int i = 1; i <= h->GetNbinsX(); i++)
+    h->SetBinError(i, 0);
+ 
+  return gscale/hscale;
+}
+
+static void styleleg(TLegend * leg)
+{
+  leg->SetTextFont(42);
+  leg->SetBorderSize(1);
+  leg->SetFillStyle(0);
+  leg->SetTextSize(tsize);
+}
+
 void draw()
 {
   TCanvas * c1 = new TCanvas("rhc1", "rhc1");
-  n_result->Draw("apz");
-  
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 10000, 0, 10);
+  TH2D * dum2 = (TH2D*) dum->Clone("dm2");
+  dum->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
+  dum->GetYaxis()->SetRangeUser(0, 
+    min(1.99, 1.05*max(gdrawmax(  n_result), gdrawmax(b12_result)))
+  );
+  dum->GetXaxis()->CenterTitle();
+  dum->GetYaxis()->CenterTitle();
+  dum->GetXaxis()->SetTitle("E_{#nu} (GeV)");
+  dum->GetYaxis()->SetTitle("RHC/FHC");
+  dum->Draw();
+
+  n_result->SetMarkerStyle(kFullCircle);
+  n_result->Draw("pz");
+  b12_result->SetMarkerStyle(kOpenCircle);
+  b12_result->SetMarkerColor(kGray+1);
+  b12_result->SetLineColor(kGray+1);
+  b12_result->SetLineStyle(kDashed);
+  b12_result->Draw("pz");
+
+  doublerat_b12complications->SetMarkerColor(kGray+1);
+  doublerat_b12complications->SetLineColor(kGray+1);
+  doublerat_b12complications->SetLineStyle(kDashed);
+
   doublerat_ncomplications->Draw("same");
+  doublerat_b12complications->Draw("same");
+
+  TLegend * leg = new TLegend(0.7, 0.7, 0.95, 0.97);
+  leg->AddEntry(n_result, "Neutrons, data", "lpe");
+  leg->AddEntry(doublerat_ncomplications, "Neutrons, fit", "l");
+  leg->AddEntry(b12_result, "^{12}B, data", "lpe");
+  leg->AddEntry(doublerat_b12complications, "^{12}B, fit", "l");
+  styleleg(leg);
+  leg->Draw();
+
+  c1->Print("fit_stage_two.pdf(");
   
+  TCanvas * c2 = new TCanvas("rhc2", "rhc2");
+  dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
+  dum2->GetYaxis()->SetRangeUser(0, 
+    min(2.5, 1.5*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc)))
+  );
+  dum2->Draw();
+  dum2->GetYaxis()->SetTitle("Neutrons per track");
+  dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
+  dum2->GetYaxis()->CenterTitle();
+  dum2->GetXaxis()->CenterTitle();
+
+  g_n_rhc->SetLineColor(kRed);
+  g_n_rhc->SetMarkerColor(kRed);
+  g_n_rhc->SetMarkerStyle(kOpenSquare);
+
+  g_n_fhc->SetLineColor(kBlue);
+  g_n_fhc->SetMarkerColor(kBlue);
+  g_n_fhc->SetMarkerStyle(kOpenCircle);
+
+  g_n_rhc->Draw("pz");
+  g_n_fhc->Draw("pz");
+
+  const double rhcscale = getscale(g_n_rhc, rhc_neutrons);
+  const double fhcscale = getscale(g_n_fhc, fhc_neutrons);
+
+  rhc_neutrons->SetLineWidth(2);
+  rhc_neutrons_nc->SetLineWidth(2);
+  rhc_neutrons_numu->SetLineWidth(2);
+  rhc_neutrons_numubar->SetLineWidth(2);
+  rhc_neutrons->SetLineColor(kRed);
+  rhc_neutrons_nc->SetLineColor(kRed);
+  rhc_neutrons_numu->SetLineColor(kRed);
+  rhc_neutrons_numubar->SetLineColor(kRed);
+  rhc_neutrons_nc->SetLineStyle(kDotted);
+  rhc_neutrons_numu->SetLineStyle(kDashed);
+  rhc_neutrons_numubar->SetLineStyle(9);
+
+  fhc_neutrons->SetLineWidth(2);
+  fhc_neutrons_nc->SetLineWidth(2);
+  fhc_neutrons_numu->SetLineWidth(2);
+  fhc_neutrons_numubar->SetLineWidth(2);
+  fhc_neutrons->SetLineColor(kBlue);
+  fhc_neutrons_nc->SetLineColor(kBlue);
+  fhc_neutrons_numu->SetLineColor(kBlue);
+  fhc_neutrons_numubar->SetLineColor(kBlue);
+  fhc_neutrons_nc->SetLineStyle(kDotted);
+  fhc_neutrons_numu->SetLineStyle(kDashed);
+  fhc_neutrons_numubar->SetLineStyle(9);
+
+  rhc_neutrons->Scale(rhcscale);
+  fhc_neutrons->Scale(fhcscale);
+  rhc_neutrons_nc->Scale(rhcscale);
+  fhc_neutrons_nc->Scale(fhcscale);
+  rhc_neutrons_numu->Scale(rhcscale);
+  fhc_neutrons_numu->Scale(fhcscale);
+  rhc_neutrons_numubar->Scale(rhcscale);
+  fhc_neutrons_numubar->Scale(fhcscale);
+
+  rhc_neutrons->Draw("histsame][");
+  fhc_neutrons->Draw("histsame][");
+  rhc_neutrons_nc->Draw("histsame][");
+  fhc_neutrons_nc->Draw("histsame][");
+  rhc_neutrons_numu->Draw("histsame][");
+  fhc_neutrons_numu->Draw("histsame][");
+  rhc_neutrons_numubar->Draw("histsame][");
+  fhc_neutrons_numubar->Draw("histsame][");
+
+  leg = new TLegend(0.14, 0.74, 0.3, 0.97);
+  styleleg(leg);
+  leg->AddEntry(g_n_rhc, "RHC data", "lpe");
+  leg->AddEntry(rhc_neutrons, "RHC Fit", "l");
+  leg->AddEntry(rhc_neutrons_nc, "RHC NC", "l");
+  leg->AddEntry(rhc_neutrons_numu, "RHC #nu_{#mu}", "l");
+  leg->AddEntry(rhc_neutrons_numubar, "RHC #bar{#nu}_{#mu}", "l");
+  leg->Draw();
+  
+  TLegend * legf = new TLegend(0.3, 0.74, 0.46, 0.97);
+  styleleg(legf);
+  legf->AddEntry(g_n_fhc, "FHC data", "lpe");
+  legf->AddEntry(fhc_neutrons, "FHC Fit", "l");
+  legf->AddEntry(fhc_neutrons_nc, "FHC NC", "l");
+  legf->AddEntry(fhc_neutrons_numu, "FHC #nu_{#mu}", "l");
+  legf->AddEntry(fhc_neutrons_numubar, "FHC #bar{#nu}_{#mu}", "l");
+  legf->Draw();
+
+  c2->Print("fit_stage_two.pdf");
+
+  TCanvas * c3 = new TCanvas("rhc3", "rhc3");
+
+  TH2D * dum3 = (TH2D*) dum2->Clone("dm3");
+  dum3->GetXaxis()->SetRangeUser(0, 3);
+  dum3->GetYaxis()->SetRangeUser(0, 1.99);
+  dum3->GetXaxis()->SetTitle("NC scale");
+  dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
+  dum3->Draw();
+
+  mn->fGraphicsMode = true;
+  mn->Command("MNCONT 1 2 99");
+  TGraph * cont1 = (TGraph *)mn->GetPlot();
+  cont1->SetFillStyle(1001);
+  cont1->SetFillColor(kBlue-2);
+  cont1->Draw("f");
+
+  mn->Command("FIX 3");
+
+  mn->Command("MNCONT 1 2 99");
+  TGraph * cont2 = (TGraph *)mn->GetPlot();
+  cont2->SetFillStyle(1001);
+  cont2->SetFillColor(kBlue);
+  cont2->Draw("f");
+  
+  mn->fGraphicsMode = false;
+
+  TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
+  bestfit->Draw();
+
+  leg = new TLegend(0.3, 0.8, 0.96, 0.98);
+  styleleg(leg);
+  leg->AddEntry(cont1, "1D 68\%, #pi/#mu neutron yield is 2.5#pm1.0", "f");
+  leg->AddEntry(cont2, "1D 68\%, perfectly known #pi/#mu neutron yield", "f");
+  leg->AddEntry((TH1D*)NULL, "Dummy NC template", "");
+  leg->Draw();
+
+  c3->Print("fit_stage_two.pdf)");
 }
 
-void mncommand()
-{
-  std::string command;
-  while(true){
-    printf("MINUIT> ");
-    if(!getline(std::cin, command)) break;
-    if(command == "exit") break;
-    mn->Command(command.c_str());
-  }
-}
 
 void rhc_stage_two(const char * const input = "for_stage_two.C")
 {
@@ -433,7 +778,12 @@ void rhc_stage_two(const char * const input = "for_stage_two.C")
 
   make_mn();
 
+  mn->Command("SET LIM 1 0 5");
+  mn->Command("SET LIM 2 0 5");
+  mn->Command("SET LIM 3 0 10");
   mn->Command("MIGRAD");
+
+  update_hists(getpar(2), getpar(1), getpar(0));
 
   draw();
 }

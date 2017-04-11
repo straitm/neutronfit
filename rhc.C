@@ -11,10 +11,12 @@
 #include "TLegend.h"
 #include <fstream>
 
+static TMinuit * mn = NULL;
+
+#include "common.C"
+
 /*
  * TODO: exclude neutron and B-12 candidates following a Michel.
- *
- * TODO: Directly extract the NC and numu fractions
  */
 
 const double nnegbins = 209;
@@ -40,7 +42,7 @@ const char * const basecut = Form(
   // conservative enough, since neutrons that spill out into the air
   // probably don't ever come back? Or do they?
   "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-  "&& nslc <= 6" // reduce pileup
+  //"&& nslc <= 6" // reduce pileup
   , maxrealtime, -nnegbins);
 
 
@@ -72,12 +74,6 @@ struct fitanswers{
   double  n_mag,  n_mage_up,  n_mage_dn,
          b12mag, b12mage_up, b12mage_dn;
 };
-
-const int nbins_e = 6;
-const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2.0, 2.5, 3.0, 6.0 };
-//const double bins_e[nbins_e+1] = {0.5, 3, 6.0 };
-
-static TMinuit * mn = NULL;
 
 const double n_lifetime_nominal = 50.;
 const double n_lifetime_priorerr = 5.;
@@ -116,8 +112,6 @@ const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
 // I'll try to get the shape right, and just note this efficiency
 // difference.
 static const double n_start_conv_time = (1.60 + 0.9)/2;
-
-static const double markersize = 0.7;
 
 struct PAR {
   char * name;
@@ -338,116 +332,6 @@ static TCanvas * c1 = new TCanvas("rhc1", "rhc1"); // hist
 static TCanvas * c2 = new TCanvas("rhc2", "rhc2"); // neutrons
 static TCanvas * c3 = new TCanvas("rhc3", "rhc3"); // B-12
 static TCanvas * c4 = new TCanvas("rhc4", "rhc4"); // ratios
-
-double getminerrup(int i) // 0-indexed!
-{
-  // Figure out how many fixed parameters there are below the one
-  // desired. Fixed parameters are, of course, FORTRAN-indexed, but the
-  // array fErp is C-indexed.
-
-  // If there are no fixed parameters, it is just the C-index
-  int wherearewe = i;
-
-  for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
-    if(mn->fIpfix[fixpar] < i+1)
-      wherearewe--;
-
-  return mn->fErp[wherearewe];
-}
-
-double getminerrdn(int i) // 0-indexed!
-{
-  int wherearewe = i;
-  for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
-    if(mn->fIpfix[fixpar] < i+1)
-      wherearewe--;
-  return -mn->fErn[wherearewe]; // define all errors as positive
-}
-
-double getpar(int i) // 0-indexed!
-{
-  double answer, dum;
-  mn->GetParameter(i, answer, dum);
-  return answer;
-}
-
-double geterr(int i) // 0-indexed!
-{
-  double val, err;
-  mn->GetParameter(i, val, err);
-  return err;
-}
-
-__attribute__((unused)) static double getlimlo(int i) // 0-indexed!
-{
-  double answer, dum;
-  int idum;
-  TString sdum;
-  mn->mnpout(i, sdum, dum, dum, answer, dum, idum);
-  return answer;
-}
-
-static double getlimup(int i) // 0-indexed!
-{
-  double answer, dum;
-  int idum;
-  TString sdum;
-  mn->mnpout(i, sdum, dum, dum, dum, answer, idum);
-  return answer;
-}
-
-__attribute__((unused)) static void fixat(int i, float v) // 1-indexed!
-{
-  mn->Command(Form("REL %d", i));
-  if(getlimup(i-1)) mn->Command(Form("SET LIM %d", i));
-  mn->Command(Form("SET PAR %d %g", i, v));
-  mn->Command(Form("FIX %d", i));
-}
-
-__attribute__((unused)) static void fixatzero(int i) // 1-indexed!
-{
-  mn->Command(Form("REL %d", i));
-  mn->Command(Form("SET LIM %d", i));
-  mn->Command(Form("SET PAR %d 0", i));
-  mn->Command(Form("FIX %d", i));
-}
-
-static bool onegoodminosup(const int par) // 0-indexed
-{
-  return getminerrup(par) > 0 && getminerrup(par) != 54321.0;
-}
-
-static bool onegoodminosdn(const int par) // 0-indexed
-{ // I define all errors as positive
-  return getminerrdn(par) > 0 && getminerrdn(par) != 54321.0;
-}
-
-static bool onegoodminos(const int par, const bool no_low_ok) // 0-indexed
-{
-  return (no_low_ok || onegoodminosdn(par)) && onegoodminosup(par);
-}
-
-// Get the MINOS error if present (regardless of whether, otherwise the
-// MIGRAD/HESSE error
-static double getbesterrup(const int par) // 0-indexed
-{
-  return onegoodminosup(par)? getminerrup(par): geterr(par);
-}
-
-static double getbesterrdn(const int par) // 0-indexed
-{
-  return onegoodminosdn(par)? getminerrdn(par): geterr(par);
-}
-
-static double min(const double a, const double b)
-{
-  return a < b? a: b;
-}
-
-__attribute__((unused)) static double max(const double a, const double b)
-{
-  return a > b? a: b;
-}
 
 static void fcn(__attribute__((unused)) int & np,
   __attribute__((unused)) double * gin, double & like, double *par,
@@ -930,45 +814,6 @@ static std::vector< std::vector<fitanswers> > dothefit()
   return anses;
 }
 
-static double product_error(const double x, const double y,
-                            const double xe, const double ye)
-{
-  return sqrt(y*y*pow(xe, 2) + x*x*pow(ye, 2));
-}
-
-__attribute__((unused))
-static double ratio_error(const double x, const double y,
-                          const double xe, const double ye)
-{
-  return 1/y * sqrt(pow(xe, 2) + x*x*pow(ye/y, 2));
-}
-
-void mncommand()
-{
-  std::string command;
-  while(true){
-    printf("MINUIT> ");
-    if(!getline(std::cin, command)) break;
-    if(command == "exit") break;
-    mn->Command(command.c_str());
-  }
-}
-
-static TGraphAsymmErrors *
-newgraph(const int color, const int linestyle, const int marker,
-         const int linewidth)
-{
-  TGraphAsymmErrors * g = new TGraphAsymmErrors;
-  g->SetMarkerSize(markersize);
-
-  g->SetMarkerStyle(marker);
-  g->SetLineStyle(linestyle);
-  g->SetLineColor(color);
-  g->SetMarkerColor(color);
-  g->SetLineWidth(linewidth);
-  return g;
-}
-
 static void addpoint(TGraphAsymmErrors * g, const double x,
                      const double y, const double xe,
                      const double ye_down, const double ye_up)
@@ -1020,18 +865,10 @@ static void init_ee()
   }
 }
 
-static double gdrawmax(const TGraphAsymmErrors * const g)
-{
-  double max = -1e300;
-  for(int i = 0; i < g->GetN(); i++){
-    const double y = g->GetY()[i] + g->GetErrorYhigh(i);
-    if(y > max) max = y;
-  }
-  return max;
-}
-
 static void save_for_stage_two(TGraphAsymmErrors * n_result,
-                               TGraphAsymmErrors * b12_result)
+                               TGraphAsymmErrors * b12_result,
+                               TGraphAsymmErrors * g_n_rhc,
+                               TGraphAsymmErrors * g_n_fhc)
 {
   ofstream for_stage_two("for_stage_two.C");
   for_stage_two << "{\n";
@@ -1039,6 +876,10 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   b12_result->SetName("b12_result");
   n_result  ->SavePrimitive(for_stage_two);
   b12_result->SavePrimitive(for_stage_two);
+  g_n_rhc->SetName("g_n_rhc");
+  g_n_fhc->SetName("g_n_fhc");
+  g_n_rhc->SavePrimitive(for_stage_two);
+  g_n_fhc->SavePrimitive(for_stage_two);
   for_stage_two << "}\n";
 }
 
@@ -1102,6 +943,7 @@ void rhc(const char * const savedhistfile = NULL)
     }
     o << "}\n";
     o.close();
+    return; // always do two passes now.
   }
   else{
     gROOT->Macro(savedhistfile);
@@ -1213,8 +1055,6 @@ void rhc(const char * const savedhistfile = NULL)
   ratleg->Draw();
   c4->Print("fit.pdf(");
 
-  save_for_stage_two(n_result, b12_result);
- 
   c2->cd();
   dum2->GetYaxis()->SetTitle("Neutrons per track");
   dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
@@ -1272,4 +1112,6 @@ void rhc(const char * const savedhistfile = NULL)
       draw_ee(period, i);
 
   c4->Print("fit.pdf]");
+
+  save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc);
 }
