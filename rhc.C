@@ -1030,6 +1030,18 @@ static double gdrawmax(const TGraphAsymmErrors * const g)
   return max;
 }
 
+static void save_for_stage_two(TGraphAsymmErrors * n_result,
+                               TGraphAsymmErrors * b12_result)
+{
+  ofstream for_stage_two("for_stage_two.C");
+  for_stage_two << "{\n";
+  n_result  ->SetName("n_result");
+  b12_result->SetName("b12_result");
+  n_result  ->SavePrimitive(for_stage_two);
+  b12_result->SavePrimitive(for_stage_two);
+  for_stage_two << "}\n";
+}
+
 void rhc(const char * const savedhistfile = NULL)
 {
   const std::string tcut = Form("i == 0 && %s", basecut);
@@ -1200,6 +1212,8 @@ void rhc(const char * const savedhistfile = NULL)
   ratleg->SetFillStyle(0);
   ratleg->Draw();
   c4->Print("fit.pdf(");
+
+  save_for_stage_two(n_result, b12_result);
  
   c2->cd();
   dum2->GetYaxis()->SetTitle("Neutrons per track");
