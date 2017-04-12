@@ -151,10 +151,23 @@ static void update_hists(const double npimu, const double nmscale, const double 
   // H. Hilscher, W.-D. Krebs, G. Sepp, and V. Soergel. An experimental
   // test of the analogy between radiative pion absorption and muon
   // capture in 12C. Nuclear Physics A, 158(2):584-592, 1970
-  const double piminus_relative_b12yield = 1/30./muminus_capture_frac;
+  // http://www.sciencedirect.com/science/article/pii/037594747090206X
+  //
+  // pi- have a lower B-12 yield despite always capturing!
+  //
+  // According to the same paper, pi- make a lot of Li-8. If you're not
+  // careful, their figure 2 makes it look that only 20% of the activity
+  // at t=0 is B-12, which would make the Li-8 yield almost 100%. But
+  // the cycle time they used was much shorter than the Li-8 lifetime,
+  // so this is activity produced over many cycles. My reanalysis, if I
+  // assume zero uncorrelated background, says that the Li-8 yield is
+  // about 4 times the B-12 yield, and with its half-life being 41 times
+  // longer, it only adds about 9% to the activity near t=0. Since the
+  // error on the B-12 yield is 22%, this can be neglected.
+  const double pim_b12yield = mum_b12yield * 5.8e-3 / 1.36e-2;
 
   // Estimate of number of B-12 from FHC per muon
-  rhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_b12yield*mum_b12yield);
+  rhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*pim_b12yield);
   rhc_b12_numu->Add(rhc_reco_numu,    mum_b12yield);
   rhc_b12_numubar->Add(rhc_reco_numubar, mup_b12yield);
 
@@ -168,7 +181,7 @@ static void update_hists(const double npimu, const double nmscale, const double 
   rhc_b12_numubar->Divide(rhc);
 
   // Estimate of number of b12 from FHC per muon
-  fhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_b12yield*mum_b12yield);
+  fhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*pim_b12yield);
   fhc_b12_numu->Add(fhc_reco_numu,    mum_b12yield);
   fhc_b12_numubar->Add(fhc_reco_numubar, mup_b12yield);
 
@@ -619,19 +632,20 @@ void draw()
   dum->Draw();
 
   n_result->SetMarkerStyle(kFullCircle);
-  n_result->Draw("pz");
   b12_result->SetMarkerStyle(kOpenCircle);
   b12_result->SetMarkerColor(kGray+1);
   b12_result->SetLineColor(kGray+1);
-  b12_result->SetLineStyle(kDashed);
-  b12_result->Draw("pz");
 
   doublerat_b12complications->SetMarkerColor(kGray+1);
   doublerat_b12complications->SetLineColor(kGray+1);
-  doublerat_b12complications->SetLineStyle(kDashed);
 
-  doublerat_ncomplications->Draw("same");
+  doublerat_b12complications->SetLineStyle(kDashed);
+  doublerat_ncomplications->SetLineStyle(kDashed);
+
+  b12_result->Draw("pz");
   doublerat_b12complications->Draw("same");
+  n_result->Draw("pz");
+  doublerat_ncomplications->Draw("same");
 
   TLegend * leg = new TLegend(0.7, 0.7, 0.95, 0.97);
   leg->AddEntry(n_result, "Neutrons, data", "lpe");
@@ -759,11 +773,10 @@ void draw()
   TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
   bestfit->Draw();
 
-  leg = new TLegend(0.3, 0.8, 0.96, 0.98);
+  leg = new TLegend(0.3, 0.85, 0.96, 0.98);
   styleleg(leg);
   leg->AddEntry(cont1, "1D 68\%, #pi/#mu neutron yield is 2.5#pm1.0", "f");
   leg->AddEntry(cont2, "1D 68\%, perfectly known #pi/#mu neutron yield", "f");
-  leg->AddEntry((TH1D*)NULL, "Dummy NC template", "");
   leg->Draw();
 
   c3->Print("fit_stage_two.pdf)");
