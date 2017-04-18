@@ -21,12 +21,10 @@ static const double tsize = 0.04;
 
 const int npar = 3;
 
-// Take the neutron yield from pions to be 2.5 times that of muons,
-// and they all capture. (R. Madey, et al. Neutrons from nuclear
-// capture of negative pions. Phys. Rev. C, 25:3050­306
+// Ratio of the neutron yield from pions to that of muons, per stop.
 // XXX to be refined by reading more papers from the 70's
-const double npimu_nominal = 2.5;
-const double npimu_error = 1.0;
+const double npimu_nominal = 0.59/0.18;
+const double npimu_error = 0.04/0.18;
 
 // Leo hists
 TH1D *fhc_reco_numubar = new TH1D("fhc_reco_numubar","",100,0,10);
@@ -775,7 +773,9 @@ void draw()
 
   leg = new TLegend(0.3, 0.85, 0.96, 0.98);
   styleleg(leg);
-  leg->AddEntry(cont1, "1D 68\%, #pi/#mu neutron yield is 2.5#pm1.0", "f");
+  leg->AddEntry(cont1,
+    Form("1D 68\%, #pi/#mu neutron yield is %0.2f#pm%0.2f", npimu_nominal, npimu_error),
+    "f");
   leg->AddEntry(cont2, "1D 68\%, perfectly known #pi/#mu neutron yield", "f");
   leg->Draw();
 
