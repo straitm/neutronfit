@@ -22,9 +22,14 @@ static const double tsize = 0.04;
 const int npar = 3;
 
 // Ratio of the neutron yield from pions to that of muons, per stop.
-// XXX to be refined by reading more papers from the 70's
-const double npimu_nominal = 0.59/0.18;
-const double npimu_error = 0.04/0.18;
+const double npimu_nominal = 19.1;
+
+const double npimu_error = 3.7;
+
+const double nm_nominal = 1;
+const double nm_error = 0.2;
+
+bool useb12 = true; // changed between fits
 
 // Leo hists
 TH1D *fhc_reco_numubar = new TH1D("fhc_reco_numubar","",100,0,10);
@@ -99,8 +104,9 @@ static void update_hists(const double npimu, const double nmscale, const double 
   const double mup_nyield = 1e-4;
 
   // Assume the track in NC events is a pi- this fraction of the time
-  // XXX need to get a much better idea of this
-  const double piminus_frac = 0.33;
+  // Rough estimate from 
+  // prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_period5_v1
+  const double piminus_frac = 0.20;
 
   const double muminus_capture_frac = 0.182;
   const double piminus_relative_nyield = npimu/muminus_capture_frac;
@@ -226,11 +232,14 @@ static void fcn(__attribute__((unused)) int & np,
   const double npimu = par[2];
   update_hists(npimu, nmscale, ncscale);
 
-  // penalty term
+  // penalty terms
   chi2 += pow((npimu - npimu_nominal)/npimu_error, 2);
 
+  // TODO: May or may not want this to be here!
+  chi2 += pow((nmscale - nm_nominal)/nm_error, 2);
+
   chi2 += compare(n_result, doublerat_ncomplications);
-  chi2 += compare(b12_result, doublerat_b12complications);
+  if(useb12) chi2 += compare(b12_result, doublerat_b12complications);
 }
 
 
@@ -533,21 +542,30 @@ void set_leo_hists()
   const double rescale_nc = fhc_reco_numu->GetMaximum()/reco_nc->GetMaximum() * 0.05;
   reco_nc->Scale(rescale_nc);
 
-  rhc_reco_numubar = (TH1D*)rhc_reco_numubar->Rebin(nbins_e, "rhc_reco_numubar", bins_e);
-  rhc_reco_numu    = (TH1D*)rhc_reco_numu   ->Rebin(nbins_e, "rhc_reco_numu"   , bins_e);
-  fhc_reco_numubar = (TH1D*)fhc_reco_numubar->Rebin(nbins_e, "fhc_reco_numubar", bins_e);
-  fhc_reco_numu    = (TH1D*)fhc_reco_numu   ->Rebin(nbins_e, "fhc_reco_numu"   , bins_e);
+  rhc_reco_numubar=(TH1D*)rhc_reco_numubar->Rebin(nbins_e,"rhc_reco_numubar",bins_e);
+  rhc_reco_numu   =(TH1D*)rhc_reco_numu   ->Rebin(nbins_e,"rhc_reco_numu"   ,bins_e);
+  fhc_reco_numubar=(TH1D*)fhc_reco_numubar->Rebin(nbins_e,"fhc_reco_numubar",bins_e);
+  fhc_reco_numu   =(TH1D*)fhc_reco_numu   ->Rebin(nbins_e,"fhc_reco_numu"   ,bins_e);
 
   reco_nc    = (TH1D*)reco_nc   ->Rebin(nbins_e, "reco_nc"   , bins_e);
 
-  rhc_neutrons = (TH1D*)rhc_neutrons->Rebin(nbins_e, "rhc_neutrons", bins_e);
-  rhc_neutrons_nc = (TH1D*)rhc_neutrons_nc->Rebin(nbins_e, "rhc_neutrons_nc", bins_e);
-  rhc_neutrons_numu = (TH1D*)rhc_neutrons_numu->Rebin(nbins_e, "rhc_neutrons_numu", bins_e);
-  rhc_neutrons_numubar = (TH1D*)rhc_neutrons_numubar->Rebin(nbins_e, "rhc_neutrons_numubar", bins_e);
-  fhc_neutrons = (TH1D*)fhc_neutrons->Rebin(nbins_e, "fhc_neutrons", bins_e);
-  fhc_neutrons_nc = (TH1D*)fhc_neutrons_nc->Rebin(nbins_e, "fhc_neutrons_nc", bins_e);
-  fhc_neutrons_numu = (TH1D*)fhc_neutrons_numu->Rebin(nbins_e, "fhc_neutrons_numu", bins_e);
-  fhc_neutrons_numubar = (TH1D*)fhc_neutrons_numubar->Rebin(nbins_e, "fhc_neutrons_numubar", bins_e);
+  rhc_neutrons     =
+    (TH1D*)rhc_neutrons     ->Rebin(nbins_e,"rhc_neutrons"     , bins_e);
+  rhc_neutrons_nc  =
+    (TH1D*)rhc_neutrons_nc  ->Rebin(nbins_e,"rhc_neutrons_nc"  , bins_e);
+  rhc_neutrons_numu=
+    (TH1D*)rhc_neutrons_numu->Rebin(nbins_e,"rhc_neutrons_numu", bins_e);
+  rhc_neutrons_numubar = 
+    (TH1D*)rhc_neutrons_numubar->Rebin(nbins_e, "rhc_neutrons_numubar", bins_e);
+  fhc_neutrons = 
+    (TH1D*)fhc_neutrons->Rebin(nbins_e, "fhc_neutrons", bins_e);
+  fhc_neutrons_nc = 
+    (TH1D*)fhc_neutrons_nc->Rebin(nbins_e, "fhc_neutrons_nc", bins_e);
+  fhc_neutrons_numu = 
+    (TH1D*)fhc_neutrons_numu->Rebin(nbins_e, "fhc_neutrons_numu", bins_e);
+  fhc_neutrons_numubar = 
+    (TH1D*)fhc_neutrons_numubar->Rebin(nbins_e, "fhc_neutrons_numubar", bins_e);
+
   rhc_b12 = (TH1D*)rhc_b12->Rebin(nbins_e, "rhc_b12", bins_e);
   rhc_b12_nc = (TH1D*)rhc_b12_nc->Rebin(nbins_e, "rhc_b12_nc", bins_e);
   rhc_b12_numu = (TH1D*)rhc_b12_numu->Rebin(nbins_e, "rhc_b12_numu", bins_e);
@@ -745,26 +763,42 @@ void draw()
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
 
   TH2D * dum3 = (TH2D*) dum2->Clone("dm3");
-  dum3->GetXaxis()->SetRangeUser(0, 3);
-  dum3->GetYaxis()->SetRangeUser(0, 1.99);
+  dum3->GetXaxis()->SetRangeUser(0, 1.5);
+  dum3->GetYaxis()->SetRangeUser(0, 1.5);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
   dum3->Draw();
 
   mn->fGraphicsMode = true;
+
   mn->Command("MNCONT 1 2 99");
   TGraph * cont1 = (TGraph *)mn->GetPlot();
   cont1->SetFillStyle(1001);
   cont1->SetFillColor(kBlue-2);
-  cont1->Draw("f");
+  cont1->SetLineColor(kBlue-2);
 
-  mn->Command("FIX 3");
-
+  useb12 = false;
+  mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 99");
   TGraph * cont2 = (TGraph *)mn->GetPlot();
   cont2->SetFillStyle(1001);
   cont2->SetFillColor(kBlue);
+  cont2->SetLineColor(kBlue);
+  cont2->SetLineStyle(kDashed);
+
+  useb12 = true;
+  mn->Command("MIGRAD");
+  mn->Command("FIX 3");
+  mn->Command("MNCONT 1 2 99");
+  TGraph * cont3 = (TGraph *)mn->GetPlot();
+  cont3->SetFillStyle(1001);
+  cont3->SetFillColor(kRed);
+  cont3->SetLineColor(kRed);
+
+  cont3->Draw("f");
+  cont1->Draw("f");
   cont2->Draw("f");
+  
   
   mn->fGraphicsMode = false;
 
@@ -774,7 +808,7 @@ void draw()
   leg = new TLegend(0.3, 0.85, 0.96, 0.98);
   styleleg(leg);
   leg->AddEntry(cont1,
-    Form("1D 68\%, #pi/#mu neutron yield is %0.2f#pm%0.2f", npimu_nominal, npimu_error),
+    Form("1D 68\%, #pi/#mu neutron yield is %.0f#pm%.0f", npimu_nominal, npimu_error),
     "f");
   leg->AddEntry(cont2, "1D 68\%, perfectly known #pi/#mu neutron yield", "f");
   leg->Draw();
@@ -793,7 +827,7 @@ void rhc_stage_two(const char * const input = "for_stage_two.C")
 
   mn->Command("SET LIM 1 0 5");
   mn->Command("SET LIM 2 0 5");
-  mn->Command("SET LIM 3 0 10");
+  mn->Command("SET LIM 3 0 50");
   mn->Command("MIGRAD");
 
   update_hists(getpar(2), getpar(1), getpar(0));
