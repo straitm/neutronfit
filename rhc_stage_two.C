@@ -12,6 +12,7 @@
 #include "TLegend.h"
 #include "TMath.h"
 #include <fstream>
+#include <iostream>
 
 static TMinuit * mn = NULL;
 
@@ -31,13 +32,11 @@ const double nm_error = 0.2;
 
 bool useb12 = true; // changed between fits
 
-// Leo hists
 TH1D *fhc_reco_numubar = new TH1D("fhc_reco_numubar","",100,0,10);
 TH1D *fhc_reco_numu = new TH1D("fhc_reco_numu","",100,0,10);
 TH1D *rhc_reco_numu = new TH1D("rhc_reco_numu","",100,0,10);
 TH1D *rhc_reco_numubar = new TH1D("rhc_reco_numubar","",100,0,10);
 
-// fake hist
 TH1D *reco_nc = new TH1D("reco_nc","",100,0,10);
 
 TH1D * fhc = NULL;
@@ -198,10 +197,13 @@ static void update_hists(const double npimu, const double nmscale, const double 
   fhc_b12_numu->Divide(fhc);
   fhc_b12_numubar->Divide(fhc);
 
-  doublerat_ncomplications = (TH1D*)rhc_neutrons->Clone("doublerat_ncomplications");
-  doublerat_ncomplications->Divide(rhc_neutrons, fhc_neutrons);
+  if(!doublerat_ncomplications)
+    doublerat_ncomplications = (TH1D*)rhc_neutrons->Clone("doublerat_ncomplications");
 
-  doublerat_b12complications = (TH1D*)rhc_b12->Clone("doublerat_b12complications");
+  if(!doublerat_b12complications)
+    doublerat_b12complications = (TH1D*)rhc_b12->Clone("doublerat_b12complications");
+
+  doublerat_ncomplications->Divide(rhc_neutrons, fhc_neutrons);
   doublerat_b12complications->Divide(rhc_b12, fhc_b12);
 }
 
@@ -246,57 +248,6 @@ static void fcn(__attribute__((unused)) int & np,
 void set_leo_hists()
 {   
   /* From Leonidas 2017-03-28 */
-
-  fhc_reco_numubar->SetBinContent(4,33);
-  fhc_reco_numubar->SetBinContent(5,236);
-  fhc_reco_numubar->SetBinContent(6,570);
-  fhc_reco_numubar->SetBinContent(7,786);
-  fhc_reco_numubar->SetBinContent(8,1014);
-  fhc_reco_numubar->SetBinContent(9,1148);
-  fhc_reco_numubar->SetBinContent(10,1174);
-  fhc_reco_numubar->SetBinContent(11,1209);
-  fhc_reco_numubar->SetBinContent(12,1228);
-  fhc_reco_numubar->SetBinContent(13,1273);
-  fhc_reco_numubar->SetBinContent(14,1177);
-  fhc_reco_numubar->SetBinContent(15,1193);
-  fhc_reco_numubar->SetBinContent(16,1151);
-  fhc_reco_numubar->SetBinContent(17,1016);
-  fhc_reco_numubar->SetBinContent(18,998);
-  fhc_reco_numubar->SetBinContent(19,909);
-  fhc_reco_numubar->SetBinContent(20,813);
-  fhc_reco_numubar->SetBinContent(21,813);
-  fhc_reco_numubar->SetBinContent(22,740);
-  fhc_reco_numubar->SetBinContent(23,669);
-  fhc_reco_numubar->SetBinContent(24,614);
-  fhc_reco_numubar->SetBinContent(25,585);
-  fhc_reco_numubar->SetBinContent(26,526);
-  fhc_reco_numubar->SetBinContent(27,463);
-  fhc_reco_numubar->SetBinContent(28,416);
-  fhc_reco_numubar->SetBinContent(29,411);
-  fhc_reco_numubar->SetBinContent(30,353);
-  fhc_reco_numubar->SetBinContent(31,314);
-  fhc_reco_numubar->SetBinContent(32,246);
-  fhc_reco_numubar->SetBinContent(33,222);
-  fhc_reco_numubar->SetBinContent(34,206);
-  fhc_reco_numubar->SetBinContent(35,158);
-  fhc_reco_numubar->SetBinContent(36,106);
-  fhc_reco_numubar->SetBinContent(37,100);
-  fhc_reco_numubar->SetBinContent(38,77);
-  fhc_reco_numubar->SetBinContent(39,63);
-  fhc_reco_numubar->SetBinContent(40,50);
-  fhc_reco_numubar->SetBinContent(41,38);
-  fhc_reco_numubar->SetBinContent(42,45);
-  fhc_reco_numubar->SetBinContent(43,35);
-  fhc_reco_numubar->SetBinContent(44,31);
-  fhc_reco_numubar->SetBinContent(45,18);
-  fhc_reco_numubar->SetBinContent(46,16);
-  fhc_reco_numubar->SetBinContent(47,8);
-  fhc_reco_numubar->SetBinContent(48,10);
-  fhc_reco_numubar->SetBinContent(49,5);
-  fhc_reco_numubar->SetBinContent(50,2);
-  fhc_reco_numubar->SetBinContent(51,1);
-  fhc_reco_numubar->SetBinContent(52,1);
-
   fhc_reco_numu->SetBinContent(3,3);
   fhc_reco_numu->SetBinContent(4,212.541);
   fhc_reco_numu->SetBinContent(5,1284.79);
@@ -354,6 +305,7 @@ void set_leo_hists()
   fhc_reco_numu->SetBinContent(77,1);
   fhc_reco_numu->SetBinContent(90,1);
 
+  /* From Leonidas 2017-03-28 */
   rhc_reco_numu->SetBinContent(4,48.2483);
   rhc_reco_numu->SetBinContent(5,239.09);
   rhc_reco_numu->SetBinContent(6,681.456);
@@ -405,6 +357,7 @@ void set_leo_hists()
   rhc_reco_numu->SetBinContent(53,1);
   rhc_reco_numu->SetBinContent(58,1);
 
+  /* From Leonidas 2017-03-28 */
   rhc_reco_numubar->SetBinContent(3,2);
   rhc_reco_numubar->SetBinContent(4,122);
   rhc_reco_numubar->SetBinContent(5,862);
@@ -457,90 +410,63 @@ void set_leo_hists()
   rhc_reco_numubar->SetBinContent(52,2);
   rhc_reco_numubar->SetBinContent(54,2);
 
-  // From a small sample of MC.  I don't yet know how to count POTs.
-  // For that matter, I don't know how many POTs are above.  Actually, if
-  // I did everything on my own, I wouldn't need to since ratios would be good 
-  // enough(?).
-  reco_nc->SetBinContent(7,8);
-  reco_nc->SetBinContent(8,16);
-  reco_nc->SetBinContent(9,14);
-  reco_nc->SetBinContent(10,15);
-  reco_nc->SetBinContent(11,24);
-  reco_nc->SetBinContent(12,34);
-  reco_nc->SetBinContent(13,23);
-  reco_nc->SetBinContent(14,21);
-  reco_nc->SetBinContent(15,18);
-  reco_nc->SetBinContent(16,28);
-  reco_nc->SetBinContent(17,20);
-  reco_nc->SetBinContent(18,23);
-  reco_nc->SetBinContent(19,18);
-  reco_nc->SetBinContent(20,12);
-  reco_nc->SetBinContent(21,11);
-  reco_nc->SetBinContent(22,16);
-  reco_nc->SetBinContent(23,16);
-  reco_nc->SetBinContent(24,14);
-  reco_nc->SetBinContent(25,9);
-  reco_nc->SetBinContent(26,9);
-  reco_nc->SetBinContent(27,5);
-  reco_nc->SetBinContent(28,6);
-  reco_nc->SetBinContent(29,3);
-  reco_nc->SetBinContent(30,1);
-  reco_nc->SetBinContent(31,5);
-  reco_nc->SetBinContent(32,5);
-  reco_nc->SetBinContent(33,6);
-  reco_nc->SetBinContent(34,3);
-  reco_nc->SetBinContent(35,5);
-  reco_nc->SetBinContent(36,5);
-  reco_nc->SetBinContent(37,7);
-  reco_nc->SetBinContent(38,2);
-  reco_nc->SetBinContent(39,3);
-  reco_nc->SetBinContent(40,2);
-  reco_nc->SetBinContent(41,5);
-  reco_nc->SetBinContent(42,4);
-  reco_nc->SetBinContent(43,1);
-  reco_nc->SetBinContent(44,1);
-  reco_nc->SetBinContent(45,3);
-  reco_nc->SetBinContent(46,3);
-  reco_nc->SetBinContent(47,2);
-  reco_nc->SetBinContent(48,2);
-  reco_nc->SetBinContent(49,1);
-  reco_nc->SetBinContent(50,5);
-  reco_nc->SetBinContent(51,2);
-  reco_nc->SetBinContent(52,2);
-  reco_nc->SetBinContent(53,3);
-  reco_nc->SetBinContent(54,3);
-  reco_nc->SetBinContent(55,3);
-  reco_nc->SetBinContent(56,2);
-  reco_nc->SetBinContent(57,2);
-  reco_nc->SetBinContent(58,1);
-  reco_nc->SetBinContent(59,1);
-  reco_nc->SetBinContent(60,1);
-  reco_nc->SetBinContent(61,3);
-  reco_nc->SetBinContent(63,1);
-  reco_nc->SetBinContent(65,1);
-  reco_nc->SetBinContent(69,1);
-  reco_nc->SetBinContent(71,1);
-  reco_nc->SetBinContent(72,2);
-  reco_nc->SetBinContent(73,2);
-  reco_nc->SetBinContent(77,1);
-  reco_nc->SetBinContent(79,1);
-  reco_nc->SetBinContent(80,1);
-  reco_nc->SetBinContent(81,1);
-  reco_nc->SetBinContent(84,2);
-  reco_nc->SetBinContent(85,1);
-  reco_nc->SetBinContent(87,1);
-  reco_nc->SetBinContent(88,2);
-  reco_nc->SetBinContent(91,3);
-  reco_nc->SetBinContent(92,1);
-  reco_nc->SetBinContent(93,1);
-  reco_nc->SetBinContent(94,2);
-  reco_nc->SetBinContent(95,2);
-  reco_nc->SetBinContent(96,2);
-  reco_nc->SetBinContent(98,2);
+  /* Well, there is no ND RHC MC yet, so I have to do something fudgy.
+     Get the histograms I can from the FHC files, scale them to match
+     Leo's histograms, and scale the remaining histograms by the same 
+     factor */
 
-  // Eyeballed from PRL plot
-  const double rescale_nc = fhc_reco_numu->GetMaximum()/reco_nc->GetMaximum() * 0.05;
-  reco_nc->Scale(rescale_nc);
+  TFile * f = new TFile("prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_"
+    "fhc_nova_v08_period5_v1/all-type3.root", "read");
+
+  if(!f || f->IsZombie()){
+    fprintf(stderr, "Could not open the file\n");
+    _exit(1);
+  }
+
+  TTree * t = dynamic_cast<TTree *>(f->Get("t"));
+
+  if(!t){
+    fprintf(stderr, "Could not get the tree\n");
+    _exit(1);
+  }
+
+  const double leo_fhc_reco_numu_count = fhc_reco_numu->Integral();
+
+  fhc_reco_numu->Reset();
+
+  {
+    // For I-don't-know-why TTree::Draw isn't working for me here, so
+    // do it the hard way
+    int i, primary, true_pdg, true_nupdg, true_nucc, contained;
+    float slce;
+    t->SetBranchAddress("slce", &slce);
+    t->SetBranchAddress("i", &i);
+    t->SetBranchAddress("primary", &primary);
+    t->SetBranchAddress("true_pdg", &true_pdg);
+    t->SetBranchAddress("true_nupdg", &true_nupdg);
+    t->SetBranchAddress("true_nucc", &true_nucc);
+    t->SetBranchAddress("contained", &contained);
+
+    for(int e = 0; e < t->GetEntries(); e++){
+      t->GetEntry(e);
+      if(!(i == 0 && primary && contained)) continue;
+      if(true_nucc){
+        if     (true_nupdg ==  14) fhc_reco_numu->Fill(slce);
+        else if(true_nupdg == -14) fhc_reco_numubar->Fill(slce);
+      }
+      else{
+        // Picking out true NC events where the primary track is a pi-
+        if(true_pdg == -211) reco_nc->Fill(slce);
+      }
+
+    }
+  }
+
+  const double scale_new_mc = leo_fhc_reco_numu_count/fhc_reco_numu->Integral();
+
+  fhc_reco_numu->Scale(scale_new_mc);
+  fhc_reco_numubar->Scale(scale_new_mc);
+  reco_nc->Scale(scale_new_mc);
 
   rhc_reco_numubar=(TH1D*)rhc_reco_numubar->Rebin(nbins_e,"rhc_reco_numubar",bins_e);
   rhc_reco_numu   =(TH1D*)rhc_reco_numu   ->Rebin(nbins_e,"rhc_reco_numu"   ,bins_e);
@@ -612,12 +538,16 @@ void make_mn()
 static double getscale(TGraphAsymmErrors * g, TH1D * h)
 {
   g->Fit("pol0", "q0", "");
-  const double gscale = g->GetFunction("pol0")->GetParameter(0);
+  const double gscale = g->GetFunction("pol0")?
+                        g->GetFunction("pol0")->GetParameter(0):
+                        1;
 
   for(int i = 1; i <= h->GetNbinsX(); i++)
     h->SetBinError(i, g->GetErrorYhigh(i));
   h->Fit("pol0", "q0", "");
-  const double hscale = h->GetFunction("pol0")->GetParameter(0);
+  const double hscale = h->GetFunction("pol0")?
+                        h->GetFunction("pol0")->GetParameter(0):
+                        1;
   for(int i = 1; i <= h->GetNbinsX(); i++)
     h->SetBinError(i, 0);
  
@@ -679,7 +609,7 @@ void draw()
     min(2.5, 1.5*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc)))
   );
   dum2->Draw();
-  dum2->GetYaxis()->SetTitle("Neutrons per track");
+  dum2->GetYaxis()->SetTitle("Neutrons/track/GeV");
   dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
@@ -731,14 +661,14 @@ void draw()
   rhc_neutrons_numubar->Scale(rhcscale);
   fhc_neutrons_numubar->Scale(fhcscale);
 
-  rhc_neutrons->Draw("histsame][");
-  fhc_neutrons->Draw("histsame][");
-  rhc_neutrons_nc->Draw("histsame][");
-  fhc_neutrons_nc->Draw("histsame][");
-  rhc_neutrons_numu->Draw("histsame][");
-  fhc_neutrons_numu->Draw("histsame][");
-  rhc_neutrons_numubar->Draw("histsame][");
-  fhc_neutrons_numubar->Draw("histsame][");
+  TH1D * c2hists[8] = { rhc_neutrons, fhc_neutrons,
+    rhc_neutrons_nc, fhc_neutrons_nc,
+    rhc_neutrons_numu, fhc_neutrons_numu,
+    rhc_neutrons_numubar, fhc_neutrons_numubar };
+    
+  for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
+    for(int h = 0; h < 8; h++)
+      c2hists[h]->Draw("histsame][");
 
   leg = new TLegend(0.14, 0.74, 0.3, 0.97);
   styleleg(leg);
@@ -808,16 +738,16 @@ void draw()
   leg = new TLegend(0.3, 0.85, 0.96, 0.98);
   styleleg(leg);
   leg->AddEntry(cont1,
-    Form("1D 68\%, #pi/#mu neutron yield is %.0f#pm%.0f", npimu_nominal, npimu_error),
+    Form("1D 68%%, #pi/#mu neutron yield is %.0f#pm%.0f", npimu_nominal, npimu_error),
     "f");
-  leg->AddEntry(cont2, "1D 68\%, perfectly known #pi/#mu neutron yield", "f");
+  leg->AddEntry(cont2, "1D 68%, perfectly known #pi/#mu neutron yield", "f");
   leg->Draw();
 
   c3->Print("fit_stage_two.pdf)");
 }
 
 
-void rhc_stage_two(const char * const input = "for_stage_two.C")
+void rhc_stage_two(const char * const input)
 {
   set_leo_hists();
 
