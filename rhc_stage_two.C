@@ -99,24 +99,21 @@ static void reset_hists()
 static void update_hists(const double npimu, const double nmscale, const double ncscale)
 {
   // Probability of getting a neutron from a mu- and a mu+
-  const double mum_nyield = 0.15;
+  const double mum_nyield = 0.181;
   const double mup_nyield = 1e-4;
 
-  // Assume the track in NC events is a pi- this fraction of the time
-  // Rough estimate from 
-  // prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_period5_v1
-  const double piminus_frac = 0.20;
-
   const double muminus_capture_frac = 0.182;
-  const double piminus_relative_nyield = npimu/muminus_capture_frac;
 
   /* We're going to ignore the corner case of pi+ -> mu+ Michel decays
      making a neutron, since we've fudged lots of other bigger stuff. */
 
   reset_hists();
 
-  rhc_neutrons_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_nyield*mum_nyield);
-  rhc_neutrons_numu->Add(rhc_reco_numu,    mum_nyield * nmscale /* note */);
+  // Is this even close?  This is a stand-in for RHC MC.
+  const double NC_XS_RATIO_RHC_FHC = 1/2.;
+
+  rhc_neutrons_nc     ->Add(reco_nc, NC_XS_RATIO_RHC_FHC*ncscale*npimu*mum_nyield);
+  rhc_neutrons_numu   ->Add(rhc_reco_numu,    mum_nyield * nmscale /* note */);
   rhc_neutrons_numubar->Add(rhc_reco_numubar, mup_nyield);
 
   rhc_neutrons->Add(rhc_neutrons_nc);
@@ -129,8 +126,8 @@ static void update_hists(const double npimu, const double nmscale, const double 
   rhc_neutrons_numubar->Divide(rhc);
 
   // Estimate of number of neutrons from FHC per muon
-  fhc_neutrons_nc->Add(reco_nc, ncscale*piminus_frac*piminus_relative_nyield*mum_nyield);
-  fhc_neutrons_numu->Add(fhc_reco_numu,    mum_nyield);
+  fhc_neutrons_nc->Add(reco_nc, ncscale*npimu*mum_nyield);
+  fhc_neutrons_numu->Add(fhc_reco_numu, mum_nyield);
   fhc_neutrons_numubar->Add(fhc_reco_numubar, mup_nyield);
 
   fhc_neutrons->Add(fhc_neutrons_nc);
@@ -170,7 +167,7 @@ static void update_hists(const double npimu, const double nmscale, const double 
   const double pim_b12yield = mum_b12yield * 5.8e-3 / 1.36e-2;
 
   // Estimate of number of B-12 from FHC per muon
-  rhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*pim_b12yield);
+  rhc_b12_nc->Add(reco_nc, ncscale*pim_b12yield);
   rhc_b12_numu->Add(rhc_reco_numu,    mum_b12yield);
   rhc_b12_numubar->Add(rhc_reco_numubar, mup_b12yield);
 
@@ -184,7 +181,7 @@ static void update_hists(const double npimu, const double nmscale, const double 
   rhc_b12_numubar->Divide(rhc);
 
   // Estimate of number of b12 from FHC per muon
-  fhc_b12_nc->Add(reco_nc, ncscale*piminus_frac*pim_b12yield);
+  fhc_b12_nc->Add(reco_nc, ncscale*pim_b12yield);
   fhc_b12_numu->Add(fhc_reco_numu,    mum_b12yield);
   fhc_b12_numubar->Add(fhc_reco_numubar, mup_b12yield);
 
@@ -213,8 +210,12 @@ static double compare(TGraphAsymmErrors * datgraph, TH1D * predhist)
   for(int i = 0; i < datgraph->GetN(); i++){
     const double e = datgraph->GetX()[i];
     const double r = datgraph->GetY()[i];
-    const double rup = datgraph->GetErrorYhigh(i);
-    const double rdn = datgraph->GetErrorYlow (i);
+    double rup = datgraph->GetErrorYhigh(i);
+    double rdn = datgraph->GetErrorYlow (i);
+
+    if(rdn == 0) rdn = rup;  // protect against bad fits
+    if(rup == 0) rup = rdn;  // of course, it'd be good if this didn't trigger
+
     const int bin = predhist->FindBin(e);
 
     const double pred = predhist->GetBinContent(bin);
@@ -238,7 +239,7 @@ static void fcn(__attribute__((unused)) int & np,
   chi2 += pow((npimu - npimu_nominal)/npimu_error, 2);
 
   // TODO: May or may not want this to be here!
-  chi2 += pow((nmscale - nm_nominal)/nm_error, 2);
+  //chi2 += pow((nmscale - nm_nominal)/nm_error, 2);
 
   chi2 += compare(n_result, doublerat_ncomplications);
   if(useb12) chi2 += compare(b12_result, doublerat_b12complications);
@@ -438,7 +439,7 @@ void set_leo_hists()
     // For I-don't-know-why TTree::Draw isn't working for me here, so
     // do it the hard way
     int i, primary, true_pdg, true_nupdg, true_nucc, contained;
-    float slce;
+    float slce, trkx, trky, trkz, trklen, remid;
     t->SetBranchAddress("slce", &slce);
     t->SetBranchAddress("i", &i);
     t->SetBranchAddress("primary", &primary);
@@ -446,10 +447,27 @@ void set_leo_hists()
     t->SetBranchAddress("true_nupdg", &true_nupdg);
     t->SetBranchAddress("true_nucc", &true_nucc);
     t->SetBranchAddress("contained", &contained);
+    t->SetBranchAddress("trkx", &trkx);
+    t->SetBranchAddress("trky", &trky);
+    t->SetBranchAddress("trkz", &trkz);
+    t->SetBranchAddress("trklen", &trklen);
+    t->SetBranchAddress("remid", &remid);
 
     for(int e = 0; e < t->GetEntries(); e++){
       t->GetEntry(e);
       if(!(i == 0 && primary && contained)) continue;
+
+      // MUST MATCH cut at top of rhc.C
+      if(fabs(trkx) > 170) continue;
+      if(fabs(trky) > 170) continue;
+      if(     trkz  >1250) continue;
+      if(trklen < 200) continue;
+      if(remid  < 0.75) continue;
+
+      // XXX What should I be doing about the case where there's a 
+      // true numu CC event where a pion is selected as the primary
+      // track?
+
       if(true_nucc){
         if     (true_nupdg ==  14) fhc_reco_numu->Fill(slce);
         else if(true_nupdg == -14) fhc_reco_numubar->Fill(slce);
@@ -569,7 +587,7 @@ void draw()
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
   dum->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   dum->GetYaxis()->SetRangeUser(0, 
-    min(1.99, 1.05*max(gdrawmax(  n_result), gdrawmax(b12_result)))
+    min(1.99, 1.05*max(gdrawmax(n_result), gdrawmax(b12_result)))
   );
   dum->GetXaxis()->CenterTitle();
   dum->GetYaxis()->CenterTitle();
@@ -587,6 +605,7 @@ void draw()
 
   doublerat_b12complications->SetLineStyle(kDashed);
   doublerat_ncomplications->SetLineStyle(kDashed);
+  doublerat_ncomplications->SetLineWidth(2);
 
   b12_result->Draw("pz");
   doublerat_b12complications->Draw("same");
@@ -609,7 +628,7 @@ void draw()
     min(2.5, 1.5*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc)))
   );
   dum2->Draw();
-  dum2->GetYaxis()->SetTitle("Neutrons/track/GeV");
+  dum2->GetYaxis()->SetTitle("Neutrons/track");
   dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
@@ -617,10 +636,12 @@ void draw()
   g_n_rhc->SetLineColor(kRed);
   g_n_rhc->SetMarkerColor(kRed);
   g_n_rhc->SetMarkerStyle(kOpenSquare);
+  g_n_rhc->SetMarkerSize(0.7);
 
   g_n_fhc->SetLineColor(kBlue);
   g_n_fhc->SetMarkerColor(kBlue);
   g_n_fhc->SetMarkerStyle(kOpenCircle);
+  g_n_fhc->SetMarkerSize(0.7);
 
   g_n_rhc->Draw("pz");
   g_n_fhc->Draw("pz");
@@ -693,8 +714,8 @@ void draw()
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
 
   TH2D * dum3 = (TH2D*) dum2->Clone("dm3");
-  dum3->GetXaxis()->SetRangeUser(0, 1.5);
-  dum3->GetYaxis()->SetRangeUser(0, 1.5);
+  dum3->GetXaxis()->SetRangeUser(0, 2.5);
+  dum3->GetYaxis()->SetRangeUser(0, 1.9);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
   dum3->Draw();
@@ -726,8 +747,8 @@ void draw()
   cont3->SetLineColor(kRed);
 
   cont3->Draw("f");
-  cont1->Draw("f");
-  cont2->Draw("f");
+  cont1->Draw("l");
+  cont2->Draw("l");
   
   
   mn->fGraphicsMode = false;
@@ -735,12 +756,14 @@ void draw()
   TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
   bestfit->Draw();
 
-  leg = new TLegend(0.3, 0.85, 0.96, 0.98);
+  leg = new TLegend(0.3, 0.83, 0.98, 0.99);
   styleleg(leg);
+  leg->SetMargin(0.1);
   leg->AddEntry(cont1,
     Form("1D 68%%, #pi/#mu neutron yield is %.0f#pm%.0f", npimu_nominal, npimu_error),
-    "f");
-  leg->AddEntry(cont2, "1D 68%, perfectly known #pi/#mu neutron yield", "f");
+    "l");
+  leg->AddEntry(cont2, "1D 68%, without using ^{12}B", "l");
+  leg->AddEntry(cont3, "1D 68%, perfectly known #pi/#mu neutron yield", "f");
   leg->Draw();
 
   c3->Print("fit_stage_two.pdf)");
@@ -755,7 +778,7 @@ void rhc_stage_two(const char * const input)
 
   make_mn();
 
-  mn->Command("SET LIM 1 0 5");
+  mn->Command("SET LIM 1 0 20");
   mn->Command("SET LIM 2 0 5");
   mn->Command("SET LIM 3 0 50");
   mn->Command("MIGRAD");

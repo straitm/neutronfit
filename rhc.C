@@ -11,7 +11,7 @@
 #include "TLegend.h"
 #include <fstream>
 
-static TMinuit * mn = NULL;
+TMinuit * mn = NULL;
 
 #include "common.C"
 
@@ -63,7 +63,7 @@ const char * const clustercut =
 */
 
 // a fairly loose, reasonable cut
-  "nhit >= 1 && mindist <= 6"
+  "nhit >= 1 && mindist <= 4"
   "&& pe > 35 && e < 20";
 
 // a very loose cut
@@ -811,6 +811,10 @@ static std::vector< std::vector<fitanswers> > dothefit()
     anses.push_back(anss);
   }
 
+  // Just in case MINOS found a new minimum
+  status = mn->Command("MIGRAD");
+  status = mn->Command("HESSE");
+
   return anses;
 }
 
@@ -880,6 +884,27 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   g_n_fhc->SetName("g_n_fhc");
   g_n_rhc->SavePrimitive(for_stage_two);
   g_n_fhc->SavePrimitive(for_stage_two);
+
+  double error_matrix[npar][npar];
+
+  mn->mnemat(&error_matrix[0][0], npar);
+
+  for_stage_two << "double error_matrix[" << nbins_e*2 << "][" << nbins_e*2 << "] = {0};\n";
+
+  // Only care about the cross-terms for the 2*bins of the fit histograms
+  for(int ii = 0; ii < nbins_e*2; ii++){
+    for(int jj = ii; jj < nbins_e*2; jj++){
+
+      const int i = ii < nbins_e? nneut_nc + ii:
+                                  nb12_nc - nbins_e + ii;
+      const int j = jj < nbins_e? nneut_nc + jj:
+                                  nb12_nc - nbins_e + jj;
+
+      for_stage_two << "error_matrix[" << ii << "][" << jj << "] = " << error_matrix[i][j] << ";\n";
+    }
+    for_stage_two << "\n";
+  }
+
   for_stage_two << "}\n";
 }
 
@@ -982,11 +1007,12 @@ void rhc(const char * const savedhistfile = NULL)
 
     const double graph_x  = (loslce+hislce)/2;
     const double graph_xe = (hislce-loslce)/2;
-    const double graph_xoff = // visual offset
-      graph_x + min(graph_xe/10, (bins_e[nbins_e]-bins_e[0])*0.02);
+    const double graph_xoff = 
+      min(graph_xe/30, (bins_e[nbins_e]-bins_e[0])*0.007);
 
     // Directly fit for: easy
-    addpoint(fhc_ans.n_good? g_n_fhc: g_n_fhc_bad, graph_x,
+    // XXX this good/bad scheme doesn't work when I use the result in a fit.
+    addpoint(g_n_fhc /*fhc_ans.n_good? g_n_fhc: g_n_fhc_bad*/, graph_x,
       fhc_ans.n_mag, graph_xe, fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
     addpoint(fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad, graph_x,
@@ -1003,8 +1029,8 @@ void rhc(const char * const savedhistfile = NULL)
       rof_ans.b12mag, rof_ans.b12mage_up, rof_ans.b12mage_dn);
 
     // Indirect, harder
-    addpoint(rof_ans.n_good && fhc_ans.n_good? g_n_rhc: g_n_rhc_bad,
-      graph_xoff,
+    addpoint(g_n_rhc /*rof_ans.n_good && fhc_ans.n_good? g_n_rhc: g_n_rhc_bad*/,
+      graph_x,
       fhc_ans.n_mag * rof_ans.n_mag, graph_xe,
       product_error(fhc_ans.n_mag, rof_ans.n_mag,
                     fhc_ans.n_mage_dn, rof_ans.n_mage_dn),
@@ -1012,18 +1038,18 @@ void rhc(const char * const savedhistfile = NULL)
                     fhc_ans.n_mage_up, rof_ans.n_mage_up));
 
     addpoint(rof_ans.b12_good && fhc_ans.b12_good? g_b12_rhc: g_b12_rhc_bad,
-      graph_xoff,
+      graph_x+graph_xoff,
       fhc_ans.b12mag * rof_ans.b12mag, graph_xe,
       product_error(fhc_ans.b12mag, rof_ans.b12mag,
                     fhc_ans.b12mage_dn, rof_ans.b12mage_dn),
       product_error(fhc_ans.b12mag, rof_ans.b12mag,
                     fhc_ans.b12mage_up, rof_ans.b12mage_up));
 
-    addpoint(rof_ans.n_good?n_result:n_resultbad, graph_x,
+    addpoint(n_result /*rof_ans.n_good?n_result:n_resultbad*/, graph_x,
       rof_ans.n_mag, graph_xe, rof_ans.n_mage_dn, rof_ans.n_mage_up);
 
-    addpoint(rof_ans.b12_good?b12_result:b12_resultbad,
-      graph_xoff, rof_ans.b12mag,
+    addpoint(b12_result /*rof_ans.b12_good?b12_result:b12_resultbad*/,
+      graph_x+graph_xoff, rof_ans.b12mag,
       graph_xe, rof_ans.b12mage_dn, rof_ans.b12mage_up);
   }
 

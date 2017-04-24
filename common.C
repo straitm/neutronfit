@@ -1,7 +1,7 @@
 static const double markersize = 0.7;
 
-const int nbins_e = 6;
-const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2.0, 2.5, 3.0, 6.0 };
+const int nbins_e = 4;
+const double bins_e[nbins_e+1] = {0.5, 2.5, 3.5, 4.5, 6.0 };
 //const double bins_e[nbins_e+1] = {0.5, 1.0, 2.0, 6.0 };
 
 double getpar(int i) // 0-indexed!
