@@ -62,8 +62,7 @@ const char * const clustercut =
    "&& pe > 70 && e < 20";
 */
 
-// a fairly loose, reasonable cut
-  "nhit >= 1 && mindist <= 4"
+  "nhit >= 1 && mindist <= 2"
   "&& pe > 35 && e < 20";
 
 // a very loose cut

@@ -1,7 +1,7 @@
-static const double markersize = 0.7;
+static const double markersize = 0.3;
 
-const int nbins_e = 4;
-const double bins_e[nbins_e+1] = {0.5, 2.5, 3.5, 4.5, 6.0 };
+const int nbins_e = 5;
+const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
 //const double bins_e[nbins_e+1] = {0.5, 1.0, 2.0, 6.0 };
 
 double getpar(int i) // 0-indexed!
@@ -141,14 +141,14 @@ static double ratio_error(const double x, const double y,
 
 static void stylegraph(TGraphAsymmErrors * g, const int color,
                        const int linestyle, const int marker,
-                       const int linewidth)
+                       const int linewidth, const double markersize_)
 {
-  g->SetMarkerSize(markersize);
   g->SetMarkerStyle(marker);
   g->SetLineStyle(linestyle);
   g->SetLineColor(color);
   g->SetMarkerColor(color);
   g->SetLineWidth(linewidth);
+  g->SetMarkerSize(markersize_);
 }
 
 static TGraphAsymmErrors *
@@ -156,7 +156,7 @@ newgraph(const int color, const int linestyle, const int marker,
          const int linewidth)
 {
   TGraphAsymmErrors * g = new TGraphAsymmErrors;
-  stylegraph(g, color, linestyle, marker, linewidth);
+  stylegraph(g, color, linestyle, marker, linewidth, markersize);
   return g;
 }
 
