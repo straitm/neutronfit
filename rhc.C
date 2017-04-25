@@ -1,3 +1,4 @@
+#include "TMatrixDSym.h"
 #include "TMinuit.h"
 #include "TH2.h"
 #include "TGraphAsymmErrors.h"
@@ -136,7 +137,6 @@ static PAR makepar(const char * const name_, const double start_)
 }
 
 const int ncommonpar = 2;
-const int nbeam      = 2; // not really generalizable as it stands
 const int nperbinpar = 4; // number per energy bin parameters
 const int nperperpar = 2; // number per period parameters
 
@@ -890,22 +890,22 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   g_b12_rhc->SavePrimitive(for_stage_two);
   g_b12_fhc->SavePrimitive(for_stage_two);
 
-  double error_matrix[npar][npar];
-
-  mn->mnemat(&error_matrix[0][0], npar);
-
-  for_stage_two << "double error_matrix[" << nbins_e*2 << "][" << nbins_e*2 << "] = {0};\n";
+  // Following the example in TMinuitMinimizer::GetHessianMatrix()
+  TMatrixDSym hessian(npar);
+  mn->mnemat(hessian.GetMatrixArray(), npar);
+  hessian.Invert();
 
   // Only care about the cross-terms for the 2*bins of the fit histograms
-  for(int ii = 0; ii < nbins_e*2; ii++){
-    for(int jj = ii; jj < nbins_e*2; jj++){
+  for(int ii = 0; ii < nbins_e*nbeam*2 /* n and b12 */; ii++){
+    for(int jj = ii; jj < nbins_e*nbeam*2; jj++){
 
-      const int i = ii < nbins_e? nneut_nc + ii:
-                                  nb12_nc - nbins_e + ii;
-      const int j = jj < nbins_e? nneut_nc + jj:
-                                  nb12_nc - nbins_e + jj;
+      const int i = ii < nbins_e*nbeam? nneut_nc + ii:
+               nb12_nc - nbins_e*nbeam + ii;
+      const int j = jj < nbins_e*nbeam? nneut_nc + jj:
+               nb12_nc - nbins_e*nbeam + jj;
 
-      for_stage_two << "error_matrix[" << ii << "][" << jj << "] = " << error_matrix[i][j] << ";\n";
+      for_stage_two << "hessian[" << ii << "][" << jj << "] = "
+        << hessian[i][j] << ";\n";
     }
     for_stage_two << "\n";
   }

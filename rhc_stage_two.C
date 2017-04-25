@@ -19,6 +19,9 @@ static TMinuit * mn = NULL;
 
 #include "common.C"
 
+// filled by Macro call at start of running
+double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
+
 enum conttype { oned68, twod68, twod90 };
 
 const conttype contour_type = twod90;
@@ -152,6 +155,7 @@ static void update_hists(const double mum_nyield, const double b12eff,
   fhc_neutrons_numubar->Divide(fhc_tracks);
 
   // My toy mc atomic cap frac, nucl cap frac on C-12, and Double Chooz!
+  // If it ever mattered, the error on this should be taken into account
   const double mum_b12yield = 0.82 * 0.077 * 0.177;
 
   // I think really zero, although of course the mu+ in flight (or the
@@ -216,23 +220,31 @@ static void update_hists(const double mum_nyield, const double b12eff,
   doublerat_b12complications->Divide(rhc_b12, fhc_b12);
 }
 
-static double compare(const int size, double * dat, double * datup, double * datdn,
+static double compare(double * dat, double * datup, double * datdn,
                       double * model)
 {
   double chi2 = 0;
-  for(int i = 0; i < size; i++){
-    double r   = dat[i];
-    double rup = datup[i];
-    double rdn = datdn[i];
-    if(rdn == 0) rdn = rup;  // protect against bad fits
-    if(rup == 0) rup = rdn;  // of course, it'd be good if this didn't trigger
-    if(rdn == 0 && rup == 0){
-      continue; // Happens if we got no MINOS errors.  Throw this bin out
+  for(int i = 0; i < nbins_e*nbeam*2 /* n and b12 */; i++){
+    for(int j = 0; j < nbins_e*nbeam*2; j++){
+      double r = dat[i];
+      const double pred = model[i];
+      double rj = dat[j];
+      const double predj = model[j];
+      if(i == j){ // for diagonal elements, use MINOS errors
+        double rup = datup[i];
+        double rdn = datdn[i];
+        if(rdn == 0) rdn = rup;  // protect against bad fits
+        if(rup == 0) rup = rdn;  // of course, it'd be good if this didn't trigger
+        if(rdn == 0 && rup == 0){
+          continue; // Happens if we got no MINOS errors.  Throw this bin out
+        }
+
+        chi2 += pow((pred - r)/(r > pred?rup:rdn), 2);
+      }
+      else{ // off diagonal -> use HESSE
+        //chi2 += hessian[i][j]*(pred - r)*(predj - rj);
+      }
     }
-
-    const double pred = model[i];
-
-    chi2 += pow((pred - r)/(r > pred?rup:rdn), 2);
   }
 
   return chi2;
@@ -243,8 +255,6 @@ static void fcn(__attribute__((unused)) int & np,
   __attribute__((unused)) int flag)  
 {
   chi2 = 0;
-
-  // TODO: add covariances
 
   const double ncscale = par[0];
   const double nmscale = par[1];
@@ -297,7 +307,7 @@ static void fcn(__attribute__((unused)) int & np,
     for(int b = 1; b <= inhists[g]->GetNbinsX(); b++)
        allmodel[i++] = inhists[g]->GetBinContent(b);
 
-  chi2 += compare(nbins_e*4, alldat, alldatup, alldatdn, allmodel);
+  chi2 += compare(alldat, alldatup, alldatdn, allmodel);
 }
 
 void fill_hists(const char * const file, TH1D * const numu,
