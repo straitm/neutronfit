@@ -238,16 +238,12 @@ static std::vector<PAR> makeparameters()
 
   const char * const bname[nbeam] = { "R_", "F_" };
 
-  // first set means the number of neutrons or B-12 seen per track in
-  // RHC. The second set means the ratio of that with the same for FHC.
-  const char * const ratname[nbeam] = { "RoF_", "F_" };
-
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sNneut%d", ratname[b], i), nneut_start));
+      p.push_back(makepar(Form("%sNneut%d", bname[b], i), nneut_start));
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sNB12_%d", ratname[b], i), nb12_start));
+      p.push_back(makepar(Form("%sNB12_%d", bname[b], i), nb12_start));
 
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
@@ -405,11 +401,11 @@ static void fcn(__attribute__((unused)) int & np,
         if(x >= 2){
           const double norm_n   =
             beam == 0 /* RHC */? 
-            par[nneut_nc + nbins_e + eb]*par[nneut_nc+eb] /* R = F*(R/F) */:
+            par[nneut_nc+eb] /* R */:
             par[nneut_nc + nbins_e + eb]; /*F*/ 
           const double norm_b12 =
             beam == 0? 
-            par[nb12_nc + nbins_e + eb]*par[nb12_nc+eb]:
+            par[nb12_nc+eb]:
             par[nb12_nc + nbins_e + eb];
 
           // Michel lifetime - ~average of mu+ and mu-, messed up by
@@ -481,12 +477,6 @@ static void set_ee_to_mn(const int periodi, const int bin) // 0-indexed
 
       (i==2||i==3||i==5? scales[periodi][bin]:1)* // per track -> total
 
-      ((i == 2 || i == 3) && beam == 0? // Check if this is a ratio
-       getpar(ncommonpar +
-              nbeam*nbins_e*(i-ncommonpar) +
-              nbins_e +
-              bin)
-       : 1) *
       getpar(ncommonpar +
              nbeam*nbins_e*(i-ncommonpar) +
              beam * nbins_e +
@@ -929,14 +919,8 @@ void rhc(const char * const savedhistfile = NULL)
     * g_n_fhc       = newgraph(kBlack, kSolid, kOpenCircle, 1),
     * g_b12_rhc     = newgraph(kBlack, kDashed,kOpenSquare, 1),
     * g_b12_fhc     = newgraph(kBlack, kDashed,kOpenCircle, 1),
-    * g_n_rhc_bad   = newgraph(kRed,   kSolid, kOpenSquare, 1),
-    * g_n_fhc_bad   = newgraph(kRed,   kSolid, kOpenCircle, 1),
-    * g_b12_rhc_bad = newgraph(kRed,   kDashed,kOpenSquare, 1),
-    * g_b12_fhc_bad = newgraph(kRed,   kDashed,kOpenCircle, 1),
     * n_result      = newgraph(kBlack, kSolid, kFullCircle, 1),
-    * n_resultbad   = newgraph(kRed,   kSolid, kFullCircle, 1),
-    * b12_result    = newgraph(kGray+1,kDashed,kOpenCircle, 1),
-    * b12_resultbad = newgraph(kRed-10,kDashed,kOpenCircle, 1);
+    * b12_result    = newgraph(kGray+1,kDashed,kOpenCircle, 1);
 
   if(savedhistfile == NULL){
     TFile * inputTFiles[nperiod] = { NULL };
@@ -1004,7 +988,7 @@ void rhc(const char * const savedhistfile = NULL)
   const std::vector< std::vector<fitanswers> > anses = dothefit();
 
   for(int s = 0; s < nbins_e; s++){
-    const fitanswers rof_ans = anses[0][s];
+    const fitanswers rhc_ans = anses[0][s];
     const fitanswers fhc_ans = anses[1][s];
 
     const double loslce = fithist[0]->GetYaxis()->GetBinLowEdge(s+1);
@@ -1016,46 +1000,44 @@ void rhc(const char * const savedhistfile = NULL)
       min(graph_xe/30, (bins_e[nbins_e]-bins_e[0])*0.007);
 
     // Directly fit for: easy
-    // XXX this good/bad scheme doesn't work when I use the result in a fit.
-    addpoint(g_n_fhc /*fhc_ans.n_good? g_n_fhc: g_n_fhc_bad*/, graph_x,
+    addpoint(g_n_rhc, graph_x,
+      rhc_ans.n_mag, graph_xe, rhc_ans.n_mage_dn, rhc_ans.n_mage_up);
+
+    addpoint(g_n_fhc, graph_x,
       fhc_ans.n_mag, graph_xe, fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
-    addpoint(fhc_ans.n_good? g_b12_fhc: g_b12_fhc_bad, graph_x,
+    addpoint(g_b12_rhc, graph_x,
+      rhc_ans.b12mag, graph_xe, rhc_ans.b12mage_dn, rhc_ans.b12mage_up);
+
+    addpoint(g_b12_fhc, graph_x,
       fhc_ans.b12mag, graph_xe, fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
-    printf("%s/%s RoF/FHC neutron (%4.2f-%4.2f)GeV: %.3f +%.3f -%.3f\n",
-      rof_ans.n_good?"Good":"Bad",
-      fhc_ans.n_good?"Good":"Bad", loslce, hislce,
-      rof_ans.n_mag, rof_ans.n_mage_up, rof_ans.n_mage_dn);
 
-    printf("%s/%s RoF/FHC B-12    (%4.2f-%4.2f)GeV: %.3f +%.3f -%.3f\n",
-      rof_ans.b12_good?"Good":"Bad",
+    printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f +%.3f -%.3f\n",
+      rhc_ans.n_good?"Good":"Bad",
+      fhc_ans.n_good?"Good":"Bad", loslce, hislce,
+      rhc_ans.n_mag, rhc_ans.n_mage_up, rhc_ans.n_mage_dn);
+
+    printf("%s/%s RHC/FHC B-12    (%4.2f-%4.2f)GeV: %.3f +%.3f -%.3f\n",
+      rhc_ans.b12_good?"Good":"Bad",
       fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
-      rof_ans.b12mag, rof_ans.b12mage_up, rof_ans.b12mage_dn);
+      rhc_ans.b12mag, rhc_ans.b12mage_up, rhc_ans.b12mage_dn);
+
 
     // Indirect, harder
-    addpoint(g_n_rhc /*rof_ans.n_good && fhc_ans.n_good? g_n_rhc: g_n_rhc_bad*/,
-      graph_x,
-      fhc_ans.n_mag * rof_ans.n_mag, graph_xe,
-      product_error(fhc_ans.n_mag, rof_ans.n_mag,
-                    fhc_ans.n_mage_dn, rof_ans.n_mage_dn),
-      product_error(fhc_ans.n_mag, rof_ans.n_mag,
-                    fhc_ans.n_mage_up, rof_ans.n_mage_up));
+    addpoint(n_result, graph_x,
+      rhc_ans.n_mag / fhc_ans.n_mag, graph_xe,
+      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
+                  rhc_ans.n_mage_dn, fhc_ans.n_mage_up),
+      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
+                  rhc_ans.n_mage_up, fhc_ans.n_mage_dn));
 
-    addpoint(rof_ans.b12_good && fhc_ans.b12_good? g_b12_rhc: g_b12_rhc_bad,
-      graph_x+graph_xoff,
-      fhc_ans.b12mag * rof_ans.b12mag, graph_xe,
-      product_error(fhc_ans.b12mag, rof_ans.b12mag,
-                    fhc_ans.b12mage_dn, rof_ans.b12mage_dn),
-      product_error(fhc_ans.b12mag, rof_ans.b12mag,
-                    fhc_ans.b12mage_up, rof_ans.b12mage_up));
-
-    addpoint(n_result /*rof_ans.n_good?n_result:n_resultbad*/, graph_x,
-      rof_ans.n_mag, graph_xe, rof_ans.n_mage_dn, rof_ans.n_mage_up);
-
-    addpoint(b12_result /*rof_ans.b12_good?b12_result:b12_resultbad*/,
-      graph_x+graph_xoff, rof_ans.b12mag,
-      graph_xe, rof_ans.b12mage_dn, rof_ans.b12mage_up);
+    addpoint(b12_result, graph_x+graph_xoff,
+      rhc_ans.b12mag / fhc_ans.b12mag, graph_xe,
+      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
+                  rhc_ans.b12mage_dn, fhc_ans.b12mage_up),
+      ratio_error(fhc_ans.b12mag, fhc_ans.b12mag,
+                  rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
   }
 
   TH2D * dum = new TH2D("dm", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
@@ -1070,13 +1052,9 @@ void rhc(const char * const savedhistfile = NULL)
   dum->GetYaxis()->SetRangeUser(0, 1.5);
   dum->Draw();
   dum->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(max(gdrawmax(  n_result), gdrawmax(  n_resultbad)),
-             max(gdrawmax(b12_result), gdrawmax(b12_resultbad))))
-  );
+    min(2.5, 1.05*max(gdrawmax(n_result), gdrawmax(b12_result))));
   n_result->Draw("pz");
-  n_resultbad->Draw("pz");
   b12_result->Draw("pz");
-  b12_resultbad->Draw("pz");
   TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.3);
   ratleg->SetTextFont(42);
   ratleg->AddEntry(n_result, "Neutrons", "lpe");
@@ -1092,14 +1070,10 @@ void rhc(const char * const savedhistfile = NULL)
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
   dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(max(gdrawmax(g_n_rhc), gdrawmax(g_n_rhc_bad)),
-                  max(gdrawmax(g_n_fhc), gdrawmax(g_n_rhc_bad))))
-  );
+    min(2.5, 1.05*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
   dum2->Draw();
   g_n_rhc->Draw("pz");
-  g_n_rhc_bad->Draw("pz");
   g_n_fhc->Draw("pz");
-  g_n_fhc_bad->Draw("pz");
 
   TLegend * nleg = new TLegend(0.6, 0.2, 0.9, 0.3);
   nleg->SetTextFont(42);
@@ -1115,16 +1089,12 @@ void rhc(const char * const savedhistfile = NULL)
   dum3->GetYaxis()->SetTitle("^{12}B per track");
   dum3->GetXaxis()->SetTitle("E_{#nu} (GeV)");
   dum3->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_rhc_bad)),
-                  max(gdrawmax(g_b12_fhc), gdrawmax(g_b12_rhc_bad))))
-  );
+    min(2.5, 1.05*max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_fhc))));
   dum3->GetYaxis()->CenterTitle();
   dum3->GetXaxis()->CenterTitle();
   dum3->Draw();
   g_b12_rhc->Draw("pz");
-  g_b12_rhc_bad->Draw("pz");
   g_b12_fhc->Draw("pz");
-  g_b12_rhc_bad->Draw("pz");
   TLegend * b12leg = new TLegend(0.6, 0.2, 0.9, 0.3);
   b12leg->SetTextFont(42);
   b12leg->AddEntry(g_b12_fhc, "FHC", "lpe");
