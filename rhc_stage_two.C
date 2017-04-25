@@ -27,7 +27,7 @@ const double npimu_nominal = 19.1;
 const double npimu_error = 3.7;
 
 const double nm_nominal = 1;
-const double nm_error = 0.5;
+const double nm_error = 0.1;
 
 bool useb12 = true; // changed between fits
 
@@ -326,7 +326,7 @@ void fill_hists(const char * const file, TH1D * const numu,
 }
 
 
-void set_leo_hists()
+void set_hists()
 {   
   // I don't need to scale these by POT because everything is done in a ratio
   // between the number of primary tracks in the given beam type and the truth
@@ -336,13 +336,14 @@ void set_leo_hists()
     "fhc_nova_v08_period5_v1/all-type3.root", fhc_reco_numu, fhc_reco_numubar,
     fhc_reco_nc);
 
-  fill_hists(//"prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_"
-    /*"rhc_nova_v08_epoch4a_v3/all-type3.root"*/ "/nova/app/users/mstrait/201704-muons-backport/4-type3.root", rhc_reco_numu, rhc_reco_numubar,
+  fill_hists("prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_"
+    "rhc_nova_v08_epoch4a_v3/all-type3.root", rhc_reco_numu, rhc_reco_numubar,
     rhc_reco_nc);
 
   rhc_reco_numubar=(TH1D*)rhc_reco_numubar->Rebin(nbins_e,"rhc_reco_numubar",bins_e);
-  rhc_reco_numu   =(TH1D*)rhc_reco_numu   ->Rebin(nbins_e,"rhc_reco_numu"   ,bins_e);
   fhc_reco_numubar=(TH1D*)fhc_reco_numubar->Rebin(nbins_e,"fhc_reco_numubar",bins_e);
+
+  rhc_reco_numu   =(TH1D*)rhc_reco_numu   ->Rebin(nbins_e,"rhc_reco_numu"   ,bins_e);
   fhc_reco_numu   =(TH1D*)fhc_reco_numu   ->Rebin(nbins_e,"fhc_reco_numu"   ,bins_e);
 
   fhc_reco_nc    = (TH1D*)fhc_reco_nc   ->Rebin(nbins_e, "fhc_reco_nc"   , bins_e);
@@ -533,7 +534,7 @@ void draw()
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.5*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
+    min(2.5, 1.2*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
   dum2->GetYaxis()->SetTitle("Neutrons/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
@@ -558,8 +559,9 @@ void draw()
     for(int h = 0; h < 4; h++)
       c2hists[h]->Draw("histsame][");
 
-  leg = new TLegend(leftmargin+0.1, 0.73, 0.28+0.1, 1-topmargin);
+  leg = new TLegend(leftmargin+0.1, 0.73, leftmargin+0.33, 1-topmargin);
   styleleg(leg);
+  leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->AddEntry(rhc_neutrons, "RHC Fit", "l");
   leg->AddEntry(rhc_neutrons_nc, "RHC NC", "l");
@@ -587,8 +589,9 @@ void draw()
     for(int h = 0; h < 4; h++)
       c2histsf[h]->Draw("histsame][");
 
-  TLegend * legf = new TLegend(0.28, 0.73, 0.28 + (0.28-leftmargin), 1-topmargin);
+  TLegend * legf = new TLegend(leftmargin+0.1, 0.73, leftmargin+0.33, 1-topmargin);
   styleleg(legf);
+  legf->SetMargin(0.4);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
   legf->AddEntry(fhc_neutrons, "FHC Fit", "l");
   legf->AddEntry(fhc_neutrons_nc, "FHC NC", "l");
@@ -602,9 +605,7 @@ void draw()
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  TH2D * dum3 = new TH2D("dm", "", 100, 0, 10, 1, 0, 2);
-  dum3->GetXaxis()->SetRangeUser(0, 2.5);
-  dum3->GetYaxis()->SetRangeUser(0, 1.9);
+  TH2D * dum3 = new TH2D("dm", "", 100, 0, 1.9, 1, 0, 1.9);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
   dum3->GetXaxis()->CenterTitle();
@@ -741,7 +742,7 @@ void rhc_stage_two(const char * const input)
 {
   TH1::SetDefaultSumw2();
 
-  set_leo_hists();
+  set_hists();
 
   gROOT->Macro(input);
 
