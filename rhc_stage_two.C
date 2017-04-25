@@ -96,9 +96,6 @@ static void reset_hists()
   fhc_b12_numubar->Reset();
 }
 
-// Is this even close?  This is a stand-in for RHC MC.
-const double NC_XS_RATIO_RHC_FHC = 0.5;
-
 static void update_hists(const double npimu, const double nmscale, const double ncscale)
 {
   // Probability of getting a neutron from a mu- and a mu+
@@ -248,262 +245,100 @@ static void fcn(__attribute__((unused)) int & np,
   if(useb12) chi2 += compare(b12_result, doublerat_b12complications);
 }
 
-
-void set_leo_hists()
-{   
-  /* From Leonidas 2017-03-28 */
-  fhc_reco_numu->SetBinContent(3,3);
-  fhc_reco_numu->SetBinContent(4,212.541);
-  fhc_reco_numu->SetBinContent(5,1284.79);
-  fhc_reco_numu->SetBinContent(6,4248.33);
-  fhc_reco_numu->SetBinContent(7,9328.47);
-  fhc_reco_numu->SetBinContent(8,15396.5);
-  fhc_reco_numu->SetBinContent(9,21537.5);
-  fhc_reco_numu->SetBinContent(10,26678.5);
-  fhc_reco_numu->SetBinContent(11,32098.6);
-  fhc_reco_numu->SetBinContent(12,36620.6);
-  fhc_reco_numu->SetBinContent(13,40362.4);
-  fhc_reco_numu->SetBinContent(14,43287.9);
-  fhc_reco_numu->SetBinContent(15,44585.5);
-  fhc_reco_numu->SetBinContent(16,45251.6);
-  fhc_reco_numu->SetBinContent(17,44704.7);
-  fhc_reco_numu->SetBinContent(18,42626.8);
-  fhc_reco_numu->SetBinContent(19,39552.2);
-  fhc_reco_numu->SetBinContent(20,35662.1);
-  fhc_reco_numu->SetBinContent(21,31291.4);
-  fhc_reco_numu->SetBinContent(22,27101.4);
-  fhc_reco_numu->SetBinContent(23,22832.5);
-  fhc_reco_numu->SetBinContent(24,18872.8);
-  fhc_reco_numu->SetBinContent(25,15295.8);
-  fhc_reco_numu->SetBinContent(26,12327);
-  fhc_reco_numu->SetBinContent(27,9607.72);
-  fhc_reco_numu->SetBinContent(28,7526.39);
-  fhc_reco_numu->SetBinContent(29,5752.59);
-  fhc_reco_numu->SetBinContent(30,4508.04);
-  fhc_reco_numu->SetBinContent(31,3414.41);
-  fhc_reco_numu->SetBinContent(32,2729.95);
-  fhc_reco_numu->SetBinContent(33,2101.8);
-  fhc_reco_numu->SetBinContent(34,1573);
-  fhc_reco_numu->SetBinContent(35,1225.34);
-  fhc_reco_numu->SetBinContent(36,886.063);
-  fhc_reco_numu->SetBinContent(37,695.44);
-  fhc_reco_numu->SetBinContent(38,663.329);
-  fhc_reco_numu->SetBinContent(39,531.704);
-  fhc_reco_numu->SetBinContent(40,430.067);
-  fhc_reco_numu->SetBinContent(41,400.083);
-  fhc_reco_numu->SetBinContent(42,347.758);
-  fhc_reco_numu->SetBinContent(43,300.585);
-  fhc_reco_numu->SetBinContent(44,259.687);
-  fhc_reco_numu->SetBinContent(45,219.636);
-  fhc_reco_numu->SetBinContent(46,171.117);
-  fhc_reco_numu->SetBinContent(47,92.8628);
-  fhc_reco_numu->SetBinContent(48,67.5887);
-  fhc_reco_numu->SetBinContent(49,41.9139);
-  fhc_reco_numu->SetBinContent(50,29.2711);
-  fhc_reco_numu->SetBinContent(51,11);
-  fhc_reco_numu->SetBinContent(52,7);
-  fhc_reco_numu->SetBinContent(53,3);
-  fhc_reco_numu->SetBinContent(54,1);
-  fhc_reco_numu->SetBinContent(55,1);
-  fhc_reco_numu->SetBinContent(57,1);
-  fhc_reco_numu->SetBinContent(77,1);
-  fhc_reco_numu->SetBinContent(90,1);
-
-  /* From Leonidas 2017-03-28 */
-  rhc_reco_numu->SetBinContent(4,48.2483);
-  rhc_reco_numu->SetBinContent(5,239.09);
-  rhc_reco_numu->SetBinContent(6,681.456);
-  rhc_reco_numu->SetBinContent(7,1181.58);
-  rhc_reco_numu->SetBinContent(8,1667.23);
-  rhc_reco_numu->SetBinContent(9,2118.18);
-  rhc_reco_numu->SetBinContent(10,2212.95);
-  rhc_reco_numu->SetBinContent(11,2275.83);
-  rhc_reco_numu->SetBinContent(12,2293.39);
-  rhc_reco_numu->SetBinContent(13,2203.7);
-  rhc_reco_numu->SetBinContent(14,2214.57);
-  rhc_reco_numu->SetBinContent(15,2063.23);
-  rhc_reco_numu->SetBinContent(16,1969.59);
-  rhc_reco_numu->SetBinContent(17,1860.93);
-  rhc_reco_numu->SetBinContent(18,1655.79);
-  rhc_reco_numu->SetBinContent(19,1732.2);
-  rhc_reco_numu->SetBinContent(20,1480.12);
-  rhc_reco_numu->SetBinContent(21,1370.12);
-  rhc_reco_numu->SetBinContent(22,1316.47);
-  rhc_reco_numu->SetBinContent(23,1194.72);
-  rhc_reco_numu->SetBinContent(24,1094.11);
-  rhc_reco_numu->SetBinContent(25,988.928);
-  rhc_reco_numu->SetBinContent(26,831.687);
-  rhc_reco_numu->SetBinContent(27,813.377);
-  rhc_reco_numu->SetBinContent(28,743.707);
-  rhc_reco_numu->SetBinContent(29,727.005);
-  rhc_reco_numu->SetBinContent(30,590.358);
-  rhc_reco_numu->SetBinContent(31,539.509);
-  rhc_reco_numu->SetBinContent(32,477.372);
-  rhc_reco_numu->SetBinContent(33,419.067);
-  rhc_reco_numu->SetBinContent(34,401.82);
-  rhc_reco_numu->SetBinContent(35,351.079);
-  rhc_reco_numu->SetBinContent(36,330.392);
-  rhc_reco_numu->SetBinContent(37,289.085);
-  rhc_reco_numu->SetBinContent(38,276.722);
-  rhc_reco_numu->SetBinContent(39,196.527);
-  rhc_reco_numu->SetBinContent(40,169.621);
-  rhc_reco_numu->SetBinContent(41,146.6);
-  rhc_reco_numu->SetBinContent(42,144.985);
-  rhc_reco_numu->SetBinContent(43,97.0034);
-  rhc_reco_numu->SetBinContent(44,87.65);
-  rhc_reco_numu->SetBinContent(45,93.3);
-  rhc_reco_numu->SetBinContent(46,63.3);
-  rhc_reco_numu->SetBinContent(47,36);
-  rhc_reco_numu->SetBinContent(48,28);
-  rhc_reco_numu->SetBinContent(49,12);
-  rhc_reco_numu->SetBinContent(50,10);
-  rhc_reco_numu->SetBinContent(51,7);
-  rhc_reco_numu->SetBinContent(53,1);
-  rhc_reco_numu->SetBinContent(58,1);
-
-  /* From Leonidas 2017-03-28 */
-  rhc_reco_numubar->SetBinContent(3,2);
-  rhc_reco_numubar->SetBinContent(4,122);
-  rhc_reco_numubar->SetBinContent(5,862);
-  rhc_reco_numubar->SetBinContent(6,2807);
-  rhc_reco_numubar->SetBinContent(7,5695);
-  rhc_reco_numubar->SetBinContent(8,8336);
-  rhc_reco_numubar->SetBinContent(9,10513);
-  rhc_reco_numubar->SetBinContent(10,12524);
-  rhc_reco_numubar->SetBinContent(11,14365);
-  rhc_reco_numubar->SetBinContent(12,16360);
-  rhc_reco_numubar->SetBinContent(13,18252);
-  rhc_reco_numubar->SetBinContent(14,19786);
-  rhc_reco_numubar->SetBinContent(15,20909);
-  rhc_reco_numubar->SetBinContent(16,21326);
-  rhc_reco_numubar->SetBinContent(17,21288);
-  rhc_reco_numubar->SetBinContent(18,20851);
-  rhc_reco_numubar->SetBinContent(19,20037);
-  rhc_reco_numubar->SetBinContent(20,18176);
-  rhc_reco_numubar->SetBinContent(21,16599);
-  rhc_reco_numubar->SetBinContent(22,14346);
-  rhc_reco_numubar->SetBinContent(23,12270);
-  rhc_reco_numubar->SetBinContent(24,10134);
-  rhc_reco_numubar->SetBinContent(25,8345);
-  rhc_reco_numubar->SetBinContent(26,6884);
-  rhc_reco_numubar->SetBinContent(27,5381);
-  rhc_reco_numubar->SetBinContent(28,4103);
-  rhc_reco_numubar->SetBinContent(29,3208);
-  rhc_reco_numubar->SetBinContent(30,2528);
-  rhc_reco_numubar->SetBinContent(31,1919);
-  rhc_reco_numubar->SetBinContent(32,1506);
-  rhc_reco_numubar->SetBinContent(33,1019);
-  rhc_reco_numubar->SetBinContent(34,738);
-  rhc_reco_numubar->SetBinContent(35,570);
-  rhc_reco_numubar->SetBinContent(36,382);
-  rhc_reco_numubar->SetBinContent(37,329);
-  rhc_reco_numubar->SetBinContent(38,205);
-  rhc_reco_numubar->SetBinContent(39,201);
-  rhc_reco_numubar->SetBinContent(40,147);
-  rhc_reco_numubar->SetBinContent(41,117);
-  rhc_reco_numubar->SetBinContent(42,111);
-  rhc_reco_numubar->SetBinContent(43,86);
-  rhc_reco_numubar->SetBinContent(44,54);
-  rhc_reco_numubar->SetBinContent(45,49);
-  rhc_reco_numubar->SetBinContent(46,24);
-  rhc_reco_numubar->SetBinContent(47,27);
-  rhc_reco_numubar->SetBinContent(48,13);
-  rhc_reco_numubar->SetBinContent(49,9);
-  rhc_reco_numubar->SetBinContent(50,10);
-  rhc_reco_numubar->SetBinContent(51,3);
-  rhc_reco_numubar->SetBinContent(52,2);
-  rhc_reco_numubar->SetBinContent(54,2);
-
-  // Well, there is no ND RHC MC yet, so I have to do something fudgy.
-  // Get the histograms I can from FHC files, scale them to match Leo's
-  // histograms, and scale the remaining histograms by the same factor
-
-  TFile * f = new TFile("prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_"
-    "fhc_nova_v08_period5_v1/all-type3.root", "read");
+void fill_hists(const char * const file, TH1D * const numu,
+                TH1D * const numubar, TH1D * const nc)
+{
+  TFile * f = new TFile(file, "read");
 
   if(!f || f->IsZombie()){
-    fprintf(stderr, "Could not open the file\n");
+    fprintf(stderr, "Could not open the file %s\n", file);
     _exit(1);
   }
 
   TTree * t = dynamic_cast<TTree *>(f->Get("t"));
 
   if(!t){
-    fprintf(stderr, "Could not get the tree\n");
+    fprintf(stderr, "Could not get the tree from %s\n", file);
     _exit(1);
   }
 
-  const double leo_fhc_reco_numu_count = fhc_reco_numu->Integral();
+  // For I-don't-know-why TTree::Draw isn't working for me here, so
+  // do it the hard way
+  int i, primary, true_pdg, true_nupdg, true_nucc, contained;
+  float slce, trkx, trky, trkz, trklen, remid;
+  t->SetBranchStatus("*", 0);
+  t->SetBranchStatus("slce", 1); t->SetBranchAddress("slce", &slce);
+  t->SetBranchStatus("i", 1); t->SetBranchAddress("i", &i);
+  t->SetBranchStatus("primary", 1); t->SetBranchAddress("primary", &primary);
+  t->SetBranchStatus("true_pdg", 1); t->SetBranchAddress("true_pdg", &true_pdg);
+  t->SetBranchStatus("true_nupdg", 1); t->SetBranchAddress("true_nupdg", &true_nupdg);
+  t->SetBranchStatus("true_nucc", 1); t->SetBranchAddress("true_nucc", &true_nucc);
+  t->SetBranchStatus("contained", 1); t->SetBranchAddress("contained", &contained);
+  t->SetBranchStatus("trkx", 1); t->SetBranchAddress("trkx", &trkx);
+  t->SetBranchStatus("trky", 1); t->SetBranchAddress("trky", &trky);
+  t->SetBranchStatus("trkz", 1); t->SetBranchAddress("trkz", &trkz);
+  t->SetBranchStatus("trklen", 1); t->SetBranchAddress("trklen", &trklen);
+  t->SetBranchStatus("remid", 1); t->SetBranchAddress("remid", &remid);
 
-  fhc_reco_numu->Reset();
+  for(int e = 0; e < t->GetEntries(); e++){
+    t->GetEntry(e);
+    if(!(i == 0 && primary && contained)) continue;
 
-  {
-    // For I-don't-know-why TTree::Draw isn't working for me here, so
-    // do it the hard way
-    int i, primary, true_pdg, true_nupdg, true_nucc, contained;
-    float slce, trkx, trky, trkz, trklen, remid;
-    t->SetBranchStatus("*", 0);
-    t->SetBranchStatus("slce", 1); t->SetBranchAddress("slce", &slce);
-    t->SetBranchStatus("i", 1); t->SetBranchAddress("i", &i);
-    t->SetBranchStatus("primary", 1); t->SetBranchAddress("primary", &primary);
-    t->SetBranchStatus("true_pdg", 1); t->SetBranchAddress("true_pdg", &true_pdg);
-    t->SetBranchStatus("true_nupdg", 1); t->SetBranchAddress("true_nupdg", &true_nupdg);
-    t->SetBranchStatus("true_nucc", 1); t->SetBranchAddress("true_nucc", &true_nucc);
-    t->SetBranchStatus("contained", 1); t->SetBranchAddress("contained", &contained);
-    t->SetBranchStatus("trkx", 1); t->SetBranchAddress("trkx", &trkx);
-    t->SetBranchStatus("trky", 1); t->SetBranchAddress("trky", &trky);
-    t->SetBranchStatus("trkz", 1); t->SetBranchAddress("trkz", &trkz);
-    t->SetBranchStatus("trklen", 1); t->SetBranchAddress("trklen", &trklen);
-    t->SetBranchStatus("remid", 1); t->SetBranchAddress("remid", &remid);
+    // MUST MATCH cut at top of rhc.C
+    if(fabs(trkx) > 170) continue;
+    if(fabs(trky) > 170) continue;
+    if(     trkz  >1250) continue;
+    if(trklen < 200) continue;
+    if(remid  < 0.75) continue;
 
-    for(int e = 0; e < t->GetEntries(); e++){
-      t->GetEntry(e);
-      if(!(i == 0 && primary && contained)) continue;
+    // XXX What should I be doing about the case where there's a 
+    // true numu CC event where a pion is selected as the primary
+    // track?
 
-      // MUST MATCH cut at top of rhc.C
-      if(fabs(trkx) > 170) continue;
-      if(fabs(trky) > 170) continue;
-      if(     trkz  >1250) continue;
-      if(trklen < 200) continue;
-      if(remid  < 0.75) continue;
+    // based entirely on what the track actually is
+    if(true_pdg == -321 /* take K- too, but they are very rare */
+       || true_pdg == -211) nc->Fill(slce);
+    else if(true_pdg == 13) numu->Fill(slce);
 
-      // XXX What should I be doing about the case where there's a 
-      // true numu CC event where a pion is selected as the primary
-      // track?
+    // XXX use numubar as a stand-in for all other tracks.  Can't just
+    // throw out tracks because everything is done per-track!
+    // This will make the guesses at neutron yield for mu+ a bit wrong,
+    // but they are only guesses anyhow
+    else /* if(true_pdg == -13) */ numubar->Fill(slce);
 
-      // based entirely on what the track actually is
-      if(true_pdg == -321 /* take K- too, but they are very rare */
-         || true_pdg == -211)
-        fhc_reco_nc->Fill(slce);
-      else if(true_pdg == 13) fhc_reco_numu->Fill(slce);
+    if(true_pdg == -321) printf("K-!\n");
 
-      // XXX use numubar as a stand-in for all other tracks.  Can't just
-      // throw out tracks because everything is done per-track!
-      // This will make the guesses at neutron yield for mu+ a bit wrong,
-      // but they are only guesses anyhow
-      else /* if(true_pdg == -13) */ fhc_reco_numubar->Fill(slce);
-
-      if(true_pdg == -321) printf("K-!\n");
-
-      /*
-      // based on the neutrino interaction
-      if(true_nucc){
-        if     (true_nupdg ==  14) fhc_reco_numu->Fill(slce);
-        else if(true_nupdg == -14) fhc_reco_numubar->Fill(slce);
-      }
-      else{
-        // Picking out true NC events where the primary track is a pi-
-        if(true_pdg == -211 || true_pdg == -321) fhc_reco_nc->Fill(slce);
-      }
-      */
+    /*
+    // based on the neutrino interaction
+    if(true_nucc){
+      if     (true_nupdg ==  14) numu->Fill(slce);
+      else if(true_nupdg == -14) numubar->Fill(slce);
     }
+    else{
+      // Picking out true NC events where the primary track is a pi-
+      if(true_pdg == -211 || true_pdg == -321) nc->Fill(slce);
+    }
+    */
   }
 
-  const double scale_new_mc = leo_fhc_reco_numu_count/fhc_reco_numu->Integral();
+  // can I safely close the file here?! You'd think so, but sometimes
+  // ROOT really surprises me!
+}
 
-  fhc_reco_numu->Scale(scale_new_mc);
-  fhc_reco_numubar->Scale(scale_new_mc);
-  fhc_reco_nc->Scale(scale_new_mc);
+
+void set_leo_hists()
+{   
+  // I don't need to scale these by POT because everything is done in a ratio
+  // between the number of primary tracks in the given beam type and the truth
+  // of those tracks.  But it might be confusing if the individual histograms
+  // are drawn without normalization.
+  fill_hists("prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_"
+    "fhc_nova_v08_period5_v1/all-type3.root", fhc_reco_numu, fhc_reco_numubar,
+    fhc_reco_nc);
+
+  fill_hists(//"prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_"
+    /*"rhc_nova_v08_epoch4a_v3/all-type3.root"*/ "/nova/app/users/mstrait/201704-muons-backport/4-type3.root", rhc_reco_numu, rhc_reco_numubar,
+    rhc_reco_nc);
 
   rhc_reco_numubar=(TH1D*)rhc_reco_numubar->Rebin(nbins_e,"rhc_reco_numubar",bins_e);
   rhc_reco_numu   =(TH1D*)rhc_reco_numu   ->Rebin(nbins_e,"rhc_reco_numu"   ,bins_e);
@@ -539,9 +374,6 @@ void set_leo_hists()
   fhc_b12_numu = (TH1D*)fhc_b12_numu->Rebin(nbins_e, "fhc_b12_numu", bins_e);
   fhc_b12_numubar = (TH1D*)fhc_b12_numubar->Rebin(nbins_e, "fhc_b12_numubar", bins_e);
 
-
-  // hack until I have RHC MC
-  rhc_reco_nc->Add(fhc_reco_nc, NC_XS_RATIO_RHC_FHC);
 
   // Total numu+numubar in RHC
   rhc_tracks = (TH1D*)rhc_reco_numu->Clone("rhc_tracks");
@@ -615,10 +447,7 @@ void draw()
   const double topmargin  = 0.025;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
-  c1->SetTopMargin(topmargin);
-  c1->SetLeftMargin(leftmargin);
-  c1->SetBottomMargin(bottommargin);
-  c1->SetRightMargin(rightmargin);
+  c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   const bool logy = false;
   c1->SetLogy(logy);
   TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-6:0, 2);
@@ -663,26 +492,8 @@ void draw()
   c1->Print("fit_stage_two.pdf");
   
   //////////////////////////////////////////////////////////////////////
-  TCanvas * c2 = new TCanvas("rhc2", "rhc2");
-  c2->SetLogy(logy);
-  c2->SetTopMargin(topmargin);
-  c2->SetLeftMargin(leftmargin);
-  c2->SetBottomMargin(bottommargin);
-  c2->SetRightMargin(rightmargin);
-  dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
-  if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.5*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
-  dum2->Draw();
-  dum2->GetYaxis()->SetTitle("Neutrons/track");
-  dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
-  dum2->GetYaxis()->CenterTitle();
-  dum2->GetXaxis()->CenterTitle();
-
   stylegraph(g_n_rhc, kRed, kSolid, kOpenSquare, 1, 0.7);
   stylegraph(g_n_fhc, kBlue, kSolid, kOpenCircle, 1, 0.7);
-
-  g_n_rhc->Draw("pz");
-  g_n_fhc->Draw("pz");
 
   const double rhcscale = getscale(g_n_rhc, rhc_neutrons);
   const double fhcscale = getscale(g_n_fhc, fhc_neutrons);
@@ -720,16 +531,34 @@ void draw()
   rhc_neutrons_numubar->Scale(rhcscale);
   fhc_neutrons_numubar->Scale(fhcscale);
 
-  TH1D * c2hists[8] = { rhc_neutrons, fhc_neutrons,
-    rhc_neutrons_nc, fhc_neutrons_nc,
-    rhc_neutrons_numu, fhc_neutrons_numu,
-    rhc_neutrons_numubar, fhc_neutrons_numubar };
+  dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
+  if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
+    min(2.5, 1.5*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
+  dum2->GetYaxis()->SetTitle("Neutrons/track");
+  dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
+  dum2->GetYaxis()->CenterTitle();
+  dum2->GetXaxis()->CenterTitle();
+
+  //
+  TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
+  c2r->SetLogy(logy);
+  c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  dum2->Draw();
+
+  g_n_rhc->Draw("pz");
+
+  TH1D * c2hists[4] = {
+    rhc_neutrons,
+    rhc_neutrons_nc,
+    rhc_neutrons_numu,
+    rhc_neutrons_numubar,
+  };
     
   for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
-    for(int h = 0; h < 8; h++)
+    for(int h = 0; h < 4; h++)
       c2hists[h]->Draw("histsame][");
 
-  leg = new TLegend(leftmargin, 0.73, 0.28, 1-topmargin);
+  leg = new TLegend(leftmargin+0.1, 0.73, 0.28+0.1, 1-topmargin);
   styleleg(leg);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->AddEntry(rhc_neutrons, "RHC Fit", "l");
@@ -737,7 +566,27 @@ void draw()
   leg->AddEntry(rhc_neutrons_numu, "RHC #nu_{#mu}", "l");
   leg->AddEntry(rhc_neutrons_numubar, "RHC #bar{#nu}_{#mu}", "l");
   leg->Draw();
-  
+
+  c2r->Print("fit_stage_two.pdf");
+
+  //
+  TCanvas * c2f = new TCanvas("rhc2f", "rhc2f");
+  c2f->SetLogy(logy);
+  c2f->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  dum2->Draw();
+
+  g_n_fhc->Draw("pz");
+    
+  TH1D * c2histsf[4] = {
+    fhc_neutrons,
+    fhc_neutrons_nc,
+    fhc_neutrons_numu,
+    fhc_neutrons_numubar
+  };
+  for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
+    for(int h = 0; h < 4; h++)
+      c2histsf[h]->Draw("histsame][");
+
   TLegend * legf = new TLegend(0.28, 0.73, 0.28 + (0.28-leftmargin), 1-topmargin);
   styleleg(legf);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
@@ -747,14 +596,11 @@ void draw()
   legf->AddEntry(fhc_neutrons_numubar, "FHC #bar{#nu}_{#mu}", "l");
   legf->Draw();
 
-  c2->Print("fit_stage_two.pdf");
+  c2f->Print("fit_stage_two.pdf");
 
   //////////////////////////////////////////////////////////////////////
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
-  c3->SetTopMargin(topmargin);
-  c3->SetLeftMargin(leftmargin);
-  c3->SetBottomMargin(bottommargin);
-  c3->SetRightMargin(rightmargin);
+  c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   TH2D * dum3 = new TH2D("dm", "", 100, 0, 10, 1, 0, 2);
   dum3->GetXaxis()->SetRangeUser(0, 2.5);
@@ -795,6 +641,9 @@ void draw()
     cont1->SetFillStyle(1001);
     cont1->SetFillColor(kBlue-2);
     cont1->SetLineColor(kBlue-2);
+
+    // get rid of the visual gap 
+    cont1->SetPoint(cont1->GetN(), cont1->GetX()[0], cont1->GetY()[0]);
     cont1->Draw("l");
   }
   if(cont2 != NULL){
@@ -825,10 +674,7 @@ void draw()
   //////////////////////////////////////////////////////////////////////
   TCanvas * c4 = new TCanvas("rhc4", "rhc4");
   c4->SetLogy();
-  c4->SetTopMargin(topmargin);
-  c4->SetLeftMargin(leftmargin);
-  c4->SetBottomMargin(bottommargin);
-  c4->SetRightMargin(rightmargin);
+  c4->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   fhc_reco_numu->SetLineColor(kBlue);
   fhc_reco_numu->SetMarkerColor(kBlue);
@@ -854,7 +700,7 @@ void draw()
   rhc_reco_nc->SetMarkerColor(kRed);
   rhc_reco_nc->SetLineWidth(4);
  
-  fhc_reco_numu->GetYaxis()->SetRangeUser(rhc_reco_numu->GetMinimum()*0.75,
+  fhc_reco_numu->GetYaxis()->SetRangeUser(max(0.1, rhc_reco_numu->GetMinimum()*0.75),
                                           fhc_reco_numu->GetMaximum()*1.25);
   fhc_reco_numu->GetYaxis()->CenterTitle();
   fhc_reco_numu->GetXaxis()->CenterTitle();
@@ -901,8 +747,8 @@ void rhc_stage_two(const char * const input)
 
   make_mn();
 
-  mn->Command("SET LIM 1 0.01 10"); // NC scale
-  mn->Command("SET LIM 2 0.01 10");  // numubar scale
+  //mn->Command("SET LIM 1 0.01 10"); // NC scale
+  //mn->Command("SET LIM 2 0.01 10");  // numubar scale
   /*mn->Command(Form("SET LIM 3 %f %f", 
     max(0, npimu_nominal - 5*npimu_error),
            npimu_nominal + 5*npimu_error)); // pion to muon neutron yield ratio */

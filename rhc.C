@@ -149,7 +149,7 @@ const char * const Speriodnames[nperiod] =
 
 const char * const inputfiles[nperiod] = {
 "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "S16-12-07_nd_period6_keepup/985-type3.root",
+  "S16-12-07_nd_period6_keepup/1278-type3.root",
 "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
   "R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
