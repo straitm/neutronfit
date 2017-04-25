@@ -871,7 +871,9 @@ static void init_ee()
 static void save_for_stage_two(TGraphAsymmErrors * n_result,
                                TGraphAsymmErrors * b12_result,
                                TGraphAsymmErrors * g_n_rhc,
-                               TGraphAsymmErrors * g_n_fhc)
+                               TGraphAsymmErrors * g_n_fhc,
+                               TGraphAsymmErrors * g_b12_rhc,
+                               TGraphAsymmErrors * g_b12_fhc)
 {
   ofstream for_stage_two("for_stage_two.C");
   for_stage_two << "{\n";
@@ -883,6 +885,10 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   g_n_fhc->SetName("g_n_fhc");
   g_n_rhc->SavePrimitive(for_stage_two);
   g_n_fhc->SavePrimitive(for_stage_two);
+  g_b12_rhc->SetName("g_b12_rhc");
+  g_b12_fhc->SetName("g_b12_fhc");
+  g_b12_rhc->SavePrimitive(for_stage_two);
+  g_b12_fhc->SavePrimitive(for_stage_two);
 
   double error_matrix[npar][npar];
 
@@ -1138,5 +1144,6 @@ void rhc(const char * const savedhistfile = NULL)
 
   c4->Print("fit.pdf]");
 
-  save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc);
+  save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc,
+                     g_b12_rhc, g_b12_fhc);
 }

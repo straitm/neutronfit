@@ -1,3 +1,4 @@
+#include "TLine.h"
 #include "TMarker.h"
 #include "TMinuit.h"
 #include "TH2.h"
@@ -18,13 +19,26 @@ static TMinuit * mn = NULL;
 
 #include "common.C"
 
+enum conttype { oned68, twod68, twod90 };
+
+const conttype contour_type = twod90;
+
 static const double tsize = 0.04;
 
-const int npar = 3;
+const int npar = 4;
+
+const double mum_nyield_nominal = 0.181;
+const double mum_nyield_error   = 0.030;
+
+const double neff_nominal = 0.5;
+const double neff_error = 0.2;
+
+const double b12eff_nominal = 0.5;
+const double b12eff_error = 0.2;
 
 // Ratio of the neutron yield from pions to that of muons, per stop.
 const double npimu_nominal = 19.1;
-const double npimu_error = 3.7;
+double npimu_error = 3.7;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -48,13 +62,11 @@ TH1D * doublerat_b12complications = NULL;
 TGraphAsymmErrors * n_result = new TGraphAsymmErrors;
 TGraphAsymmErrors * b12_result = new TGraphAsymmErrors;
 
-// For drawing
 TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
 
-// For drawing later
-//TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
-//TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
+TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
+TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
 
 // Out here so we can draw them
 TH1D * rhc_neutrons = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons");
@@ -96,13 +108,15 @@ static void reset_hists()
   fhc_b12_numubar->Reset();
 }
 
-static void update_hists(const double npimu, const double nmscale, const double ncscale)
+static void update_hists(const double mum_nyield, const double b12eff,
+                         const double neff, const double npimu,
+                         const double nmscale, const double ncscale)
 {
-  // Probability of getting a neutron from a mu- and a mu+
-  const double mum_nyield = 0.181;
+  // Probability of getting a neutron from a mu+ via electrodisintigration, roughly
   const double mup_nyield = 1e-4;
 
-  // this could be another nuisance parameter
+  // this could be another nuisance parameter.  Don't want to double count
+  // it with the ratio of pion to muon yields, though, so careful.
   const double muminus_capture_frac = 0.182;
 
   /* We're going to ignore the corner case of pi+ -> mu+ Michel decays
@@ -110,9 +124,9 @@ static void update_hists(const double npimu, const double nmscale, const double 
 
   reset_hists();
 
-  rhc_neutrons_nc     ->Add(rhc_reco_nc, ncscale*npimu*mum_nyield);
-  rhc_neutrons_numu   ->Add(rhc_reco_numu,    mum_nyield * nmscale /* note */);
-  rhc_neutrons_numubar->Add(rhc_reco_numubar, mup_nyield);
+  rhc_neutrons_nc     ->Add(rhc_reco_nc, ncscale*npimu*mum_nyield*neff);
+  rhc_neutrons_numu   ->Add(rhc_reco_numu,    mum_nyield * nmscale /* note */ *neff);
+  rhc_neutrons_numubar->Add(rhc_reco_numubar, mup_nyield*neff);
 
   rhc_neutrons->Add(rhc_neutrons_nc);
   rhc_neutrons->Add(rhc_neutrons_numu);
@@ -124,9 +138,9 @@ static void update_hists(const double npimu, const double nmscale, const double 
   rhc_neutrons_numubar->Divide(rhc_tracks);
 
   // Estimate of number of neutrons from FHC per muon
-  fhc_neutrons_nc->Add(fhc_reco_nc, ncscale*npimu*mum_nyield);
-  fhc_neutrons_numu->Add(fhc_reco_numu, mum_nyield);
-  fhc_neutrons_numubar->Add(fhc_reco_numubar, mup_nyield);
+  fhc_neutrons_nc->Add(fhc_reco_nc, ncscale*npimu*mum_nyield*neff);
+  fhc_neutrons_numu->Add(fhc_reco_numu, mum_nyield*neff);
+  fhc_neutrons_numubar->Add(fhc_reco_numubar, mup_nyield*neff);
 
   fhc_neutrons->Add(fhc_neutrons_nc);
   fhc_neutrons->Add(fhc_neutrons_numu);
@@ -164,10 +178,10 @@ static void update_hists(const double npimu, const double nmscale, const double 
   // error on the B-12 yield is 22%, this can be neglected.
   const double pim_b12yield = mum_b12yield * 5.8e-3 / 1.36e-2;
 
-  // Estimate of number of B-12 from FHC per muon
-  rhc_b12_nc->Add(rhc_reco_nc, ncscale*pim_b12yield);
-  rhc_b12_numu->Add(rhc_reco_numu,    mum_b12yield);
-  rhc_b12_numubar->Add(rhc_reco_numubar, mup_b12yield);
+  // Estimate of number of B-12 from FHC per track
+  rhc_b12_nc->Add(rhc_reco_nc, ncscale*pim_b12yield*b12eff);
+  rhc_b12_numu->Add(rhc_reco_numu,    mum_b12yield*b12eff);
+  rhc_b12_numubar->Add(rhc_reco_numubar, mup_b12yield*b12eff);
 
   rhc_b12->Add(rhc_b12_nc);
   rhc_b12->Add(rhc_b12_numu);
@@ -178,10 +192,10 @@ static void update_hists(const double npimu, const double nmscale, const double 
   rhc_b12_numu->Divide(rhc_tracks);
   rhc_b12_numubar->Divide(rhc_tracks);
 
-  // Estimate of number of b12 from FHC per muon
-  fhc_b12_nc->Add(fhc_reco_nc, ncscale*pim_b12yield);
-  fhc_b12_numu->Add(fhc_reco_numu,    mum_b12yield);
-  fhc_b12_numubar->Add(fhc_reco_numubar, mup_b12yield);
+  // Estimate of number of b12 from FHC per track
+  fhc_b12_nc->Add(fhc_reco_nc, ncscale*pim_b12yield*b12eff);
+  fhc_b12_numu->Add(fhc_reco_numu,    mum_b12yield*b12eff);
+  fhc_b12_numubar->Add(fhc_reco_numubar, mup_b12yield*b12eff);
 
   fhc_b12->Add(fhc_b12_nc);
   fhc_b12->Add(fhc_b12_numu);
@@ -202,23 +216,25 @@ static void update_hists(const double npimu, const double nmscale, const double 
   doublerat_b12complications->Divide(rhc_b12, fhc_b12);
 }
 
-static double compare(TGraphAsymmErrors * datgraph, TH1D * predhist)
+static double compare(const int size, double * dat, double * datup, double * datdn,
+                      double * model)
 {
   double chi2 = 0;
-  for(int i = 0; i < datgraph->GetN(); i++){
-    const double e = datgraph->GetX()[i];
-    const double r = datgraph->GetY()[i];
-    double rup = datgraph->GetErrorYhigh(i);
-    double rdn = datgraph->GetErrorYlow (i);
-
+  for(int i = 0; i < size; i++){
+    double r   = dat[i];
+    double rup = datup[i];
+    double rdn = datdn[i];
     if(rdn == 0) rdn = rup;  // protect against bad fits
     if(rup == 0) rup = rdn;  // of course, it'd be good if this didn't trigger
+    if(rdn == 0 && rup == 0){
+      continue; // Happens if we got no MINOS errors.  Throw this bin out
+    }
 
-    const int bin = predhist->FindBin(e);
+    const double pred = model[i];
 
-    const double pred = predhist->GetBinContent(bin);
     chi2 += pow((pred - r)/(r > pred?rup:rdn), 2);
   }
+
   return chi2;
 }
 
@@ -232,17 +248,56 @@ static void fcn(__attribute__((unused)) int & np,
 
   const double ncscale = par[0];
   const double nmscale = par[1];
-  const double npimu = par[2];
-  update_hists(npimu, nmscale, ncscale);
+  const double npimu   = par[2];
+  const double neff    = par[3];
+  const double b12eff  = par[4];
+  const double mum_nyield = par[5];
+  update_hists(mum_nyield, b12eff, neff, npimu, nmscale, ncscale);
 
   // penalty terms
+  
+  // Justified by external data
   chi2 += pow((npimu - npimu_nominal)/npimu_error, 2);
 
-  // TODO: May or may not want this to be here!
+  // Justified by external data
+  chi2 += pow((mum_nyield - mum_nyield_nominal)/mum_nyield_error, 2);
+
+  // not really justified
+  //chi2 += pow((neff - neff_nominal)/neff_error, 2);
+  //chi2 += pow((b12eff - b12eff_nominal)/b12eff_error, 2);
+
+  // Can use this if we really think we have an external handle
+  // on the numu contamination in RHC, but better to leave it out
+  // and see that the fit finds a reasonable value
   //chi2 += pow((nmscale - nm_nominal)/nm_error, 2);
 
-  chi2 += compare(n_result, doublerat_ncomplications);
-  if(useb12) chi2 += compare(b12_result, doublerat_b12complications);
+  static double alldat[nbins_e*4],
+                alldatup[nbins_e*4],
+                alldatdn[nbins_e*4];
+  static bool first = true;
+  if(first){
+    first = false;
+    TGraphAsymmErrors * ingraphs[4] = { g_n_rhc, g_n_fhc, g_b12_rhc, g_b12_fhc };
+
+    int i = 0;
+    for(int g = 0; g < 4; g++){
+      for(int j = 0; j < ingraphs[g]->GetN(); j++){
+        alldat[i] = ingraphs[g]->GetY()[j];
+        alldatup[i] = ingraphs[g]->GetErrorYhigh(j);
+        alldatdn[i] = ingraphs[g]->GetErrorYlow (j);
+        i++;
+      }
+    }
+  }
+
+  double allmodel[nbins_e*4];
+  TH1D * inhists[4] = { rhc_neutrons, fhc_neutrons, rhc_b12, fhc_b12 };
+  int i = 0;
+  for(int g = 0; g < 4; g++)
+    for(int b = 1; b <= inhists[g]->GetNbinsX(); b++)
+       allmodel[i++] = inhists[g]->GetBinContent(b);
+
+  chi2 += compare(nbins_e*4, alldat, alldatup, alldatdn, allmodel);
 }
 
 void fill_hists(const char * const file, TH1D * const numu,
@@ -402,12 +457,19 @@ void make_mn()
   mn->Command("SET STRATEGY 2");
 
   mn->SetFCN(fcn);
-  mn->Command("SET ERR 1"); // chi^2
+  mn->Command(Form("SET ERR %f",
+    contour_type == oned68? 1.00:
+    contour_type == twod68? 2.30:
+                            4.61
+  ));
 
   int mnparmerr = 0;
   mn->mnparm(0, "NCscale", 1, 0.1, 0, 0, mnparmerr);
   mn->mnparm(1, "NMscale", 1, 0.1, 0, 0, mnparmerr);
   mn->mnparm(2, "npimu", npimu_nominal, 0.5, 0, 0, mnparmerr);
+  mn->mnparm(3, "neff", neff_nominal, 0.1, 0, 0, mnparmerr);
+  mn->mnparm(4, "b12eff", b12eff_nominal, 0.1, 0, 0, mnparmerr);
+  mn->mnparm(5, "mum_nyield", mum_nyield_nominal, 0.03, 0, 0, mnparmerr);
 }
 
 // I believe that TGraph::Integral does a different thing
@@ -493,8 +555,8 @@ void draw()
   c1->Print("fit_stage_two.pdf");
   
   //////////////////////////////////////////////////////////////////////
-  stylegraph(g_n_rhc, kRed, kSolid, kOpenSquare, 1, 0.7);
-  stylegraph(g_n_fhc, kBlue, kSolid, kOpenCircle, 1, 0.7);
+  stylegraph(g_n_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
+  stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
 
   const double rhcscale = getscale(g_n_rhc, rhc_neutrons);
   const double fhcscale = getscale(g_n_fhc, fhc_neutrons);
@@ -534,7 +596,7 @@ void draw()
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.2*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
+    min(2.5, 1.05*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
   dum2->GetYaxis()->SetTitle("Neutrons/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
@@ -559,11 +621,11 @@ void draw()
     for(int h = 0; h < 4; h++)
       c2hists[h]->Draw("histsame][");
 
-  leg = new TLegend(leftmargin+0.1, 0.73, leftmargin+0.33, 1-topmargin);
+  leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
   styleleg(leg);
   leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
-  leg->AddEntry(rhc_neutrons, "RHC Fit", "l");
+  leg->AddEntry(rhc_neutrons, "RHC fit", "l");
   leg->AddEntry(rhc_neutrons_nc, "RHC NC", "l");
   leg->AddEntry(rhc_neutrons_numu, "RHC #nu_{#mu}", "l");
   leg->AddEntry(rhc_neutrons_numubar, "RHC #bar{#nu}_{#mu}", "l");
@@ -589,11 +651,11 @@ void draw()
     for(int h = 0; h < 4; h++)
       c2histsf[h]->Draw("histsame][");
 
-  TLegend * legf = new TLegend(leftmargin+0.1, 0.73, leftmargin+0.33, 1-topmargin);
+  TLegend * legf = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
   styleleg(legf);
   legf->SetMargin(0.4);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
-  legf->AddEntry(fhc_neutrons, "FHC Fit", "l");
+  legf->AddEntry(fhc_neutrons, "FHC fit", "l");
   legf->AddEntry(fhc_neutrons_nc, "FHC NC", "l");
   legf->AddEntry(fhc_neutrons_numu, "FHC #nu_{#mu}", "l");
   legf->AddEntry(fhc_neutrons_numubar, "FHC #bar{#nu}_{#mu}", "l");
@@ -605,50 +667,69 @@ void draw()
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  TH2D * dum3 = new TH2D("dm", "", 100, 0, 1.9, 1, 0, 1.9);
+  const double ncmin = 0, ncmax = 1.2,
+    nmmin = 0.8, nmmax = 2.6;
+  TH2D * dum3 = new TH2D("dm", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
   dum3->GetXaxis()->CenterTitle();
   dum3->GetYaxis()->CenterTitle();
   dum3->Draw();
 
+  TLine * l1 = new TLine(1, nmmin, 1, nmmax);
+  l1->Draw();
+  TLine * l2 = new TLine(ncmin, 1, ncmax, 1);
+  l2->Draw();
+
   mn->fGraphicsMode = true;
 
-  mn->Command("MNCONT 1 2 99");
+  mn->Command("MNCONT 1 2 50");
   TGraph * cont1 = dynamic_cast<TGraph *>(mn->GetPlot());
 
   useb12 = false;
   mn->Command("MIGRAD");
-  mn->Command("MNCONT 1 2 99");
+  mn->Command("MNCONT 1 2 50");
   TGraph * cont2 = dynamic_cast<TGraph *>(mn->GetPlot());
 
   useb12 = true;
   mn->Command("MIGRAD");
-  mn->Command("FIX 3");
-  mn->Command("MNCONT 1 2 99");
+  const double proper_npimu_error = npimu_error;
+  npimu_error = 1.1;
+  mn->Command("MNCONT 1 2 50");
   TGraph * cont3 = dynamic_cast<TGraph *>(mn->GetPlot());
 
+  mn->Command("FIX 3");
+  mn->Command("MNCONT 1 2 50");
+  TGraph * cont4 = dynamic_cast<TGraph *>(mn->GetPlot());
+
   // restore
+  npimu_error = proper_npimu_error;
   mn->Command("REL 3");
   mn->Command("MIGRAD");
 
+  if(cont4 != NULL){
+    cont4->SetFillStyle(1001);
+    cont4->SetFillColor(kViolet);
+    cont4->SetLineColor(kViolet);
+    cont4->Draw("f");
+  }
   if(cont3 != NULL){
     cont3->SetFillStyle(1001);
     cont3->SetFillColor(kRed);
     cont3->SetLineColor(kRed);
-    cont3->Draw("f");
+
+    // get rid of the visual gap 
+    cont3->SetPoint(cont3->GetN(), cont3->GetX()[0], cont3->GetY()[0]);
+    cont3->Draw("l");
   }
   if(cont1 != NULL){
     cont1->SetFillStyle(1001);
     cont1->SetFillColor(kBlue-2);
     cont1->SetLineColor(kBlue-2);
-
-    // get rid of the visual gap 
     cont1->SetPoint(cont1->GetN(), cont1->GetX()[0], cont1->GetY()[0]);
     cont1->Draw("l");
   }
   if(cont2 != NULL){
-    cont2->SetFillStyle(1001);
     cont2->SetFillColor(kBlue);
     cont2->SetLineColor(kBlue);
     cont2->SetLineStyle(kDashed);
@@ -660,16 +741,46 @@ void draw()
   TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
   bestfit->Draw();
 
-  leg = new TLegend(0.3, 0.83, 1-rightmargin, 1-topmargin);
+  mn->Command("MINOS 10000 1");
+  mn->Command("MINOS 10000 2");
+
+  TGraphAsymmErrors * onederrs = new TGraphAsymmErrors;
+  onederrs->SetPoint(0, getpar(0), getpar(1) - getminerrdn(1)*1.1);
+  onederrs->SetPoint(1, getpar(0)+getminerrup(0)*1.1, getpar(1));
+
+  mn->Command("SET ERR 1"); // get one D 68% errors
+  mn->Command("MIGRAD");
+  mn->Command("MINOS 10000 1");
+  mn->Command("MINOS 10000 2");
+  mn->Command("MINOS 10000 4");
+
+  onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
+  onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
+  onederrs->SetMarkerStyle(kFullCircle);
+  onederrs->Draw("p");
+
+  mn->Command(Form("SET ERR %f",
+    contour_type == oned68? 1.00:
+    contour_type == twod68? 2.30:
+                            4.61
+  )); // put back
+
+  leg = new TLegend(0.42, 0.75, 1-rightmargin, 1-topmargin);
   styleleg(leg);
+  leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
   leg->AddEntry(cont1,
-    Form("1D 68%%, #pi/#mu neutron yield is %.0f#pm%.0f", npimu_nominal, npimu_error),
+    Form("%s, #pi/#mu neutron yield is %.1f #pm %.1f",
+    contour_type == oned68?"1D 68%":
+    contour_type == twod68?"2D 68%":
+                           "2D 90%",
+    npimu_nominal, npimu_error),
     "l");
-  leg->AddEntry(cont2, "1D 68%, without using ^{12}B", "l");
-  leg->AddEntry(cont3, "1D 68%, perfectly known #pi/#mu neutron yield", "f");
+  leg->AddEntry(onederrs, "1D 68% errors", "lp");
+  leg->AddEntry(cont2, "without using ^{12}B", "l");
+  leg->AddEntry(cont3, "perfectly known nuclear #pi/#mu neutron yield", "l");
+  leg->AddEntry(cont4, "and perfectly known atomic capture ratios", "f");
   leg->Draw();
-
   c3->Print("fit_stage_two.pdf");
 
   //////////////////////////////////////////////////////////////////////
@@ -748,15 +859,18 @@ void rhc_stage_two(const char * const input)
 
   make_mn();
 
-  //mn->Command("SET LIM 1 0.01 10"); // NC scale
-  //mn->Command("SET LIM 2 0.01 10");  // numubar scale
-  /*mn->Command(Form("SET LIM 3 %f %f", 
+  mn->Command("SET LIM 1 0.01 10"); // NC scale
+  mn->Command("SET LIM 2 0.01 10");  // numubar scale
+  mn->Command(Form("SET LIM 3 %f %f", 
     max(0, npimu_nominal - 5*npimu_error),
-           npimu_nominal + 5*npimu_error)); // pion to muon neutron yield ratio */
+           npimu_nominal + 5*npimu_error)); // pion to muon neutron yield ratio
+  mn->Command("SET LIM 4 0.01 1"); // neutron efficiency
+  mn->Command("SET LIM 5 0.01 1.1"); // B-12 efficiency
+  mn->Command("SET LIM 6 0.01 1"); // mu- neutron yield
   mn->Command("MIGRAD");
   mn->Command("IMPROVE");
 
-  update_hists(getpar(2), getpar(1), getpar(0));
+  update_hists(getpar(5), getpar(4), getpar(3), getpar(2), getpar(1), getpar(0));
 
   draw();
 }
