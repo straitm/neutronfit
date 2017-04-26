@@ -226,24 +226,20 @@ static double compare(double * dat, double * datup, double * datdn,
   double chi2 = 0;
   for(int i = 0; i < nbins_e*nbeam*2 /* n and b12 */; i++){
     for(int j = 0; j < nbins_e*nbeam*2; j++){
-      double r = dat[i];
-      const double pred = model[i];
-      double rj = dat[j];
-      const double predj = model[j];
-      if(i == j){ // for diagonal elements, use MINOS errors
-        double rup = datup[i];
-        double rdn = datdn[i];
-        if(rdn == 0) rdn = rup;  // protect against bad fits
-        if(rup == 0) rup = rdn;  // of course, it'd be good if this didn't trigger
-        if(rdn == 0 && rup == 0){
-          continue; // Happens if we got no MINOS errors.  Throw this bin out
-        }
+      if(!useb12 && (i >= nbins_e*nbeam || j >= nbins_e*nbeam)) continue;
 
-        chi2 += pow((pred - r)/(r > pred?rup:rdn), 2);
-      }
-      else{ // off diagonal -> use HESSE
-        //chi2 += hessian[i][j]*(pred - r)*(predj - rj);
-      }
+      const double r = dat[i];
+      const double pred = model[i];
+      const double rj = dat[j];
+      const double predj = model[j];
+
+      // for diagonal elements, try to incorporate MINOS information
+      const double rup = datup[i];
+      const double rdn = datdn[i];
+      const double correction = i != j || rdn == 0 || rup == 0?  1
+      : (r > pred?rup:rdn)/(rup + rdn)*2;
+
+      chi2 += correction*hessian[i][j]*(pred - r)*(predj - rj);
     }
   }
 
@@ -674,6 +670,115 @@ void draw()
   c2f->Print("fit_stage_two.pdf");
 
   //////////////////////////////////////////////////////////////////////
+  stylegraph(g_b12_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
+  stylegraph(g_b12_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
+
+  const double brhcscale = getscale(g_b12_rhc, rhc_b12);
+  const double bfhcscale = getscale(g_b12_fhc, fhc_b12);
+
+  rhc_b12->SetLineColor(kRed);
+  rhc_b12->SetLineWidth(2);
+  rhc_b12_nc->SetLineColor(kRed);
+  rhc_b12_nc->SetLineStyle(kDotted);
+  rhc_b12_nc->SetLineWidth(2);
+  rhc_b12_numu->SetLineColor(kRed);
+  rhc_b12_numu->SetLineStyle(kDashed);
+  rhc_b12_numu->SetLineWidth(2);
+  rhc_b12_numubar->SetLineColor(kRed);
+  rhc_b12_numubar->SetLineStyle(9);
+  rhc_b12_numubar->SetLineWidth(2);
+
+  fhc_b12->SetLineWidth(2);
+  fhc_b12_nc->SetLineWidth(2);
+  fhc_b12_numu->SetLineWidth(2);
+  fhc_b12_numubar->SetLineWidth(2);
+  fhc_b12->SetLineColor(kBlue);
+  fhc_b12_nc->SetLineColor(kBlue);
+  fhc_b12_numu->SetLineColor(kBlue);
+  fhc_b12_numubar->SetLineColor(kBlue);
+  fhc_b12_nc->SetLineStyle(kDotted);
+  fhc_b12_numu->SetLineStyle(kDashed);
+  fhc_b12_numubar->SetLineStyle(9);
+
+  rhc_b12->Scale(brhcscale);
+  fhc_b12->Scale(bfhcscale);
+  rhc_b12_nc->Scale(brhcscale);
+  fhc_b12_nc->Scale(bfhcscale);
+  rhc_b12_numu->Scale(brhcscale);
+  fhc_b12_numu->Scale(bfhcscale);
+  rhc_b12_numubar->Scale(brhcscale);
+  fhc_b12_numubar->Scale(bfhcscale);
+
+  dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
+  if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
+    min(2.5, 1.03*max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_fhc))));
+  dum2->GetYaxis()->SetTitle("^{12}B/track");
+  dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
+  dum2->GetYaxis()->CenterTitle();
+  dum2->GetXaxis()->CenterTitle();
+
+  //
+  TCanvas * c2rb = new TCanvas("rhc2rb", "rhc2rb");
+  c2rb->SetLogy(logy);
+  c2rb->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  dum2->Draw();
+
+  g_b12_rhc->Draw("pz");
+
+  TH1D * c2histsb[4] = {
+    rhc_b12,
+    rhc_b12_nc,
+    rhc_b12_numu,
+    rhc_b12_numubar,
+  };
+    
+  for(int i = 1; i <= rhc_b12->GetNbinsX(); i++)
+    for(int h = 0; h < 4; h++)
+      c2histsb[h]->Draw("histsame][");
+
+  leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  styleleg(leg);
+  leg->SetMargin(0.4);
+  leg->AddEntry(g_n_rhc, "RHC data", "lpe");
+  leg->AddEntry(rhc_b12, "RHC fit", "l");
+  leg->AddEntry(rhc_b12_nc, "RHC NC", "l");
+  leg->AddEntry(rhc_b12_numu, "RHC #nu_{#mu}", "l");
+  leg->AddEntry(rhc_b12_numubar, "RHC #bar{#nu}_{#mu}", "l");
+  leg->Draw();
+
+  c2rb->Print("fit_stage_two.pdf");
+
+  //
+  TCanvas * c2fb = new TCanvas("rhc2fb", "rhc2fb");
+  c2fb->SetLogy(logy);
+  c2fb->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  dum2->Draw();
+
+  g_b12_fhc->Draw("pz");
+    
+  TH1D * c2histsfb[4] = {
+    fhc_b12,
+    fhc_b12_nc,
+    fhc_b12_numu,
+    fhc_b12_numubar
+  };
+  for(int i = 1; i <= rhc_b12->GetNbinsX(); i++)
+    for(int h = 0; h < 4; h++)
+      c2histsfb[h]->Draw("histsame][");
+
+  legf = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  styleleg(legf);
+  legf->SetMargin(0.4);
+  legf->AddEntry(g_n_fhc, "FHC data", "lpe");
+  legf->AddEntry(fhc_b12, "FHC fit", "l");
+  legf->AddEntry(fhc_b12_nc, "FHC NC", "l");
+  legf->AddEntry(fhc_b12_numu, "FHC #nu_{#mu}", "l");
+  legf->AddEntry(fhc_b12_numubar, "FHC #bar{#nu}_{#mu}", "l");
+  legf->Draw();
+
+  c2fb->Print("fit_stage_two.pdf");
+
+  //////////////////////////////////////////////////////////////////////
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
@@ -756,18 +861,19 @@ void draw()
 
   TGraphAsymmErrors * onederrs = new TGraphAsymmErrors;
   onederrs->SetPoint(0, getpar(0), getpar(1) - getminerrdn(1)*1.1);
-  onederrs->SetPoint(1, getpar(0)+getminerrup(0)*1.1, getpar(1));
+  onederrs->SetPoint(1, getpar(0)-getminerrdn(0)*1.1, getpar(1));
 
   mn->Command("SET ERR 1"); // get one D 68% errors
   mn->Command("MIGRAD");
   mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
   mn->Command("MINOS 10000 4");
+  mn->Command("MINOS 10000 5");
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
   onederrs->SetMarkerStyle(kFullCircle);
-  onederrs->Draw("p");
+  onederrs->Draw("pz");
 
   mn->Command(Form("SET ERR %f",
     contour_type == oned68? 1.00:

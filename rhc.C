@@ -752,8 +752,6 @@ static std::vector< std::vector<fitanswers> > dothefit()
       mn->Command(Form("SET PAR %d %f",
             nneut_nf+beam*nbins_e+bin, fabs(getpar(nneut_nc+beam*nbins_e+bin))));
 
-      // Half of these are observed probabilities and the other half
-      // are ratios. Same limits are reasonable at the moment.
       mn->Command(Form("SET LIM %d 0 10",  nb12_nf+beam*nbins_e+bin));
       mn->Command(Form("SET LIM %d 0 10", nneut_nf+beam*nbins_e+bin));
     }
