@@ -24,7 +24,12 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-const double n_lifetime_nominal = 50.;
+// From a loose cut running of this program
+const double n_lifetime_nominal = 52.7;
+
+// From external considerations.  It doesn't substantively change the
+// result of this program if a smaller number is put here, but it would
+// be circular to do so in most cases, so don't.
 const double n_lifetime_priorerr = 5.;
 
 /*
