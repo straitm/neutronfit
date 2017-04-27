@@ -63,11 +63,11 @@ const char * const clustercut =
    "&& pe > 70 && e < 20";
 */
 
-  "nhit >= 1 && mindist <= 2"
+  "nhit >= 1 && mindist <= 6"
   "&& pe > 35 && e < 20";
 
 // a very loose cut
-// "";
+// "1";
 
 struct fitanswers{
   bool n_good, b12_good;
@@ -1038,69 +1038,7 @@ void rhc(const char * const savedhistfile = NULL)
                   rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
   }
 
-  TH2D * dum = new TH2D("dm", "", 100, 0, bins_e[nbins_e], 10000, 0, 10);
-  TH2D * dum2 = (TH2D*) dum->Clone("dm2");
-  TH2D * dum3 = (TH2D*) dum->Clone("dm3");
-
-  c4->cd();
-  dum->GetYaxis()->SetTitle("RHC/FHC");
-  dum->GetXaxis()->SetTitle("E_{#nu} (GeV)");
-  dum->GetYaxis()->CenterTitle();
-  dum->GetXaxis()->CenterTitle();
-  dum->GetYaxis()->SetRangeUser(0, 1.5);
-  dum->Draw();
-  dum->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(gdrawmax(n_result), gdrawmax(b12_result))));
-  n_result->Draw("pz");
-  b12_result->Draw("pz");
-  TLegend * ratleg = new TLegend(0.6, 0.2, 0.85, 0.3);
-  ratleg->SetTextFont(42);
-  ratleg->AddEntry(n_result, "Neutrons", "lpe");
-  ratleg->AddEntry(b12_result, "^{12}B", "lpe");
-  ratleg->SetBorderSize(1);
-  ratleg->SetFillStyle(0);
-  ratleg->Draw();
-  c4->Print("fit.pdf(");
-
-  c2->cd();
-  dum2->GetYaxis()->SetTitle("Neutrons per track");
-  dum2->GetXaxis()->SetTitle("E_{#nu} (GeV)");
-  dum2->GetYaxis()->CenterTitle();
-  dum2->GetXaxis()->CenterTitle();
-  dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
-  dum2->Draw();
-  g_n_rhc->Draw("pz");
-  g_n_fhc->Draw("pz");
-
-  TLegend * nleg = new TLegend(0.6, 0.2, 0.9, 0.3);
-  nleg->SetTextFont(42);
-  nleg->AddEntry(g_n_fhc, "FHC", "lpe");
-  nleg->AddEntry(g_n_rhc, "RHC", "lpe");
-  nleg->SetBorderSize(1);
-  nleg->SetFillStyle(0);
-  nleg->Draw();
-
-  c2->Print("fit.pdf");
-
-  c3->cd();
-  dum3->GetYaxis()->SetTitle("^{12}B per track");
-  dum3->GetXaxis()->SetTitle("E_{#nu} (GeV)");
-  dum3->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_fhc))));
-  dum3->GetYaxis()->CenterTitle();
-  dum3->GetXaxis()->CenterTitle();
-  dum3->Draw();
-  g_b12_rhc->Draw("pz");
-  g_b12_fhc->Draw("pz");
-  TLegend * b12leg = new TLegend(0.6, 0.2, 0.9, 0.3);
-  b12leg->SetTextFont(42);
-  b12leg->AddEntry(g_b12_fhc, "FHC", "lpe");
-  b12leg->AddEntry(g_b12_rhc, "RHC", "lpe");
-  b12leg->SetBorderSize(1);
-  b12leg->SetFillStyle(0);
-  b12leg->Draw();
-  c3->Print("fit.pdf");
+  c1->Print("fit.pdf[");
 
   for(int i = 0; i < nbins_e; i++)
     for(int beam = 0; beam < nbeam; beam++)
@@ -1110,7 +1048,7 @@ void rhc(const char * const savedhistfile = NULL)
     for(int period = 0; period < nperiod; period++)
       draw_ee(period, i);
 
-  c4->Print("fit.pdf]");
+  c1->Print("fit.pdf]");
 
   save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc,
                      g_b12_rhc, g_b12_fhc);

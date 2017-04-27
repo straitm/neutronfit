@@ -180,7 +180,11 @@ static void update_hists(const double mum_nyield, const double b12eff,
   // about 4 times the B-12 yield, and with its half-life being 41 times
   // longer, it only adds about 9% to the activity near t=0. Since the
   // error on the B-12 yield is 22%, this can be neglected.
-  const double pim_b12yield = mum_b12yield * 5.8e-3 / 1.36e-2;
+  const double hilscher_b12_per_stopping_pim = 3.8e-3;  // +- 1.3e-3
+  const double hilscher_b12_per_decaying_mum = 1.36e-2; // +- 0.13e-2
+  const double hilscher_b12_per_stopping_mum = hilscher_b12_per_decaying_mum/(1-0.077);
+  const double pim_b12yield = hilscher_b12_per_stopping_pim/
+                              hilscher_b12_per_stopping_mum;
 
   // Estimate of number of B-12 from FHC per track
   rhc_b12_nc->Add(rhc_reco_nc, ncscale*pim_b12yield*b12eff);
@@ -509,57 +513,14 @@ static void styleleg(TLegend * leg)
 void draw()
 {
   //////////////////////////////////////////////////////////////////////
-  TCanvas * c1 = new TCanvas("rhc1", "rhc1");
-  c1->Print("fit_stage_two.pdf[");
-  c1->Print("fit_stage_two.pdf");
   const double leftmargin = 0.12;
   const double topmargin  = 0.025;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
-  c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   const bool logy = false;
-  c1->SetLogy(logy);
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-6:0, 2);
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-6:0, 10);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
-  dum->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
-  if(!logy) dum->GetYaxis()->SetRangeUser(0, 
-    min(1.99, 1.05*max(gdrawmax(n_result), gdrawmax(b12_result))));
-  dum->GetXaxis()->CenterTitle();
-  dum->GetYaxis()->CenterTitle();
-  dum->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
-  dum->GetYaxis()->SetTitle("RHC/FHC");
-  dum->Draw();
 
-  n_result->SetMarkerStyle(kFullCircle);
-  b12_result->SetMarkerStyle(kOpenCircle);
-
-  const int gray = kGray; // or kGray+1
-
-  b12_result->SetMarkerColor(gray);
-  b12_result->SetLineColor(gray);
-
-  doublerat_b12complications->SetMarkerColor(gray);
-  doublerat_b12complications->SetLineColor(gray);
-
-  doublerat_b12complications->SetLineStyle(kDashed);
-  doublerat_ncomplications->SetLineStyle(kDashed);
-  doublerat_ncomplications->SetLineWidth(2);
-
-  b12_result->Draw("pz");
-  doublerat_b12complications->Draw("same");
-  n_result->Draw("pz");
-  doublerat_ncomplications->Draw("same");
-
-  TLegend * leg = new TLegend(0.73, 0.73, 1-rightmargin, 1-topmargin);
-  leg->AddEntry(n_result, "Neutrons, data", "lpe");
-  leg->AddEntry(doublerat_ncomplications, "Neutrons, fit", "l");
-  leg->AddEntry(b12_result, "^{12}B, data", "lpe");
-  leg->AddEntry(doublerat_b12complications, "^{12}B, fit", "l");
-  styleleg(leg);
-  leg->Draw();
-
-  c1->Print("fit_stage_two.pdf");
-  
   //////////////////////////////////////////////////////////////////////
   stylegraph(g_n_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
   stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
@@ -602,7 +563,9 @@ void draw()
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.05*max(gdrawmax(g_n_rhc), gdrawmax(g_n_fhc))));
+    1.03*max(max(gdrawmax(g_n_rhc), rhc_neutrons->GetMaximum()),
+             max(gdrawmax(g_n_fhc), fhc_neutrons->GetMaximum())
+             ));
   dum2->GetYaxis()->SetTitle("Neutrons/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
@@ -610,31 +573,30 @@ void draw()
 
   //
   TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
+  c2r->Print("fit_stage_two.pdf("); // intentionally print a blank page
   c2r->SetLogy(logy);
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
   g_n_rhc->Draw("pz");
 
-  TH1D * c2hists[4] = {
+  TH1D * c2hists[3] = {
     rhc_neutrons,
     rhc_neutrons_nc,
     rhc_neutrons_numu,
-    rhc_neutrons_numubar,
   };
     
   for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
-    for(int h = 0; h < 4; h++)
+    for(int h = 0; h < 3; h++)
       c2hists[h]->Draw("histsame][");
 
-  leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  TLegend * leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
   styleleg(leg);
   leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->AddEntry(rhc_neutrons, "RHC fit", "l");
   leg->AddEntry(rhc_neutrons_nc, "RHC NC", "l");
   leg->AddEntry(rhc_neutrons_numu, "RHC #nu_{#mu}", "l");
-  leg->AddEntry(rhc_neutrons_numubar, "RHC #bar{#nu}_{#mu}", "l");
   leg->Draw();
 
   c2r->Print("fit_stage_two.pdf");
@@ -647,14 +609,13 @@ void draw()
 
   g_n_fhc->Draw("pz");
     
-  TH1D * c2histsf[4] = {
+  TH1D * c2histsf[3] = {
     fhc_neutrons,
     fhc_neutrons_nc,
     fhc_neutrons_numu,
-    fhc_neutrons_numubar
   };
   for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
-    for(int h = 0; h < 4; h++)
+    for(int h = 0; h < 3; h++)
       c2histsf[h]->Draw("histsame][");
 
   TLegend * legf = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
@@ -664,7 +625,6 @@ void draw()
   legf->AddEntry(fhc_neutrons, "FHC fit", "l");
   legf->AddEntry(fhc_neutrons_nc, "FHC NC", "l");
   legf->AddEntry(fhc_neutrons_numu, "FHC #nu_{#mu}", "l");
-  legf->AddEntry(fhc_neutrons_numubar, "FHC #bar{#nu}_{#mu}", "l");
   legf->Draw();
 
   c2f->Print("fit_stage_two.pdf");
@@ -711,7 +671,9 @@ void draw()
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(2.5, 1.03*max(gdrawmax(g_b12_rhc), gdrawmax(g_b12_fhc))));
+    1.03*max(max(gdrawmax(g_b12_fhc), fhc_b12->GetMaximum()),
+                      max(gdrawmax(g_b12_rhc), rhc_b12->GetMaximum())
+             ));
   dum2->GetYaxis()->SetTitle("^{12}B/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
@@ -725,15 +687,14 @@ void draw()
 
   g_b12_rhc->Draw("pz");
 
-  TH1D * c2histsb[4] = {
+  TH1D * c2histsb[3] = {
     rhc_b12,
     rhc_b12_nc,
     rhc_b12_numu,
-    rhc_b12_numubar,
   };
     
   for(int i = 1; i <= rhc_b12->GetNbinsX(); i++)
-    for(int h = 0; h < 4; h++)
+    for(int h = 0; h < 3; h++)
       c2histsb[h]->Draw("histsame][");
 
   leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
@@ -743,7 +704,6 @@ void draw()
   leg->AddEntry(rhc_b12, "RHC fit", "l");
   leg->AddEntry(rhc_b12_nc, "RHC NC", "l");
   leg->AddEntry(rhc_b12_numu, "RHC #nu_{#mu}", "l");
-  leg->AddEntry(rhc_b12_numubar, "RHC #bar{#nu}_{#mu}", "l");
   leg->Draw();
 
   c2rb->Print("fit_stage_two.pdf");
@@ -756,14 +716,13 @@ void draw()
 
   g_b12_fhc->Draw("pz");
     
-  TH1D * c2histsfb[4] = {
+  TH1D * c2histsfb[3] = {
     fhc_b12,
     fhc_b12_nc,
     fhc_b12_numu,
-    fhc_b12_numubar
   };
   for(int i = 1; i <= rhc_b12->GetNbinsX(); i++)
-    for(int h = 0; h < 4; h++)
+    for(int h = 0; h < 3; h++)
       c2histsfb[h]->Draw("histsame][");
 
   legf = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
@@ -773,7 +732,6 @@ void draw()
   legf->AddEntry(fhc_b12, "FHC fit", "l");
   legf->AddEntry(fhc_b12_nc, "FHC NC", "l");
   legf->AddEntry(fhc_b12_numu, "FHC #nu_{#mu}", "l");
-  legf->AddEntry(fhc_b12_numubar, "FHC #bar{#nu}_{#mu}", "l");
   legf->Draw();
 
   c2fb->Print("fit_stage_two.pdf");
@@ -783,7 +741,7 @@ void draw()
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   const double ncmin = 0, ncmax = 1.2,
-    nmmin = 0.8, nmmax = 2.6;
+    nmmin = 0.8, nmmax = 3.6;
   TH2D * dum3 = new TH2D("dm", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
@@ -798,62 +756,59 @@ void draw()
 
   mn->fGraphicsMode = true;
 
+  TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont1 = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_full = (TGraph*)(dynamic_cast<TGraph *>(mn->GetPlot()))->Clone("cont_full");
 
   useb12 = false;
   mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont2 = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_nob12 = dynamic_cast<TGraph *>(mn->GetPlot());
 
   useb12 = true;
-  mn->Command("MIGRAD");
   const double proper_npimu_error = npimu_error;
   npimu_error = 1.1;
+  mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont3 = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_perfect_nuclear = dynamic_cast<TGraph *>(mn->GetPlot());
 
+  mn->Command(Form("SET PAR 3 %f", npimu_nominal));
   mn->Command("FIX 3");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont4 = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_perfect_ratio = dynamic_cast<TGraph *>(mn->GetPlot());
 
   // restore
   npimu_error = proper_npimu_error;
   mn->Command("REL 3");
   mn->Command("MIGRAD");
 
-  if(cont4 != NULL){
-    cont4->SetFillStyle(1001);
-    cont4->SetFillColor(kViolet);
-    cont4->SetLineColor(kViolet);
-    cont4->Draw("f");
-  }
-  if(cont3 != NULL){
-    cont3->SetFillStyle(1001);
-    cont3->SetFillColor(kRed);
-    cont3->SetLineColor(kRed);
-
+  if(cont_perfect_ratio != NULL){
+    cont_perfect_ratio->SetLineColor(kViolet);
+    cont_perfect_ratio->SetLineStyle(kDashed);
     // get rid of the visual gap 
-    cont3->SetPoint(cont3->GetN(), cont3->GetX()[0], cont3->GetY()[0]);
-    cont3->Draw("l");
+    cont_perfect_ratio->SetPoint(cont_perfect_ratio->GetN(), cont_perfect_ratio->GetX()[0], cont_perfect_ratio->GetY()[0]);
+    cont_perfect_ratio->Draw("l");
   }
-  if(cont1 != NULL){
-    cont1->SetFillStyle(1001);
-    cont1->SetFillColor(kBlue-2);
-    cont1->SetLineColor(kBlue-2);
-    cont1->SetPoint(cont1->GetN(), cont1->GetX()[0], cont1->GetY()[0]);
-    cont1->Draw("l");
+  if(cont_perfect_nuclear != NULL){
+    cont_perfect_nuclear->SetLineColor(kRed);
+    cont_perfect_nuclear->SetLineStyle(kDotted);
+    cont_perfect_nuclear->SetPoint(cont_perfect_nuclear->GetN(), cont_perfect_nuclear->GetX()[0], cont_perfect_nuclear->GetY()[0]);
+    cont_perfect_nuclear->Draw("l");
   }
-  if(cont2 != NULL){
-    cont2->SetFillColor(kBlue);
-    cont2->SetLineColor(kBlue);
-    cont2->SetLineStyle(kDashed);
-    cont2->Draw("l");
+  if(cont_full != NULL){
+    cont_full->SetLineColor(kBlue-2);
+    cont_full->SetLineStyle(kSolid);
+    cont_full->SetPoint(cont_full->GetN(), cont_full->GetX()[0], cont_full->GetY()[0]);
+    cont_full->Draw("l");
+  }
+  if(cont_nob12 != NULL){
+    cont_nob12->SetLineColor(kBlue);
+    cont_nob12->SetLineStyle(7);
+    cont_nob12->Draw("l");
   }
   
   mn->fGraphicsMode = false;
 
-  TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
   bestfit->Draw();
 
   mn->Command("MINOS 10000 1");
@@ -885,7 +840,7 @@ void draw()
   styleleg(leg);
   leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
-  leg->AddEntry(cont1,
+  if(cont_full != NULL) leg->AddEntry(cont_full,
     Form("%s, #pi/#mu neutron yield is %.1f #pm %.1f",
     contour_type == oned68?"1D 68%":
     contour_type == twod68?"2D 68%":
@@ -893,24 +848,23 @@ void draw()
     npimu_nominal, npimu_error),
     "l");
   leg->AddEntry(onederrs, "1D 68% errors", "lp");
-  leg->AddEntry(cont2, "without using ^{12}B", "l");
-  leg->AddEntry(cont3, "perfectly known nuclear #pi/#mu neutron yield", "l");
-  leg->AddEntry(cont4, "and perfectly known atomic capture ratios", "f");
+  if(cont_nob12 != NULL) leg->AddEntry(cont_nob12, "without using ^{12}B", "l");
+  if(cont_perfect_nuclear != NULL) leg->AddEntry(cont_perfect_nuclear, "perfectly known nuclear #pi/#mu neutron yield", "l");
+  if(cont_perfect_ratio != NULL)   leg->AddEntry(cont_perfect_ratio, "and perfectly known atomic capture ratios", "l");
   leg->Draw();
   c3->Print("fit_stage_two.pdf");
 
   //////////////////////////////////////////////////////////////////////
   TCanvas * c4 = new TCanvas("rhc4", "rhc4");
-  c4->SetLogy();
   c4->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   fhc_reco_numu->SetLineColor(kBlue);
   fhc_reco_numu->SetMarkerColor(kBlue);
-  fhc_reco_numu->SetLineWidth(2);
+  fhc_reco_numu->SetLineWidth(1);
 
   rhc_reco_numu->SetLineColor(kRed);
   rhc_reco_numu->SetMarkerColor(kRed);
-  rhc_reco_numu->SetLineWidth(2);
+  rhc_reco_numu->SetLineWidth(1);
 
   fhc_reco_numubar->SetLineColor(kBlue-9);
   fhc_reco_numubar->SetMarkerColor(kBlue-9);
@@ -922,37 +876,31 @@ void draw()
 
   fhc_reco_nc->SetLineColor(kBlue);
   fhc_reco_nc->SetMarkerColor(kBlue);
-  fhc_reco_nc->SetLineWidth(4);
+  fhc_reco_nc->SetLineWidth(3);
 
   rhc_reco_nc->SetLineColor(kRed);
   rhc_reco_nc->SetMarkerColor(kRed);
-  rhc_reco_nc->SetLineWidth(4);
+  rhc_reco_nc->SetLineWidth(3);
  
-  fhc_reco_numu->GetYaxis()->SetRangeUser(max(0.1, rhc_reco_numu->GetMinimum()*0.75),
-                                          fhc_reco_numu->GetMaximum()*1.25);
+  fhc_reco_numu->GetYaxis()->SetRangeUser(0, 1.1*
+    max(max(rhc_reco_nc->GetMaximum(), rhc_reco_numu->GetMaximum()),
+        max(fhc_reco_nc->GetMaximum(), fhc_reco_numu->GetMaximum())));
   fhc_reco_numu->GetYaxis()->CenterTitle();
   fhc_reco_numu->GetXaxis()->CenterTitle();
-  fhc_reco_numu->GetYaxis()->SetTitle("Selected tracks/bin");
+  fhc_reco_numu->GetYaxis()->SetTitle("Probability/bin");
   fhc_reco_numu->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
 
   // neutron producers
-  fhc_reco_numu->Draw("ehist");
-  rhc_reco_numu->Draw("ehistsame");
-  fhc_reco_nc->Draw("ehistsame");
-  rhc_reco_nc->Draw("ehistsame");
+  fhc_reco_numu->DrawNormalized("ehist");
+  rhc_reco_numu->DrawNormalized("ehistsame");
+  fhc_reco_nc->DrawNormalized("ehistsame");
+  rhc_reco_nc->DrawNormalized("ehistsame");
 
-  // non-neutron producers
-  fhc_reco_numubar->Draw("ehistsame");
-  rhc_reco_numubar->Draw("ehistsame");
-  
-  
 
-  TLegend * leg4 = new TLegend(0.73, 0.63, 1-rightmargin, 1-topmargin);
+  TLegend * leg4 = new TLegend(0.73, 0.73, 1-rightmargin, 1-topmargin);
   leg4->AddEntry((TH1D*)NULL, "Unscaled", "");
   leg4->AddEntry(fhc_reco_numu, "#mu^{-} in FHC", "l");
   leg4->AddEntry(rhc_reco_numu, "#mu^{-} in RHC", "l");
-  leg4->AddEntry(fhc_reco_numubar, "#mu^{+} in FHC", "l");
-  leg4->AddEntry(rhc_reco_numubar, "#mu^{+} in RHC", "l");
   leg4->AddEntry(fhc_reco_nc, "#pi^{-} in FHC", "l");
   leg4->AddEntry(rhc_reco_nc, "#pi^{-} in RHC", "l");
   styleleg(leg4);
@@ -961,7 +909,7 @@ void draw()
   c4->Print("fit_stage_two.pdf");
 
 
-  c1->Print("fit_stage_two.pdf]"); // doesn't print anything, just closes
+  c4->Print("fit_stage_two.pdf]"); // doesn't print anything, just closes
 }
 
 
