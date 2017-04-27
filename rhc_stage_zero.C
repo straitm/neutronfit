@@ -15,79 +15,155 @@ TMinuit * mn = NULL; // dumb, because of common.C
  * TODO: exclude neutron and B-12 candidates following a Michel.
  */
 
-void rhc_stage_zero(const int mindist)
+struct data{
+  int run;
+  int primary;
+  int type;
+  int contained;
+  int nslc;
+  int nhitx;
+  int nhity;
+  int nhit;
+  int i;
+  float timeleft;
+  float timeback;
+  float remid;
+  float trklen;
+  float trkx;
+  float trky;
+  float trkz;
+  float mindist;
+  float maxdist;
+  float pe;
+  float e;
+  float t;
+  float slce;
+};
+
+void setbranchaddress(const char * const name, float * d, TTree * t)
 {
-  const char * const basecut = Form(
-    "run != 11601" // noise at t = 106 in this run.
+  t->SetBranchStatus(name, 1);
+  t->SetBranchAddress(name, d);
+}
+
+void setbranchaddress(const char * const name, int * d, TTree * t)
+{
+  t->SetBranchStatus(name, 1);
+  t->SetBranchAddress(name, d);
+}
+
+void setbranchaddresses(data * dat, TTree * t)
+{
+  t->SetBranchStatus("*", 0);
+  setbranchaddress("i", &dat->i, t);
+  setbranchaddress("run", &dat->run, t);
+  setbranchaddress("primary", &dat->primary, t);
+  setbranchaddress("type", &dat->type, t);
+  setbranchaddress("contained", &dat->contained, t);
+  setbranchaddress("nslc", &dat->nslc, t);
+  setbranchaddress("nhitx", &dat->nhitx, t);
+  setbranchaddress("nhity", &dat->nhity, t);
+  setbranchaddress("nhit", &dat->nhit, t);
+  setbranchaddress("timeleft", &dat->timeleft, t);
+  setbranchaddress("timeback", &dat->timeback, t);
+  setbranchaddress("remid", &dat->remid, t);
+  setbranchaddress("trklen", &dat->trklen, t);
+  setbranchaddress("trkx", &dat->trkx, t);
+  setbranchaddress("trky", &dat->trky, t);
+  setbranchaddress("trkz", &dat->trkz, t);
+  setbranchaddress("mindist", &dat->mindist, t);
+  setbranchaddress("maxdist", &dat->maxdist, t);
+  setbranchaddress("pe", &dat->pe, t);
+  setbranchaddress("e", &dat->e, t);
+  setbranchaddress("t", &dat->t, t);
+  setbranchaddress("slce", &dat->slce, t);
+}
+
+// true if it passes the cut
+bool basecut(data * dat)
+{
+  return dat->run != 11601 // noise at t = 106 in this run.
                    // Will go away with a better run list.
-    "&& primary && type == 3 && timeleft > %f && timeback > %f "
-    "&& remid > 0.75 "
-    "&& trklen > 200 " // standard
-    //"&& trklen > 600 " // longer -- drops nearly all NC background
+    && dat->primary && dat->type == 3
+    && dat->timeleft > maxrealtime && dat->timeback > -nnegbins 
+    && dat->remid > 0.75 
+    && dat->trklen > 200  // standard
+    //&& dat->trklen > 600  // longer -- drops nearly all NC background
     // standard numu ND containment cuts, except for some muon-catcher
     // track checks which are irrelevant because I'm about to cut
     // those in the next line anyhow. I need the track ends to be more
     // contained than the standard cuts.
-    "&& contained"
+    && dat->contained
 
     // Sufficient to catch all neutrons within 6 cell widths. Maybe not
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
-    "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-    //"&& nslc <= 6" // reduce pileup
-    , maxrealtime, -nnegbins);
+    && fabs(dat->trkx) < 170 && fabs(dat->trky) < 170 && dat->trkz < 1250
+    //&& dat->nslc <= 6 // reduce pileup
+    ;
+}
 
 
-  const char * const clustercut = 
-  // Attempt to agressively reduce neutrons while still getting B-12
-  /*
-    "nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
-    "&& nhitx <= 2 && nhity <= 2"
-    "&& nhit <= 3"
-    "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
-    "&& pe > 35 && e > 8*0.62 && e < 25*0.62";
-  */
+// Other possibilities:
+// 
+// Attempt to agressively reduce neutrons while still getting B-12
+/*
+  "nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
+  "&& nhitx <= 2 && nhity <= 2"
+  "&& nhit <= 3"
+  "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
+  "&& pe > 35 && e > 8*0.62 && e < 25*0.62";
+*/
 
-  // a pretty strict, reasonable cut
-  /*
-     "nhitx >= 1 && nhity >= 1 && mindist <= 6"
-     "&& pe > 70 && e < 20";
-  */
+// a pretty strict, reasonable cut
+/*
+   "nhitx >= 1 && nhity >= 1 && mindist <= 6"
+   "&& pe > 70 && e < 20";
+*/
+bool clustercut(data * dat, const int mindist)
+{
+  return !(dat->t >= -1 && dat->t < 2) &&
+    dat->t > -nnegbins && dat->t < maxrealtime &&
+    dat->nhit >= 1 && dat->mindist <= mindist
+    && dat->pe > 35 && dat->e < 20;
+}
 
-    Form("nhit >= 1 && mindist <= %d"
-    "&& pe > 35 && e < 20", mindist);
+void fill_2dhist(TH2D * h, data * dat, TTree * t, const int mindist)
+{
+  for(int i = 0; i < t->GetEntries(); i++){
+    t->GetEntry(i);
+    if(basecut(dat) && clustercut(dat, mindist)) h->Fill(dat->t, dat->slce);
+  }
+}
 
-  // a very loose cut
-  // "1";
+void fill_1dhist(TH1D * h, data * dat, TTree * t)
+{
+  for(int i = 0; i < t->GetEntries(); i++){
+    t->GetEntry(i);
+    if(basecut(dat) && dat->i == 0) h->Fill(dat->slce);
+  }
+}
 
-  const std::string tcut = Form("i == 0 && %s", basecut);
-
-  const std::string cut = Form(
-   "%s && %s && t > %f && t < %f && !(t >= -1 && t < 2)",
-    basecut, clustercut, -nnegbins, maxrealtime);
-
+void rhc_stage_zero(const int mindist)
+{
   TFile * inputTFiles[nperiod] = { NULL };
   TTree * trees[nperiod] = { NULL };
 
   const char * const inputfiles[nperiod] = {
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "S16-12-07_nd_period6_keepup/1278-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
+  "prod_pid_S16-12-07_nd_period6_keepup/1278-type3.root",
+  "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
-  "/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-    "R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
   };
 
+  data dat;
 
   for(int i = 0; i < nperiod; i++){
-    inputTFiles[i] = new TFile(inputfiles[i], "read");
+    inputTFiles[i] = new TFile(
+      Form("/nova/ana/users/mstrait/ndcosmic/%s", inputfiles[i]), "read");
     if(!inputTFiles[i] || inputTFiles[i]->IsZombie()){
       fprintf(stderr, "Couldn't read a file.  See above.\n");
       return;
@@ -97,6 +173,7 @@ void rhc_stage_zero(const int mindist)
       fprintf(stderr, "Couldn't read a tree.  See above.\n");
       return;
     }
+    setbranchaddresses(&dat, trees[i]);
   }
 
   std::ofstream o(Form("savedhists_mindist%d.C", mindist));
@@ -107,8 +184,10 @@ void rhc_stage_zero(const int mindist)
     fithist[i] = new TH2D(Form("%s_s", Speriodnames[i]), "",
       nnegbins + maxrealtime + additional,
       -nnegbins, maxrealtime + additional, nbins_e, bins_e);
-    trees[i]->Draw(Form("slce:t >> %s_s"    , Speriodnames[i]),  cut.c_str());
-    trees[i]->Draw(Form("slce >> tcounts_%s", Speriodnames[i]), tcut.c_str());
+
+    fill_2dhist(fithist[i], &dat, trees[i], mindist);
+    fill_1dhist(all_tcounts[i], &dat, trees[i]);
+
     printf("Got %s_s\n", Speriodnames[i]);
     fflush(stdout);
     fithist[i]->SavePrimitive(o);
