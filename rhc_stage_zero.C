@@ -146,9 +146,6 @@ void fill_1dhist(TH1D * h, data * dat, TTree * t)
 
 void rhc_stage_zero(const int mindist)
 {
-  TFile * inputTFiles[nperiod] = { NULL };
-  TTree * trees[nperiod] = { NULL };
-
   const char * const inputfiles[nperiod] = {
   "prod_pid_S16-12-07_nd_period6_keepup/1278-type3.root",
   "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
@@ -161,38 +158,38 @@ void rhc_stage_zero(const int mindist)
 
   data dat;
 
-  for(int i = 0; i < nperiod; i++){
-    inputTFiles[i] = new TFile(
-      Form("/nova/ana/users/mstrait/ndcosmic/%s", inputfiles[i]), "read");
-    if(!inputTFiles[i] || inputTFiles[i]->IsZombie()){
-      fprintf(stderr, "Couldn't read a file.  See above.\n");
-      return;
-    }
-    trees[i] = dynamic_cast<TTree *>(inputTFiles[i]->Get("t"));
-    if(!trees[i]){
-      fprintf(stderr, "Couldn't read a tree.  See above.\n");
-      return;
-    }
-    setbranchaddresses(&dat, trees[i]);
-  }
-
   std::ofstream o(Form("savedhists_mindist%d.C", mindist));
   o << "{\n";
   for(int i = 0; i < nperiod; i++){
-    all_tcounts[i] = new
+    TFile * inputTFiles = NULL;
+    TTree * trees = NULL;
+
+    inputTFiles = new TFile(
+      Form("/nova/ana/users/mstrait/ndcosmic/%s", inputfiles[i]), "read");
+    if(!inputTFiles || inputTFiles->IsZombie()){
+      fprintf(stderr, "Couldn't read a file.  See above.\n");
+      return;
+    }
+    trees = dynamic_cast<TTree *>(inputTFiles->Get("t"));
+    if(!trees){
+      fprintf(stderr, "Couldn't read a tree.  See above.\n");
+      return;
+    }
+    setbranchaddresses(&dat, trees);
+
+    TH1D * all_tcounts = new
       TH1D(Form("tcounts_%s", Speriodnames[i]), "", nbins_e, bins_e);
-    fithist[i] = new TH2D(Form("%s_s", Speriodnames[i]), "",
+    TH2D * fithist = new TH2D(Form("%s_s", Speriodnames[i]), "",
       nnegbins + maxrealtime + additional,
       -nnegbins, maxrealtime + additional, nbins_e, bins_e);
 
-    fill_2dhist(fithist[i], &dat, trees[i], mindist);
-    fill_1dhist(all_tcounts[i], &dat, trees[i]);
+    fill_2dhist(fithist, &dat, trees, mindist);
+    fill_1dhist(all_tcounts, &dat, trees);
 
     printf("Got %s_s\n", Speriodnames[i]);
-    fflush(stdout);
-    fithist[i]->SavePrimitive(o);
-    all_tcounts[i]->SavePrimitive(o);
-    //inputTFiles[i]->Close(); // XXX why does this seg fault?
+    fithist->SavePrimitive(o);
+    all_tcounts->SavePrimitive(o);
+    inputTFiles->Close();
   }
   o << "}\n";
   o.close();

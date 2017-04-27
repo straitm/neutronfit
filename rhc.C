@@ -32,6 +32,10 @@ const double n_lifetime_nominal = 52.7;
 // be circular to do so in most cases, so don't.
 const double n_lifetime_priorerr = 5.;
 
+// This is the *effective* muon lifetime, with all detector effects
+const double tmich_nominal = 2.1;
+const double tmich_priorerr = 0.3;
+
 /*
   Based on my MC, 400us is reasonable for a mindist of 6, but more like
   25us for a mindist of 2. However, it's murky because we don't measure
@@ -130,7 +134,6 @@ const int ee_scale_par = npar_ee-1;
 const double nmich_start = 0.8;
 const double nneut_start = 0.05;
 const double nb12_start  = 0.001;
-const double tmich_start = 2.1;
 const double flat_start = 3;
 const double pileup_start = 300;
 
@@ -178,7 +181,7 @@ static std::vector<PAR> makeparameters()
 
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
-      p.push_back(makepar(Form("%sTMich%d", bname[b], i), tmich_start));
+      p.push_back(makepar(Form("%sTMich%d", bname[b], i), tmich_nominal));
   for(int b = 0; b < nbeam; b++)
     for(int i = 0; i < nbins_e; i++)
       p.push_back(makepar(Form("%sNMich%d", bname[b], i), nmich_start));
@@ -200,7 +203,7 @@ static TF1 * ee_flat =
 
 static TF1 * ee_mich =
   new TF1("ee_mich", "[8]*(abs([5])/[4] * exp(-x/[4]))",
-          2, maxrealtime+additional);
+          holex_hi, maxrealtime+additional);
 
 static TF1 * ee_neut =
   new TF1("ee_mich",
@@ -212,11 +215,11 @@ static TF1 * ee_neut =
    // intersection-of-two-cylinders cut
    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))",
   n_start_conv_time, n_start_conv_time),
-   2, maxrealtime+additional);
+   holex_hi, maxrealtime+additional);
 
 static TF1 * ee_b12 =
   new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))",
-          2, maxrealtime+additional);
+          holex_hi, maxrealtime+additional);
 
 static TF1 * ee_pileup = new TF1("ee_b12",
   "[8]*((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
@@ -234,12 +237,12 @@ static TF1 * ee_pos = new TF1("ee_pos",
   ") + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
   n_start_conv_time, n_start_conv_time),
-  2, maxrealtime+additional);
+  holex_hi, maxrealtime+additional);
 
 static TF1 * ee_neg = new TF1("ee_neg",
   "[8]*(abs([6]) + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
-  -nnegbins, -1);
+  -nnegbins, holex_lo);
 
 const int ntf1s = 7;
 static TF1 * ees[ntf1s] =
@@ -253,9 +256,6 @@ static std::vector< std::vector<double> > scales;
 
 
 static TCanvas * c1 = new TCanvas("rhc1", "rhc1"); // hist
-static TCanvas * c2 = new TCanvas("rhc2", "rhc2"); // neutrons
-static TCanvas * c3 = new TCanvas("rhc3", "rhc3"); // B-12
-static TCanvas * c4 = new TCanvas("rhc4", "rhc4"); // ratios
 
 static void fcn(__attribute__((unused)) int & np,
   __attribute__((unused)) double * gin, double & like, double *par,
@@ -325,9 +325,9 @@ static void fcn(__attribute__((unused)) int & np,
 
         const double sca = scales[period][eb];
 
-        if(x <= -1 || x >= 2) model += fabs(par[flat_nc+off_period]);
+        if(x <= holex_lo || x >= holex_hi) model += fabs(par[flat_nc+off_period]);
 
-        if(x >= 2){
+        if(x >= holex_hi){
           const double norm_n   =
             beam == 0 /* RHC */? 
             par[nneut_nc+eb] /* R */:
@@ -346,7 +346,7 @@ static void fcn(__attribute__((unused)) int & np,
                 + fabs(norm_b12*sca) * exp_x_b12life;
         }
 
-        if((x >= -10 && x <= -1) || (x >= 2 && x <= 10))
+        if((x >= -10 && x <= holex_lo) || (x >= holex_hi && x <= 10))
           model += fabs(par[pileup_nc+off_period])*(10-fabs(x));
 
         const double data = alldata[period][tb][eb];
@@ -357,13 +357,19 @@ static void fcn(__attribute__((unused)) int & np,
     }
   }
 
-  const double tneut_penalty = 0.5 *
+  // penalty on Michel lifetimes.  Introduced when I started trying to 
+  // implement cuts on later events based on Michels, which reduces
+  // the lever arm of Michels considerably.
+  for(int i = 0; i < nbeam*nbins_e; i++)
+    like += 0.5 * pow((par[tmich_nc + i] - tmich_nominal)/tmich_priorerr, 2);
+
+  // penalty on neutron lifetime
+  like += 0.5 *
     pow((par[tneut_nc] - n_lifetime_nominal)/n_lifetime_priorerr, 2);
 
-  const double aneut_penalty = 0.5 *
+  // penalty on neutron diffusion constant
+  like += 0.5 *
     pow((par[aneut_nc] - n_diffusion_nominal)/n_diffusion_priorerr, 2);
-
-  like += tneut_penalty + aneut_penalty;
 }
 
 void make_mn()
@@ -501,7 +507,8 @@ static void draw_ee_common(TH1D * x, const int rebin, const char * const outname
   leg->SetFillStyle(0);
   leg->Draw();
 
-
+  c1->SetTickx(1);
+  c1->SetTicky(1);
   c1->SetLogy();
   c1->Print(outname);
   c1->Update(); c1->Modified();
