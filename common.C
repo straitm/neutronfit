@@ -1,3 +1,18 @@
+const double nnegbins = 209;
+const double maxrealtime = 269;
+const double additional = 0;
+
+
+const int nperiodrhc = 2; // 4, 6
+const int nperiodfhc = 4; // 1, 2, 3, 5
+const int nperiod    = nperiodrhc + nperiodfhc;
+
+const char * const Speriodnames[nperiod] =
+    { "P6", "P4", "P1", "P2", "P3", "P5" };
+
+static TH2D ** fithist     = (TH2D**)malloc(nperiod*sizeof(TH2D*));
+static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
+
 static const double markersize = 0.3;
 
 const int nbeam      = 2; // not really generalizable as it stands

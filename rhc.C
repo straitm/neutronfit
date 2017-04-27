@@ -16,58 +16,7 @@ TMinuit * mn = NULL;
 
 #include "common.C"
 
-/*
- * TODO: exclude neutron and B-12 candidates following a Michel.
- */
-
-const double nnegbins = 209;
-const double maxrealtime = 269;
-const double additional = 0;
-
 double maxfitt = maxrealtime; // varies
-
-const char * const basecut = Form(
-  "run != 11601" // noise at t = 106 in this run.
-                 // Will go away with a better run list.
-  "&& primary && type == 3 && timeleft > %f && timeback > %f "
-  "&& remid > 0.75 "
-  "&& trklen > 200 " // standard
-  //"&& trklen > 600 " // longer -- drops nearly all NC background
-  // standard numu ND containment cuts, except for some muon-catcher
-  // track checks which are irrelevant because I'm about to cut
-  // those in the next line anyhow. I need the track ends to be more
-  // contained than the standard cuts.
-  "&& contained"
-
-  // Sufficient to catch all neutrons within 6 cell widths. Maybe not
-  // conservative enough, since neutrons that spill out into the air
-  // probably don't ever come back? Or do they?
-  "&& abs(trkx) < 170 && abs(trky) < 170 && trkz < 1250"
-  //"&& nslc <= 6" // reduce pileup
-  , maxrealtime, -nnegbins);
-
-
-const char * const clustercut = 
-// Attempt to agressively reduce neutrons while still getting B-12
-/*
-  "nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
-  "&& nhitx <= 2 && nhity <= 2"
-  "&& nhit <= 3"
-  "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
-  "&& pe > 35 && e > 8*0.62 && e < 25*0.62";
-*/
-
-// a pretty strict, reasonable cut
-/*
-   "nhitx >= 1 && nhity >= 1 && mindist <= 6"
-   "&& pe > 70 && e < 20";
-*/
-
-  "nhit >= 1 && mindist <= 6"
-  "&& pe > 35 && e < 20";
-
-// a very loose cut
-// "1";
 
 struct fitanswers{
   bool n_good, b12_good;
@@ -139,29 +88,6 @@ static PAR makepar(const char * const name_, const double start_)
 const int ncommonpar = 2;
 const int nperbinpar = 4; // number per energy bin parameters
 const int nperperpar = 2; // number per period parameters
-
-const int nperiodrhc = 2; // 4, 6
-const int nperiodfhc = 4; // 1, 2, 3, 5
-const int nperiod    = nperiodrhc + nperiodfhc;
-
-const char * const Speriodnames[nperiod] =
-    { "P6", "P4", "P1", "P2", "P3", "P5" };
-
-const char * const inputfiles[nperiod] = {
-"/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "S16-12-07_nd_period6_keepup/1278-type3.root",
-"/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
-
-"/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
-"/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
-"/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
-"/nova/ana/users/mstrait/ndcosmic/prod_pid_"
-  "R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
-};
 
 const char * const Lperiodnames[nperiod] = {
      "Period 6 (RHC)",
@@ -320,8 +246,6 @@ static const char * const ees_description[ntf1s] =
 
 static std::vector< std::vector<double> > scales;
 
-static TH2D ** fithist     = (TH2D**)malloc(nperiod*sizeof(TH2D*));
-static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
 
 static TCanvas * c1 = new TCanvas("rhc1", "rhc1"); // hist
 static TCanvas * c2 = new TCanvas("rhc2", "rhc2"); // neutrons
@@ -506,12 +430,12 @@ static void set_ee_to_mn_beam(const int beam, const int bin)
 {
   // Oh so hacky!
   double pars[npar_ee];
-  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
+  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++){
     const int idx = i + (beam == 1)*nperiodrhc;
     set_ee_to_mn(idx, bin);
     if(i == 0)
       for(int p = 0; p < npar_ee; p++)
-        pars[p] = ee_pos->GetParameter(p);
+        pars[p] = fabs(ee_pos->GetParameter(p));
     else
       for(int p = 0; p < npar_ee; p++)
         // Only the additive parameters
@@ -548,7 +472,7 @@ static double beam_scale(const int beam, const int bin)
   return ans;
 }
 
-static void draw_ee_common(TH1D * x, const int rebin)
+static void draw_ee_common(TH1D * x, const int rebin, const char * const outname)
 {
   x->Rebin(rebin);
   sanitize_after_rebinning(x);
@@ -574,13 +498,13 @@ static void draw_ee_common(TH1D * x, const int rebin)
 
 
   c1->SetLogy();
-  c1->Print("fit.pdf");
+  c1->Print(outname);
   c1->Update(); c1->Modified();
 }
 
 // Draw the sum of the fit histograms for a beam type and energy bin.
 // 0-indexed
-static void draw_ee_beam(const int beam, const int bin)
+static void draw_ee_beam(const int beam, const int bin, const char * const outname)
 {
   c1->cd();
 
@@ -601,14 +525,14 @@ static void draw_ee_beam(const int beam, const int bin)
   x->GetXaxis()->SetTitle(
     Form("All %s E_{#nu} bin %d: Time since muon stop (#mus)",
     beam == 0?"RHC":"FHC", bin));
-  x->GetYaxis()->SetRangeUser(beam_scale(beam, bin)*1e-5*rebin,
+  x->GetYaxis()->SetRangeUser(beam_scale(beam, bin)*1e-6*rebin,
                               beam_scale(beam, bin)* 0.1*rebin);
 
-  draw_ee_common(x, rebin);
+  draw_ee_common(x, rebin, outname);
 }
 
 // Draw the fit histogram for a period and energy bin. 0-indexed bins
-static void draw_ee(const int per, const int bin)
+static void draw_ee(const int per, const int bin, const char * const outname)
 {
   c1->cd();
 
@@ -621,9 +545,9 @@ static void draw_ee(const int per, const int bin)
   x->GetXaxis()->SetTitle(
     Form("%s E_{#nu} bin %d: Time since muon stop (#mus)",
     Lperiodnames[per], bin));
-  x->GetYaxis()->SetRangeUser(scales[per][bin]*1e-5*rebin,
+  x->GetYaxis()->SetRangeUser(scales[per][bin]*1e-6*rebin,
                               scales[per][bin]* 0.1*rebin);
-  draw_ee_common(x, rebin);
+  draw_ee_common(x, rebin, outname);
 }
 
   /* Cheating for sensitivity study! */
@@ -764,12 +688,11 @@ static std::vector< std::vector<fitanswers> > dothefit()
   status = mn->Command("HESSE");
 
   if(!status)
-    // could skip MINOS errors for FHC and just do them for that ratio,
-    // but then I can't make plots of the raw amount of each with MINOS errors
     for(int beam = 0; beam < nbeam; beam++)
       for(int bin = 0; bin < nbins_e; bin++){
-        gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
-        gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));
+        /// XXX I don't use these results in the end and it is really slow
+        /*gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
+        gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));*/
       }
 
   gMinuit->Command("show min");
@@ -861,9 +784,10 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
                                TGraphAsymmErrors * g_n_rhc,
                                TGraphAsymmErrors * g_n_fhc,
                                TGraphAsymmErrors * g_b12_rhc,
-                               TGraphAsymmErrors * g_b12_fhc)
+                               TGraphAsymmErrors * g_b12_fhc,
+                               const int mindist)
 {
-  ofstream for_stage_two("for_stage_two.C");
+  ofstream for_stage_two(Form("for_stage_two_mindist%d.C", mindist));
   for_stage_two << "{\n";
   n_result  ->SetName("n_result");
   b12_result->SetName("b12_result");
@@ -901,13 +825,23 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   for_stage_two << "}\n";
 }
 
-void rhc(const char * const savedhistfile = NULL)
+void rhc(const char * const savedhistfile, const int mindist)
 {
-  const std::string tcut = Form("i == 0 && %s", basecut);
-
-  const std::string cut = Form(
-   "%s && %s && t > %f && t < %f && !(t >= -1 && t < 2)",
-    basecut, clustercut, -nnegbins, maxrealtime);
+  gROOT->Macro(savedhistfile);
+  for(int i = 0; i < nperiod; i++){
+    if(NULL == (all_tcounts[i] = dynamic_cast<TH1D*>(
+      gROOT->FindObject(Form("tcounts_%s", Speriodnames[i]))))){
+      fprintf(stderr, "Could not read %s from %s\n",
+             Form("tcounts_%s", Speriodnames[i]), savedhistfile);
+      _exit(1);
+    }
+    if(NULL == (fithist[i] = dynamic_cast<TH2D*>(
+      gROOT->FindObject(Form("%s_s", Speriodnames[i]))))){
+      fprintf(stderr, "Could not read %s from %s\n",
+             Form("%s_s", Speriodnames[i]), savedhistfile);
+      _exit(1);
+    }
+  }
 
   init_ee();
 
@@ -919,61 +853,6 @@ void rhc(const char * const savedhistfile = NULL)
     * g_b12_fhc     = newgraph(kBlack, kDashed,kOpenCircle, 1),
     * n_result      = newgraph(kBlack, kSolid, kFullCircle, 1),
     * b12_result    = newgraph(kGray+1,kDashed,kOpenCircle, 1);
-
-  if(savedhistfile == NULL){
-    TFile * inputTFiles[nperiod] = { NULL };
-    TTree * trees[nperiod] = { NULL };
-
-    for(int i = 0; i < nperiod; i++){
-      inputTFiles[i] = new TFile(inputfiles[i], "read");
-      if(!inputTFiles[i] || inputTFiles[i]->IsZombie()){
-        fprintf(stderr, "Couldn't read a file.  See above.\n");
-        return;
-      }
-      trees[i] = dynamic_cast<TTree *>(inputTFiles[i]->Get("t"));
-      if(!trees[i]){
-        fprintf(stderr, "Couldn't read a tree.  See above.\n");
-        return;
-      }
-    }
-
-    std::ofstream o("savedhists.C");
-    o << "{\n";
-    for(int i = 0; i < nperiod; i++){
-      all_tcounts[i] = new
-        TH1D(Form("tcounts_%s", Speriodnames[i]), "", nbins_e, bins_e);
-      fithist[i] = new TH2D(Form("%s_s", Speriodnames[i]), "",
-        nnegbins + maxrealtime + additional,
-        -nnegbins, maxrealtime + additional, nbins_e, bins_e);
-      trees[i]->Draw(Form("slce:t >> %s_s", Speriodnames[i]), cut.c_str());
-      trees[i]->Draw(Form("slce >> tcounts_%s", Speriodnames[i]), tcut.c_str());
-      printf("Got %s_s\n", Speriodnames[i]);
-      fflush(stdout);
-      fithist[i]->SavePrimitive(o);
-      all_tcounts[i]->SavePrimitive(o);
-      //inputTFiles[i]->Close(); // XXX why does this seg fault?
-    }
-    o << "}\n";
-    o.close();
-    return; // always do two passes now.
-  }
-  else{
-    gROOT->Macro(savedhistfile);
-    for(int i = 0; i < nperiod; i++){
-      if(NULL == (all_tcounts[i] = dynamic_cast<TH1D*>(
-        gROOT->FindObject(Form("tcounts_%s", Speriodnames[i]))))){
-        fprintf(stderr, "Could not read %s from %s\n",
-               Form("tcounts_%s", Speriodnames[i]), savedhistfile);
-        _exit(1);
-      }
-      if(NULL == (fithist[i] = dynamic_cast<TH2D*>(
-        gROOT->FindObject(Form("%s_s", Speriodnames[i]))))){
-        fprintf(stderr, "Could not read %s from %s\n",
-               Form("%s_s", Speriodnames[i]), savedhistfile);
-        _exit(1);
-      }
-    }
-  }
 
   gErrorIgnoreLevel = kError; // after new TFile and Get above
 
@@ -1038,18 +917,18 @@ void rhc(const char * const savedhistfile = NULL)
                   rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
   }
 
-  c1->Print("fit.pdf[");
+  c1->Print(Form("fit_mindist%d.pdf[", mindist));
 
   for(int i = 0; i < nbins_e; i++)
     for(int beam = 0; beam < nbeam; beam++)
-      draw_ee_beam(beam, i);
+      draw_ee_beam(beam, i, Form("fit_mindist%d.pdf", mindist));
 
   for(int i = 0; i < nbins_e; i++)
     for(int period = 0; period < nperiod; period++)
-      draw_ee(period, i);
+      draw_ee(period, i, Form("fit_mindist%d.pdf", mindist));
 
-  c1->Print("fit.pdf]");
+  c1->Print(Form("fit_mindist%d.pdf]", mindist));
 
   save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc,
-                     g_b12_rhc, g_b12_fhc);
+                     g_b12_rhc, g_b12_fhc, mindist);
 }
