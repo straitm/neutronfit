@@ -11,12 +11,10 @@ TMinuit * mn = NULL; // dumb, because of common.C
 
 #include "common.C"
 
-/*
- * TODO: exclude neutron and B-12 candidates following a Michel.
- */
-
 struct data{
   int run;
+  int event;
+  int trk;
   int primary;
   int type;
   int contained;
@@ -33,7 +31,6 @@ struct data{
   float trky;
   float trkz;
   float mindist;
-  float maxdist;
   float pe;
   float e;
   float t;
@@ -57,6 +54,8 @@ void setbranchaddresses(data * dat, TTree * t)
   t->SetBranchStatus("*", 0);
   setbranchaddress("i", &dat->i, t);
   setbranchaddress("run", &dat->run, t);
+  setbranchaddress("event", &dat->event, t);
+  setbranchaddress("trk", &dat->trk, t);
   setbranchaddress("primary", &dat->primary, t);
   setbranchaddress("type", &dat->type, t);
   setbranchaddress("contained", &dat->contained, t);
@@ -72,7 +71,6 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("trky", &dat->trky, t);
   setbranchaddress("trkz", &dat->trkz, t);
   setbranchaddress("mindist", &dat->mindist, t);
-  setbranchaddress("maxdist", &dat->maxdist, t);
   setbranchaddress("pe", &dat->pe, t);
   setbranchaddress("e", &dat->e, t);
   setbranchaddress("t", &dat->t, t);
@@ -103,6 +101,26 @@ bool basecut(data * dat)
     ;
 }
 
+// True if the track passes
+bool trackcut(const vector<data> & dats)
+{
+  for(unsigned int i = 0; i < dats.size(); i++){
+    const data * const dat = &dats[i];
+
+    // reject the event if there is something that looks like a Michel
+    // closely following the track.  Don't look too close in time, or 
+    // we may cut lots of events for late track light.  Don't look after
+    // holex_hi, which is where the time series fit starts.
+    //
+    // I checked that this supresses the background more than the signal,
+    // although the effect is not magical.
+    if(dat->t > 0.75 && dat->t < holex_hi && 
+       dat->mindist <= 3 &&
+       dat->e > 10. && dat->e < 70.) return false;
+  }
+
+  return true;
+}
 
 // Other possibilities:
 // 
@@ -130,9 +148,30 @@ bool clustercut(data * dat, const int mindist)
 
 void fill_2dhist(TH2D * h, data * dat, TTree * t, const int mindist)
 {
+  int lastrun = 0, lastevent = 0, lasttrk = 0;
+  vector<data> dats;
   for(int i = 0; i < t->GetEntries(); i++){
     t->GetEntry(i);
-    if(basecut(dat) && clustercut(dat, mindist)) h->Fill(dat->t, dat->slce);
+
+    // read in all of the clusters for this track
+    if(i != t->GetEntries()-1 &&
+       lastrun == dat->run && lastevent == dat->event && lasttrk == dat->trk){
+      dats.push_back(*dat);
+    }
+
+    // analyze them.  If we like the track, write out its clusters.
+    else{
+      if(trackcut(dats))
+        for(unsigned int j = 0; j < dats.size(); j++)
+          if(basecut(&dats[j]) && clustercut(&dats[j], mindist))
+            h->Fill(dats[j].t, dats[j].slce);
+
+      dats.clear();
+      dats.push_back(*dat);
+    }
+    lastrun = dat->run;
+    lastevent = dat->event;
+    lasttrk = dat->trk;
   }
 }
 
@@ -187,6 +226,7 @@ void rhc_stage_zero(const int mindist)
     fill_1dhist(all_tcounts, &dat, trees);
 
     printf("Got %s_s\n", Speriodnames[i]);
+    fflush(stdout);
     fithist->SavePrimitive(o);
     all_tcounts->SavePrimitive(o);
     inputTFiles->Close();

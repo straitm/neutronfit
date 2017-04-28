@@ -2,7 +2,7 @@
 // the detector conditions are just too awful.  And then don't use
 // anything before 10 microseconds because I'm now using that region
 // to define Michels that cut further interactions.
-const double holex_lo = -1, holex_hi = 6;
+const double holex_lo = -1, holex_hi = 8;
 
 const double nnegbins = 209;
 const double maxrealtime = 269;

@@ -654,7 +654,7 @@ static std::vector< std::vector<fitanswers> > dothefit()
 
   const int migrad_tries = 8;
 
-  status = mn->Command("SIMPLEX 30000");
+  status = mn->Command("SIMPLEX 100000");
   for(int i = 0; i < migrad_tries; i++)
     if(0 == (status = mn->Command("MIGRAD 100000")))
       break;
@@ -693,7 +693,7 @@ static std::vector< std::vector<fitanswers> > dothefit()
     }
   }
 
-  status = mn->Command("SIMPLEX 30000");
+  status = mn->Command("SIMPLEX 100000");
   for(int i = 0; i < migrad_tries; i++)
     if(0 == (status = mn->Command("MIGRAD 100000")))
       break;

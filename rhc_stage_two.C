@@ -625,9 +625,9 @@ void draw(const int mindist)
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    1.03*max(max(gdrawmax(g_b12_fhc), fhc_b12->GetMaximum()),
-                      max(gdrawmax(g_b12_rhc), rhc_b12->GetMaximum())
-             ));
+    min(1.03*max(max(gdrawmax(g_b12_fhc), fhc_b12->GetMaximum()),
+                 max(gdrawmax(g_b12_rhc), rhc_b12->GetMaximum())),
+        0.25));
   dum2->GetYaxis()->SetTitle("^{12}B/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
