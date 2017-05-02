@@ -1,11 +1,16 @@
-all: fit_stage_two_mindist6.pdf fit_stage_two_mindist5.pdf \
-     fit_stage_two_mindist4.pdf fit_stage_two_mindist3.pdf \
-     fit_stage_two_mindist2.pdf fit_stage_two_mindist1.pdf \
-     fit_stage_two_mindist0.pdf
+all: \
+     fit_stage_two_mindist0.pdf \
+     fit_stage_two_mindist1.pdf \
+     fit_stage_two_mindist2.pdf \
+     fit_stage_two_mindist3.pdf \
+     fit_stage_two_mindist4.pdf \
+     fit_stage_two_mindist5.pdf \
+     fit_stage_two_mindist6.pdf
 
 define mindist_rule
 fit_stage_two_mindist$(1).out.txt fit_stage_two_mindist$(1).pdf: \
-  rhc_stage_two.C for_stage_two.C for_stage_two_ready_mindist$(1).C common.C stage_two.sh
+  rhc_stage_two.C for_stage_two.C for_stage_two_ready_mindist$(1).C \
+  common.C stage_two.sh
 	./stage_two.sh $(1)
 
 fit_stage_one_mindist$(1).out.txt for_stage_two_mindist$(1).C: rhc_stage_one.C savedhists_mindist$(1).C common.C stage_one.sh

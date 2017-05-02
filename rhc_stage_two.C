@@ -39,9 +39,14 @@ const double neff_error = 0.03;
 const double b12eff_nominal = 0.5;
 const double b12eff_error = 0.2;
 
+const double rough_neutron_lifetime = 52.; // us
+const double mean_time_of_muon_capture_weighted_by_neutron_yield = 1.07; // us
+const double timing_eff_difference_for_pions =
+  exp(-mean_time_of_muon_capture_weighted_by_neutron_yield/rough_neutron_lifetime);
+
 // Ratio of the neutron yield from pions to that of muons, per stop.
-const double npimu_nominal = 19.06;
-double npimu_error = 3.68;
+const double npimu_nominal = 15.23;
+double npimu_error = 2.63;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -109,9 +114,11 @@ static void reset_hists()
 }
 
 static void update_hists(const double mum_nyield, const double b12eff,
-                         const double neff, const double npimu,
+                         const double neff, const double real_npimu,
                          const double nmscale, const double ncscale)
 {
+  const double npimu = real_npimu * timing_eff_difference_for_pions;
+
   // Probability of getting a neutron from a mu+ via
   // electrodisintigration, roughly Then multipled by 0.5 because not
   // all of the "mu+" are mu+, some are protons, or EM showers, or
