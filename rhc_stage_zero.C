@@ -31,6 +31,7 @@ struct data{
   float trky;
   float trkz;
   float mindist;
+  float maxdist;
   float pe;
   float e;
   float t;
@@ -71,6 +72,7 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("trky", &dat->trky, t);
   setbranchaddress("trkz", &dat->trkz, t);
   setbranchaddress("mindist", &dat->mindist, t);
+  setbranchaddress("maxdist", &dat->maxdist, t);
   setbranchaddress("pe", &dat->pe, t);
   setbranchaddress("e", &dat->e, t);
   setbranchaddress("t", &dat->t, t);
@@ -114,6 +116,9 @@ bool trackcut(const vector<data> & dats)
     //
     // I checked that this supresses the background more than the signal,
     // although the effect is not magical.
+    //
+    // TODO: Select pions by looking for a 100MeV shower coincident with
+    // the track!
     if(dat->t > 0.75 && dat->t < holex_hi && 
        dat->mindist <= 3 &&
        dat->e > 10. && dat->e < 70.) return false;
