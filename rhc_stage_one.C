@@ -702,9 +702,9 @@ static std::vector< std::vector<fitanswers> > dothefit()
   if(!status)
     for(int beam = 0; beam < nbeam; beam++)
       for(int bin = 0; bin < nbins_e; bin++){
-        /// XXX I don't use these results in the end and it is really slow
-        /*gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
-        gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));*/
+        /// XXX This is realy slow and only marginally useful
+        gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
+        gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));
       }
 
   gMinuit->Command("show min");
@@ -801,10 +801,6 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
 {
   ofstream for_stage_two(Form("for_stage_two_mindist%d.C", mindist));
   for_stage_two << "{\n";
-  n_result  ->SetName("n_result");
-  b12_result->SetName("b12_result");
-  n_result  ->SavePrimitive(for_stage_two);
-  b12_result->SavePrimitive(for_stage_two);
   g_n_rhc->SetName("g_n_rhc");
   g_n_fhc->SetName("g_n_fhc");
   g_n_rhc->SavePrimitive(for_stage_two);
@@ -837,7 +833,7 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   for_stage_two << "}\n";
 }
 
-void rhc(const char * const savedhistfile, const int mindist)
+void rhc_stage_one(const char * const savedhistfile, const int mindist)
 {
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod; i++){

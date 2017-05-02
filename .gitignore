@@ -1,0 +1,10 @@
+fit_stage_two_mindist*.pdf
+fit_stage_two_mindist*.out.txt
+fit_stage_two_mindist*.pdf
+for_stage_two_mindist*.C
+for_stage_two_ready_mindist*.C
+savedhists_mindist*.C
+*_C.d
+*_C.so
+*.root
+fit_stage_one_mindist*.out.txt

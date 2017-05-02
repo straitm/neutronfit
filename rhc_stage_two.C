@@ -19,6 +19,8 @@ static TMinuit * mn = NULL;
 
 #include "common.C"
 
+double residuals[nbins_e*nbeam*2][nbins_e*nbeam*2];
+
 // filled by Macro call at start of running
 double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
 
@@ -28,18 +30,18 @@ const conttype contour_type = twod90;
 
 static const double tsize = 0.04;
 
-const double mum_nyield_nominal = 0.181;
-const double mum_nyield_error   = 0.030;
+const double mum_nyield_nominal = 0.1810;
+const double mum_nyield_error   = 0.0305;
 
-const double neff_nominal = 0.1;
+const double neff_nominal = 0.3;
 const double neff_error = 0.03;
 
 const double b12eff_nominal = 0.5;
 const double b12eff_error = 0.2;
 
 // Ratio of the neutron yield from pions to that of muons, per stop.
-const double npimu_nominal = 19.1;
-double npimu_error = 3.7;
+const double npimu_nominal = 19.06;
+double npimu_error = 3.68;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -56,9 +58,6 @@ TH1D *rhc_reco_nc = new TH1D("rhc_reco_nc","",100,0,10);
 
 TH1D * fhc_tracks = NULL;
 TH1D * rhc_tracks = NULL;
-
-TGraphAsymmErrors * n_result = new TGraphAsymmErrors;
-TGraphAsymmErrors * b12_result = new TGraphAsymmErrors;
 
 TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
@@ -113,8 +112,11 @@ static void update_hists(const double mum_nyield, const double b12eff,
                          const double neff, const double npimu,
                          const double nmscale, const double ncscale)
 {
-  // Probability of getting a neutron from a mu+ via electrodisintigration, roughly
-  const double mup_nyield = 1e-4;
+  // Probability of getting a neutron from a mu+ via
+  // electrodisintigration, roughly Then multipled by 0.5 because not
+  // all of the "mu+" are mu+, some are protons, or EM showers, or
+  // whatever.
+  const double mup_nyield = 1e-4 * 0.5;
 
   // this could be another nuisance parameter.  Don't want to double count
   // it with the ratio of pion to muon yields, though, so careful.
@@ -139,7 +141,7 @@ static void update_hists(const double mum_nyield, const double b12eff,
   rhc_neutrons_numu   ->Divide(rhc_tracks);
   rhc_neutrons_numubar->Divide(rhc_tracks);
 
-  // Ditton FHC
+  // Ditto FHC
   fhc_neutrons_nc     ->Add(fhc_reco_nc, ncscale*npimu*mum_nyield*neff);
   fhc_neutrons_numu   ->Add(fhc_reco_numu,             mum_nyield*neff);
   fhc_neutrons_numubar->Add(fhc_reco_numubar,          mup_nyield*neff);
@@ -221,21 +223,26 @@ static double compare(double * dat, double * datup, double * datdn,
 {
   double chi2 = 0;
   for(int i = 0; i < nbins_e*nbeam*2 /* n and b12 */; i++){
-    for(int j = 0; j < nbins_e*nbeam*2; j++){
+    for(int j = i; j < nbins_e*nbeam*2; j++){
       if(!useb12 && (i >= nbins_e*nbeam || j >= nbins_e*nbeam)) continue;
 
-      const double r = dat[i];
-      const double pred = model[i];
-      const double rj = dat[j];
+      const double datai = dat[i];
+      const double predi = model[i];
+      const double dataj = dat[j];
       const double predj = model[j];
 
       // for diagonal elements, try to incorporate MINOS information
       const double rup = datup[i];
       const double rdn = datdn[i];
-      const double correction = i != j || rdn == 0 || rup == 0?  1
-      : (r > pred?rup:rdn)/(rup + rdn)*2;
+      const double correction = (i != j || rdn == 0 || rup == 0)?  1
+      : (predi > datai?rup:rdn)/(rup/2 + rdn/2);
 
-      chi2 += correction*hessian[i][j]*(pred - r)*(predj - rj);
+      // Need to count all off-diagonal elements twice since
+      // we're only looking at the top half.
+      const double offdiagonalmult = i == j? 1 : 2;
+
+      chi2 += offdiagonalmult * (residuals[i][j]
+               = correction*hessian[i][j]*(predi - datai)*(predj - dataj));
     }
   }
 
@@ -323,7 +330,7 @@ void fill_hists(const char * const file, TH1D * const numu,
   // For I-don't-know-why TTree::Draw isn't working for me here, so
   // do it the hard way
   int i, primary, true_pdg, true_nupdg, true_nucc, contained;
-  float slce, trkx, trky, trkz, trklen, remid;
+  float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback;
   t->SetBranchStatus("*", 0);
   t->SetBranchStatus("slce", 1); t->SetBranchAddress("slce", &slce);
   t->SetBranchStatus("i", 1); t->SetBranchAddress("i", &i);
@@ -337,46 +344,38 @@ void fill_hists(const char * const file, TH1D * const numu,
   t->SetBranchStatus("trkz", 1); t->SetBranchAddress("trkz", &trkz);
   t->SetBranchStatus("trklen", 1); t->SetBranchAddress("trklen", &trklen);
   t->SetBranchStatus("remid", 1); t->SetBranchAddress("remid", &remid);
+  t->SetBranchStatus("timeleft", 1); t->SetBranchAddress("timeleft", &timeleft);
+  t->SetBranchStatus("timeback", 1); t->SetBranchAddress("timeback", &timeback);
 
   for(int e = 0; e < t->GetEntries(); e++){
     t->GetEntry(e);
     if(!(i == 0 && primary && contained)) continue;
 
-    // MUST MATCH cut at top of rhc.C
+    // MUST MATCH cut in rhc_stage_zero.C
     if(fabs(trkx) > 170) continue;
     if(fabs(trky) > 170) continue;
     if(     trkz  >1250) continue;
     if(trklen < 200) continue;
     if(remid  < 0.75) continue;
 
-    // XXX What should I be doing about the case where there's a 
-    // true numu CC event where a pion is selected as the primary
-    // track?
+    // Should have no effect, unless there is cosmic overlay
+    // In fact, MC times seem to be totally different, so never mind
+    //if(timeleft < maxrealtime || timeback > -nnegbins) continue;
 
-    // based entirely on what the track actually is
+    // based entirely on what the track actually is NOT what the
+    // neutrino interaction is. I think this makes more sense.
+
     if(true_pdg == -321 /* take K- too, but they are very rare */
        || true_pdg == -211) nc->Fill(slce);
     else if(true_pdg == 13) numu->Fill(slce);
 
-    // XXX use numubar as a stand-in for all other tracks.  Can't just
+    // Use numubar as a stand-in for all other tracks.  Can't just
     // throw out tracks because everything is done per-track!
     // This will make the guesses at neutron yield for mu+ a bit wrong,
     // but they are only guesses anyhow
     else /* if(true_pdg == -13) */ numubar->Fill(slce);
 
     if(true_pdg == -321) printf("K-!\n");
-
-    /*
-    // based on the neutrino interaction
-    if(true_nucc){
-      if     (true_nupdg ==  14) numu->Fill(slce);
-      else if(true_nupdg == -14) numubar->Fill(slce);
-    }
-    else{
-      // Picking out true NC events where the primary track is a pi-
-      if(true_pdg == -211 || true_pdg == -321) nc->Fill(slce);
-    }
-    */
   }
 
   // can I safely close the file here?! You'd think so, but sometimes
@@ -451,6 +450,9 @@ void make_mn()
   const int npar = 6;
   mn = new TMinuit(npar);
   mn->fGraphicsMode = false;
+
+  // MUST be at least zero to get the contours out because MINUIT
+  // decides whether you really want contours by the print level...!
   const int print = 0;
 
   // not sure which of these works
@@ -468,12 +470,13 @@ void make_mn()
   ));
 
   int mnparmerr = 0;
-  mn->mnparm(0, "NCscale", 1, 0.1, 0, 0, mnparmerr);
+  mn->mnparm(0, "NCscale", 1, 0.2, 0, 0, mnparmerr);
   mn->mnparm(1, "NMscale", 1, 0.1, 0, 0, mnparmerr);
-  mn->mnparm(2, "npimu", npimu_nominal, 0.5, 0, 0, mnparmerr);
-  mn->mnparm(3, "neff", neff_nominal, 0.1, 0, 0, mnparmerr);
-  mn->mnparm(4, "b12eff", b12eff_nominal, 0.1, 0, 0, mnparmerr);
-  mn->mnparm(5, "mum_nyield", mum_nyield_nominal, 0.03, 0, 0, mnparmerr);
+  mn->mnparm(2, "npimu", npimu_nominal, npimu_error, 0, 0, mnparmerr);
+  mn->mnparm(3, "neff", neff_nominal, neff_error, 0, 0, mnparmerr);
+  mn->mnparm(4, "b12eff", b12eff_nominal, b12eff_error, 0, 0, mnparmerr);
+  mn->mnparm(5, "mum_nyield", mum_nyield_nominal, mum_nyield_error,
+                0, 0, mnparmerr);
 }
 
 
@@ -483,6 +486,13 @@ static void styleleg(TLegend * leg)
   leg->SetBorderSize(1);
   leg->SetFillStyle(0);
   leg->SetTextSize(tsize);
+}
+
+TGraph * get_the_stupid_contour(const char * const name)
+{
+  TGraph * cont = dynamic_cast<TGraph *>(mn->GetPlot());
+  if(cont) cont = (TGraph *)cont->Clone(name);
+  return cont;
 }
 
 void draw(const int mindist)
@@ -698,7 +708,7 @@ void draw(const int mindist)
 
   const double ncmin = 0, ncmax = 1.2,
     nmmin = 0.5, nmmax = 3.1;
-  TH2D * dum3 = new TH2D("dm", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
+  TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
   dum3->GetXaxis()->CenterTitle();
@@ -713,25 +723,30 @@ void draw(const int mindist)
   mn->fGraphicsMode = true;
 
   TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
+  mn->Command("MINOS 10000 1");
+  mn->Command("MINOS 10000 2");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_full = (TGraph*)(dynamic_cast<TGraph *>(mn->GetPlot()))->Clone("cont_full");
+  TGraph * cont_full = get_the_stupid_contour("cont_full");
+
+  printf("NC scale: %f + %f - %f\n", getpar(0), getminerrup(0), getminerrdn(0));
+  printf("NM scale: %f + %f - %f\n", getpar(1), getminerrup(1), getminerrdn(1));
 
   /*useb12 = false;
   mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_nob12 = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_nob12 = get_the_stupid_contour("cont_nob12");
 
   useb12 = true; */
   const double proper_npimu_error = npimu_error;
   npimu_error = 1.1;
   mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_perfect_nuclear = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_perfect_nuclear = get_the_stupid_contour("cont_perfect_nuclear");
 
   mn->Command(Form("SET PAR 3 %f", npimu_nominal));
   mn->Command("FIX 3");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_perfect_ratio = dynamic_cast<TGraph *>(mn->GetPlot());
+  TGraph * cont_perfect_ratio = get_the_stupid_contour("cont_perfect_ratio");
 
   // restore
   npimu_error = proper_npimu_error;
@@ -779,7 +794,7 @@ void draw(const int mindist)
   mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
   mn->Command("MINOS 10000 4");
-  mn->Command("MINOS 10000 5");
+  if(useb12) mn->Command("MINOS 10000 5");
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
@@ -787,9 +802,9 @@ void draw(const int mindist)
   onederrs->Draw("pz");
 
   mn->Command(Form("SET ERR %f",
-    contour_type == oned68? 1.00:
-    contour_type == twod68? 2.30:
-                            4.61
+    contour_type == oned68? 1.0:
+    contour_type == twod68? TMath::ChisquareQuantile(0.68269, 2):
+                            TMath::ChisquareQuantile(0.9, 2)
   )); // put back
 
   leg = new TLegend(0.42, 0.75, 1-rightmargin, 1-topmargin);
@@ -868,6 +883,22 @@ void draw(const int mindist)
   c4->Print(outpdfname.c_str());
 
 
+  TH2D * hresid = new TH2D("hresid", "", 20, 0, 20, 20, 0, 20);
+  mn->Command("CALL");
+
+  // If an input variable is up against a limit and the fit results
+  // are garbage, check if one of these is huge.  If so, probably
+  // the hessian is messed up.
+
+  for(int i = 0; i < nbins_e*nbeam*2; i++)
+    for(int j = 0; j < nbins_e*nbeam*2; j++)
+      hresid->SetBinContent(i+1, j+1, residuals[i][j]);
+
+  c4->SetLogz();
+  c4->SetRightMargin(0.18);
+  hresid->Draw("colz");
+  c4->Print(outpdfname.c_str());
+
   c4->Print((outpdfname + "]").c_str()); // doesn't print anything, just closes
 }
 
@@ -882,8 +913,8 @@ void rhc_stage_two(const char * const input, const int mindist)
 
   make_mn();
 
-  mn->Command("SET LIM 1 0.01 10"); // NC scale
-  mn->Command("SET LIM 2 0.01 10");  // numubar scale
+  mn->Command("SET LIM 1 0 5"); // NC scale
+  mn->Command("SET LIM 2 0 5");  // numubar scale
   mn->Command(Form("SET LIM 3 %f %f", 
     max(0, npimu_nominal - 5*npimu_error),
            npimu_nominal + 5*npimu_error)); // pion to muon neutron yield ratio
@@ -892,9 +923,8 @@ void rhc_stage_two(const char * const input, const int mindist)
   mn->Command("SET LIM 6 0.01 1"); // mu- neutron yield
 
   if(!useb12) mn->Command("FIX 5");
-
-  mn->Command("MIGRAD");
-  mn->Command("IMPROVE");
+  mn->Command("MINIMIZE 10000");
+  mn->Command("HESSE");
 
   update_hists(getpar(5), getpar(4), getpar(3), getpar(2), getpar(1), getpar(0));
 
