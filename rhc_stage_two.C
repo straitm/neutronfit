@@ -365,11 +365,14 @@ void fill_hists(const char * const file, TH1D * const numu,
     if(trklen < 200) continue;
     if(remid  < 0.75) continue;
 
+    // Check if this is a mu-, pi- or K- that truly stops.
+    if(!true_atom_cap) continue;
+
     // Should have no effect, unless there is cosmic overlay
     // In fact, MC times seem to be totally different, so never mind
     //if(timeleft < maxrealtime || timeback > -nnegbins) continue;
 
-    // based entirely on what the track actually is NOT what the
+    // based entirely on what the track actually is, NOT what the
     // neutrino interaction is. I think this makes more sense.
 
     if(true_pdg == -321 /* take K- too, but they are very rare */
