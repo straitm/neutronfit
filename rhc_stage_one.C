@@ -898,15 +898,22 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist)
       fhc_ans.b12mag, graph_xe, fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
 
-    printf("%s/%s RHC/FHC neutron (%4.2f-%4.2f)GeV: %.3f +%.3f -%.3f\n",
-      rhc_ans.n_good?"Good":"Bad",
-      fhc_ans.n_good?"Good":"Bad", loslce, hislce,
+    printf("%s RHC neutron (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
+      rhc_ans.n_good?"Good":" Bad", loslce, hislce,
       rhc_ans.n_mag, rhc_ans.n_mage_up, rhc_ans.n_mage_dn);
 
-    printf("%s/%s RHC/FHC B-12    (%4.2f-%4.2f)GeV: %.3f +%.3f -%.3f\n",
-      rhc_ans.b12_good?"Good":"Bad",
-      fhc_ans.b12_good?"Good":"Bad", loslce, hislce,
+    printf("%s RHC B-12    (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
+      rhc_ans.b12_good?"Good":" Bad", loslce, hislce,
       rhc_ans.b12mag, rhc_ans.b12mage_up, rhc_ans.b12mage_dn);
+
+    printf("%s FHC neutron (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
+      fhc_ans.n_good?"Good":" Bad", loslce, hislce,
+      fhc_ans.n_mag, fhc_ans.n_mage_up, fhc_ans.n_mage_dn);
+
+    printf("%s FHC B-12    (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
+      fhc_ans.b12_good?"Good":" Bad", loslce, hislce,
+      fhc_ans.b12mag, fhc_ans.b12mage_up, fhc_ans.b12mage_dn);
+
 
 
     // Indirect, harder

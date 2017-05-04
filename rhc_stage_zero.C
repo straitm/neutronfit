@@ -11,6 +11,17 @@ TMinuit * mn = NULL; // dumb, because of common.C
 
 #include "common.C"
 
+// If true, all tracks that pass basecut() go into the denominator.
+// basecut() only excludes tracks based on characteristics of the track
+// itself.
+//
+// If false, don't put tracks in the denominator if we have rejected
+// them (i.e. rejected all clusters following them) based on other
+// clusters, such as the presense of a Michel-like cluster.
+//
+// For my standard study, "true" is the correct choice.
+const bool ALL_TRACKS_GO_IN_THE_DENOMINATOR = false;
+
 struct data{
   int run;
   int event;
@@ -84,6 +95,7 @@ bool basecut(data * dat)
 {
   return dat->run != 11601 // noise at t = 106 in this run.
                    // Will go away with a better run list.
+    &&   dat->run != 12187 // noise at t = -27, 90, 92
     && dat->primary && dat->type == 3
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins 
     && dat->remid > 0.75 
@@ -106,6 +118,8 @@ bool basecut(data * dat)
 // True if the track passes
 bool trackcut(const vector<data> & dats)
 {
+  bool has_pion_gamma = false;
+
   for(unsigned int i = 0; i < dats.size(); i++){
     const data * const dat = &dats[i];
 
@@ -116,9 +130,6 @@ bool trackcut(const vector<data> & dats)
     //
     // I checked that this supresses the background more than the signal,
     // although the effect is not magical.
-    //
-    // TODO: Select pions by looking for a 100MeV shower coincident with
-    // the track!
     if(dat->t > 0.75 && dat->t < holex_hi && 
        dat->mindist <= 3 &&
        dat->e > 10. && dat->e < 70.) return false;
@@ -151,7 +162,8 @@ bool clustercut(data * dat, const int mindist)
     && dat->pe > 35 && dat->e < 20;
 }
 
-void fill_2dhist(TH2D * h, data * dat, TTree * t, const int mindist)
+void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
+                 const int mindist)
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
   vector<data> dats;
@@ -166,10 +178,17 @@ void fill_2dhist(TH2D * h, data * dat, TTree * t, const int mindist)
 
     // analyze them.  If we like the track, write out its clusters.
     else{
-      if(trackcut(dats))
-        for(unsigned int j = 0; j < dats.size(); j++)
+      if(trackcut(dats)){
+        for(unsigned int j = 0; j < dats.size(); j++){
           if(basecut(&dats[j]) && clustercut(&dats[j], mindist))
             h->Fill(dats[j].t, dats[j].slce);
+
+          // In this scheme, only tracks that pass go into the denominator
+          if(!ALL_TRACKS_GO_IN_THE_DENOMINATOR)
+            if(dats[j].i == 0 && basecut(&dats[j]))
+               trackcounts->Fill(dat->slce);
+        }
+      }
 
       dats.clear();
       dats.push_back(*dat);
@@ -180,6 +199,7 @@ void fill_2dhist(TH2D * h, data * dat, TTree * t, const int mindist)
   }
 }
 
+// In this scheme, all tracks go into the denominator
 void fill_1dhist(TH1D * h, data * dat, TTree * t)
 {
   for(int i = 0; i < t->GetEntries(); i++){
@@ -191,7 +211,7 @@ void fill_1dhist(TH1D * h, data * dat, TTree * t)
 void rhc_stage_zero(const int mindist)
 {
   const char * const inputfiles[nperiod] = {
-  "prod_pid_S16-12-07_nd_period6_keepup/1278-type3.root",
+  "prod_pid_S16-12-07_nd_period6_keepup/1508-type3.root",
   "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
@@ -227,8 +247,9 @@ void rhc_stage_zero(const int mindist)
       nnegbins + maxrealtime + additional,
       -nnegbins, maxrealtime + additional, nbins_e, bins_e);
 
-    fill_2dhist(fithist, &dat, trees, mindist);
-    fill_1dhist(all_tcounts, &dat, trees);
+    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist);
+    if(ALL_TRACKS_GO_IN_THE_DENOMINATOR)
+      fill_1dhist(all_tcounts, &dat, trees); // see comments above
 
     printf("Got %s_s\n", Speriodnames[i]);
     fflush(stdout);
