@@ -702,7 +702,7 @@ static std::vector< std::vector<fitanswers> > dothefit()
   if(!status)
     for(int beam = 0; beam < nbeam; beam++)
       for(int bin = 0; bin < nbins_e; bin++){
-        /// XXX This is realy slow and only marginally useful
+        // This is realy slow and only marginally useful
         gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
         gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));
       }
@@ -835,6 +835,8 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
 
 void rhc_stage_one(const char * const savedhistfile, const int mindist)
 {
+  if(mindist < 0) return; // to compile only
+
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod; i++){
     if(NULL == (all_tcounts[i] = dynamic_cast<TH1D*>(

@@ -336,7 +336,7 @@ void fill_hists(const char * const file, TH1D * const numu,
 
   // For I-don't-know-why TTree::Draw isn't working for me here, so
   // do it the hard way
-  int i, primary, true_pdg, true_nupdg, true_nucc, contained;
+  int i, primary, true_pdg, true_nupdg, true_nucc, contained, true_atom_cap;
   float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback;
   t->SetBranchStatus("*", 0);
   t->SetBranchStatus("slce", 1); t->SetBranchAddress("slce", &slce);
@@ -353,6 +353,7 @@ void fill_hists(const char * const file, TH1D * const numu,
   t->SetBranchStatus("remid", 1); t->SetBranchAddress("remid", &remid);
   t->SetBranchStatus("timeleft", 1); t->SetBranchAddress("timeleft", &timeleft);
   t->SetBranchStatus("timeback", 1); t->SetBranchAddress("timeback", &timeback);
+  t->SetBranchStatus("true_atom_cap", 1); t->SetBranchAddress("true_atom_cap", &true_atom_cap);
 
   for(int e = 0; e < t->GetEntries(); e++){
     t->GetEntry(e);
@@ -915,6 +916,8 @@ void draw(const int mindist)
 
 void rhc_stage_two(const char * const input, const int mindist)
 {
+  if(mindist < 0) return; // to compile only
+
   TH1::SetDefaultSumw2();
 
   set_hists();

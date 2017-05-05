@@ -20,7 +20,7 @@ TMinuit * mn = NULL; // dumb, because of common.C
 // clusters, such as the presense of a Michel-like cluster.
 //
 // For my standard study, "true" is the correct choice.
-const bool ALL_TRACKS_GO_IN_THE_DENOMINATOR = false;
+const bool ALL_TRACKS_GO_IN_THE_DENOMINATOR = true;
 
 struct data{
   int run;
@@ -97,8 +97,8 @@ bool basecut(data * dat)
                    // Will go away with a better run list.
     &&   dat->run != 12187 // noise at t = -27, 90, 92
     && dat->primary && dat->type == 3
-    && dat->timeleft > maxrealtime && dat->timeback > -nnegbins 
-    && dat->remid > 0.75 
+    && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
+    && dat->remid > 0.75
     && dat->trklen > 200  // standard
     //&& dat->trklen > 600  // longer -- drops nearly all NC background
     // standard numu ND containment cuts, except for some muon-catcher
@@ -118,28 +118,47 @@ bool basecut(data * dat)
 // True if the track passes
 bool trackcut(const vector<data> & dats)
 {
-  bool has_pion_gamma = false;
+  bool has_pion_gamma = false, has_xray = false;
 
   for(unsigned int i = 0; i < dats.size(); i++){
     const data * const dat = &dats[i];
 
     // reject the event if there is something that looks like a Michel
-    // closely following the track.  Don't look too close in time, or 
+    // closely following the track.  Don't look too close in time, or
     // we may cut lots of events for late track light.  Don't look after
     // holex_hi, which is where the time series fit starts.
     //
     // I checked that this supresses the background more than the signal,
     // although the effect is not magical.
-    if(dat->t > 0.75 && dat->t < holex_hi && 
+    if(dat->t > 0.75 && dat->t < holex_hi &&
        dat->mindist <= 3 &&
        dat->e > 10. && dat->e < 70.) return false;
+
+    // In principle you can select pions here by looking for a 100MeV
+    // shower coincident with the track. This does seem to work:
+    // I get consistently higher fractions of neutrons.  Can this be
+    // made interesting?
+    /*
+    if(dat->t < 0.75 && dat->t > -0.75 &&
+       dat->mindist > 2 &&
+       dat->e > 50){
+       has_pion_gamma = true;
+       fprintf(stderr, "%d %d %d %f %f\n", dat->run, dat->event,
+               dat->trk, dat->e, dat->mindist);
+    } */
+
+    // Or try to preferentially select muon captures on Ti and Sn using
+    // their x-rays.
+    /*if(dat->t < 0.75 && dat->t > -0.75 &&
+       dat->mindist > 2 &&
+       dat->pe > 35 && dat->e > 1 && dat->e/0.7 < 8) has_xray = true; */
   }
 
   return true;
 }
 
 // Other possibilities:
-// 
+//
 // Attempt to agressively reduce neutrons while still getting B-12
 /*
   "nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
@@ -210,6 +229,8 @@ void fill_1dhist(TH1D * h, data * dat, TTree * t)
 
 void rhc_stage_zero(const int mindist)
 {
+  if(mindist < 0) return; // used to compile only
+
   const char * const inputfiles[nperiod] = {
   "prod_pid_S16-12-07_nd_period6_keepup/1508-type3.root",
   "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
