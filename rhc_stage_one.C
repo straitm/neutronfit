@@ -30,7 +30,8 @@ const double n_lifetime_nominal = 52.7;
 // From external considerations.  It doesn't substantively change the
 // result of this program if a smaller number is put here, but it would
 // be circular to do so in most cases, so don't.
-const double n_lifetime_priorerr = 5.;
+//const double n_lifetime_priorerr = 5.;
+const double n_lifetime_priorerr = 2.;
 
 // This is the *effective* muon lifetime, with all detector effects
 const double tmich_nominal = 2.1;

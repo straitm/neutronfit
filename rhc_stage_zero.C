@@ -11,9 +11,9 @@ TMinuit * mn = NULL; // dumb, because of common.C
 
 #include "common.C"
 
-// If true, all tracks that pass basecut() go into the denominator.
-// basecut() only excludes tracks based on characteristics of the track
-// itself.
+// If true, all tracks that pass track_itself_cut() go into the
+// denominator. This only excludes tracks based on characteristics of
+// the track itself and not on any hits coincident or following it.
 //
 // If false, don't put tracks in the denominator if we have rejected
 // them (i.e. rejected all clusters following them) based on other
@@ -24,6 +24,7 @@ const bool ALL_TRACKS_GO_IN_THE_DENOMINATOR = true;
 
 struct data{
   int run;
+  int subrun;
   int event;
   int trk;
   int primary;
@@ -47,6 +48,8 @@ struct data{
   float e;
   float t;
   float slce;
+  float cosx;
+  float cosy;
 };
 
 void setbranchaddress(const char * const name, float * d, TTree * t)
@@ -66,6 +69,7 @@ void setbranchaddresses(data * dat, TTree * t)
   t->SetBranchStatus("*", 0);
   setbranchaddress("i", &dat->i, t);
   setbranchaddress("run", &dat->run, t);
+  setbranchaddress("subrun", &dat->subrun, t);
   setbranchaddress("event", &dat->event, t);
   setbranchaddress("trk", &dat->trk, t);
   setbranchaddress("primary", &dat->primary, t);
@@ -88,15 +92,18 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("e", &dat->e, t);
   setbranchaddress("t", &dat->t, t);
   setbranchaddress("slce", &dat->slce, t);
+  setbranchaddress("cosx", &dat->cosx, t);
+  setbranchaddress("cosy", &dat->cosy, t);
 }
 
 // true if it passes the cut
-bool basecut(data * dat)
+bool track_itself_cut(data * dat)
 {
   return dat->run != 11601 // noise at t = 106 in this run.
                    // Will go away with a better run list.
     &&   dat->run != 12187 // noise at t = -27, 90, 92
-    && dat->primary && dat->type == 3
+    && dat->primary 
+    && dat->type == 3
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
     && dat->remid > 0.75
     && dat->trklen > 200  // standard
@@ -116,7 +123,7 @@ bool basecut(data * dat)
 }
 
 // True if the track passes
-bool trackcut(const vector<data> & dats)
+bool track_followers_cut(const vector<data> & dats)
 {
   bool has_pion_gamma = false, has_xray = false;
 
@@ -138,20 +145,33 @@ bool trackcut(const vector<data> & dats)
     // shower coincident with the track. This does seem to work:
     // I get consistently higher fractions of neutrons.  Can this be
     // made interesting?
-    /*
-    if(dat->t < 0.75 && dat->t > -0.75 &&
-       dat->mindist > 2 &&
-       dat->e > 50){
+    /*   
+    if(dat->t < 0.25 && dat->t > -0.25 &&
+       dat->mindist > 3 &&
+       dat->e > 50 &&
+       dat->remid > 0.5 &&
+       dat->type == 3 &&
+       dat->trkz < 1250 &&
+       ((dat->cosx > -1 && fabs(dat->cosx) < 0.6) ||
+        (dat->cosy > -1 && fabs(dat->cosy) < 0.6))
+      ){
        has_pion_gamma = true;
-       fprintf(stderr, "%d %d %d %f %f\n", dat->run, dat->event,
-               dat->trk, dat->e, dat->mindist);
-    } */
+       printf("Pion-gamma: %d %d %d %6.1f %6.1f %4.2f %5.2f %5.2f %6.3f\n",
+              dat->run, dat->subrun, dat->event,
+              dat->trkz, dat->e, dat->mindist, dat->cosx, dat->cosy, dat->remid);
+    }
 
     // Or try to preferentially select muon captures on Ti and Sn using
     // their x-rays.
-    /*if(dat->t < 0.75 && dat->t > -0.75 &&
+    if(dat->t < 0.75 && dat->t > -0.75 &&
        dat->mindist > 2 &&
-       dat->pe > 35 && dat->e > 1 && dat->e/0.7 < 8) has_xray = true; */
+       dat->pe > 35 && dat->e > 1 && dat->e/0.7 < 8){
+       has_xray = true;
+       printf("Ti-xray: %d %d %d %6.1f %6.1f %4.2f %5.2f %5.2f %6.3f\n",
+              dat->run, dat->subrun, dat->event,
+              dat->trkz, dat->e, dat->mindist, dat->cosx, dat->cosy, dat->remid);
+    }
+    */
   }
 
   return true;
@@ -197,14 +217,14 @@ void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
 
     // analyze them.  If we like the track, write out its clusters.
     else{
-      if(trackcut(dats)){
+      if(track_followers_cut(dats)){
         for(unsigned int j = 0; j < dats.size(); j++){
-          if(basecut(&dats[j]) && clustercut(&dats[j], mindist))
+          if(track_itself_cut(&dats[j]) && clustercut(&dats[j], mindist))
             h->Fill(dats[j].t, dats[j].slce);
 
           // In this scheme, only tracks that pass go into the denominator
           if(!ALL_TRACKS_GO_IN_THE_DENOMINATOR)
-            if(dats[j].i == 0 && basecut(&dats[j]))
+            if(dats[j].i == 0 && track_itself_cut(&dats[j]))
                trackcounts->Fill(dat->slce);
         }
       }
@@ -223,7 +243,7 @@ void fill_1dhist(TH1D * h, data * dat, TTree * t)
 {
   for(int i = 0; i < t->GetEntries(); i++){
     t->GetEntry(i);
-    if(basecut(dat) && dat->i == 0) h->Fill(dat->slce);
+    if(track_itself_cut(dat) && dat->i == 0) h->Fill(dat->slce);
   }
 }
 
@@ -232,8 +252,10 @@ void rhc_stage_zero(const int mindist)
   if(mindist < 0) return; // used to compile only
 
   const char * const inputfiles[nperiod] = {
+  //"postmuon_12104_7.20170308.ntuple.root",
+  //"prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1/postmuon_11392_18.20170308.ntuple.root",
   "prod_pid_S16-12-07_nd_period6_keepup/1508-type3.root",
-  "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1/all-type3.root",
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",

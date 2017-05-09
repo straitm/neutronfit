@@ -44,9 +44,11 @@ const double mean_time_of_muon_capture_weighted_by_neutron_yield = 1.07; // us
 const double timing_eff_difference_for_pions =
   exp(-mean_time_of_muon_capture_weighted_by_neutron_yield/rough_neutron_lifetime);
 
-// Ratio of the neutron yield from pions to that of muons, per stop.
-const double npimu_nominal = 15.23;
-double npimu_error = 2.63;
+// Ratio of the neutron yield from pions to that of muons, per stop,
+// slightly adjusted by the greater fraction of those from pions that
+// aren't captured.
+const double npimu_nominal = 14.29;
+double npimu_error = 2.52;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -337,7 +339,7 @@ void fill_hists(const char * const file, TH1D * const numu,
   // For I-don't-know-why TTree::Draw isn't working for me here, so
   // do it the hard way
   int i, primary, true_pdg, true_nupdg, true_nucc, contained, true_atom_cap;
-  float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback;
+  float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback, mcweight;
   t->SetBranchStatus("*", 0);
   t->SetBranchStatus("slce", 1); t->SetBranchAddress("slce", &slce);
   t->SetBranchStatus("i", 1); t->SetBranchAddress("i", &i);
@@ -354,6 +356,7 @@ void fill_hists(const char * const file, TH1D * const numu,
   t->SetBranchStatus("timeleft", 1); t->SetBranchAddress("timeleft", &timeleft);
   t->SetBranchStatus("timeback", 1); t->SetBranchAddress("timeback", &timeback);
   t->SetBranchStatus("true_atom_cap", 1); t->SetBranchAddress("true_atom_cap", &true_atom_cap);
+  t->SetBranchStatus("mcweight", 1); t->SetBranchAddress("mcweight", &mcweight);
 
   for(int e = 0; e < t->GetEntries(); e++){
     t->GetEntry(e);
@@ -373,18 +376,20 @@ void fill_hists(const char * const file, TH1D * const numu,
     // In fact, MC times seem to be totally different, so never mind
     //if(timeleft < maxrealtime || timeback > -nnegbins) continue;
 
+    // If it's not filled (perhaps for data), let it have no effect
+    if(mcweight == 0) mcweight = 1;
+
     // based entirely on what the track actually is, NOT what the
     // neutrino interaction is. I think this makes more sense.
-
     if(true_pdg == -321 /* take K- too, but they are very rare */
-       || true_pdg == -211) nc->Fill(slce);
-    else if(true_pdg == 13) numu->Fill(slce);
+       || true_pdg == -211) nc  ->Fill(slce, mcweight);
+    else if(true_pdg == 13) numu->Fill(slce, mcweight);
 
     // Use numubar as a stand-in for all other tracks.  Can't just
     // throw out tracks because everything is done per-track!
     // This will make the guesses at neutron yield for mu+ a bit wrong,
     // but they are only guesses anyhow
-    else /* if(true_pdg == -13) */ numubar->Fill(slce);
+    else /* if(true_pdg == -13) */ numubar->Fill(slce, mcweight);
 
     if(true_pdg == -321) printf("K-!\n");
   }
@@ -400,13 +405,13 @@ void set_hists()
   // between the number of primary tracks in the given beam type and the truth
   // of those tracks.  But it might be confusing if the individual histograms
   // are drawn without normalization.
-  fill_hists("prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_"
-    "fhc_nova_v08_period5_v1/all-type3.root", fhc_reco_numu, fhc_reco_numubar,
-    fhc_reco_nc);
+  fill_hists(
+    "prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1"
+    "/all-type3.root", fhc_reco_numu, fhc_reco_numubar, fhc_reco_nc);
 
-  fill_hists("prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_"
-    "rhc_nova_v08_epoch4a_v3/all-type3.root", rhc_reco_numu, rhc_reco_numubar,
-    rhc_reco_nc);
+  fill_hists(
+    "prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_rhc_nova_v08_epoch4a_v3"
+    "/all-type3.root", rhc_reco_numu, rhc_reco_numubar, rhc_reco_nc);
 
   rhc_reco_numubar=(TH1D*)rhc_reco_numubar->Rebin(nbins_e,"rhc_reco_numubar",bins_e);
   fhc_reco_numubar=(TH1D*)fhc_reco_numubar->Rebin(nbins_e,"fhc_reco_numubar",bins_e);

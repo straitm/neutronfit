@@ -23,8 +23,8 @@ static const double markersize = 0.3;
 
 const int nbeam      = 2; // not really generalizable as it stands
 
-const int nbins_e = 5;
-const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
+const int nbins_e = 4;
+const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, /*4.9,*/ 6.0 };
 //const double bins_e[nbins_e+1] = {0.5, 1.0, 2.0, 6.0 };
 
 double getpar(int i) // 0-indexed!
