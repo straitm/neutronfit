@@ -362,12 +362,11 @@ void fill_hists(const char * const file, TH1D * const numu,
     t->GetEntry(e);
     if(!(i == 0 && primary && contained)) continue;
 
-    // MUST MATCH cut in rhc_stage_zero.C
-    if(fabs(trkx) > 170) continue;
-    if(fabs(trky) > 170) continue;
-    if(     trkz  >1250) continue;
-    if(trklen < 200) continue;
-    if(remid  < 0.75) continue;
+    if(fabs(trkx) > trkx_cut) continue;
+    if(fabs(trky) > trky_cut) continue;
+    if(     trkz  > trkz_cut) continue;
+    if(trklen < trklen_cut) continue;
+    if(remid  < remid_cut) continue;
 
     // Check if this is a mu-, pi- or K- that truly stops.
     if(!true_atom_cap) continue;
@@ -722,8 +721,8 @@ void draw(const int mindist)
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double ncmin = 0, ncmax = 1.2,
-    nmmin = 0.5, nmmax = 3.1;
+  const double ncmin = 0, ncmax = 1.9,
+    nmmin = 0.0, nmmax = 2.1;
   TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");

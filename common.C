@@ -8,6 +8,11 @@ const double nnegbins = 209;
 const double maxrealtime = 269;
 const double additional = 0;
 
+const double trkx_cut = 170,
+             trky_cut = 170,
+             trkz_cut = 1250;
+const double trklen_cut = 200;
+const double remid_cut = 0.75;
 
 const int nperiodrhc = 2; // 4, 6
 const int nperiodfhc = 4; // 1, 2, 3, 5

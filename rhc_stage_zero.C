@@ -102,22 +102,19 @@ bool track_itself_cut(data * dat)
   return dat->run != 11601 // noise at t = 106 in this run.
                    // Will go away with a better run list.
     &&   dat->run != 12187 // noise at t = -27, 90, 92
-    && dat->primary 
+    && dat->primary
     && dat->type == 3
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
-    && dat->remid > 0.75
-    && dat->trklen > 200  // standard
-    //&& dat->trklen > 600  // longer -- drops nearly all NC background
-    // standard numu ND containment cuts, except for some muon-catcher
-    // track checks which are irrelevant because I'm about to cut
-    // those in the next line anyhow. I need the track ends to be more
-    // contained than the standard cuts.
+    && dat->remid > remid_cut
+    && dat->trklen > trklen_cut
     && dat->contained
 
     // Sufficient to catch all neutrons within 6 cell widths. Maybe not
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
-    && fabs(dat->trkx) < 170 && fabs(dat->trky) < 170 && dat->trkz < 1250
+    && fabs(dat->trkx) < trkx_cut
+    && fabs(dat->trky) < trky_cut
+    && dat->trkz < trkz_cut
     //&& dat->nslc <= 6 // reduce pileup
     ;
 }
