@@ -252,7 +252,7 @@ void rhc_stage_zero(const int mindist)
   //"postmuon_12104_7.20170308.ntuple.root",
   //"prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1/postmuon_11392_18.20170308.ntuple.root",
   "prod_pid_S16-12-07_nd_period6_keepup/1508-type3.root",
-  "prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1/all-type3.root",
+  "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",

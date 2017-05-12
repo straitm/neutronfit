@@ -7,14 +7,13 @@
 #include "TTree.h"
 #include "TF1.h"
 #include "TCanvas.h"
-#include "TError.h"
-#include "TRandom.h"
 #include "TROOT.h"
 #include "TLegend.h"
 #include "TMath.h"
 #include <fstream>
 #include <iostream>
 
+const int npar = 7;
 static TMinuit * mn = NULL;
 
 #include "common.C"
@@ -39,29 +38,59 @@ const double neff_error = 0.03;
 const double b12eff_nominal = 0.5;
 const double b12eff_error = 0.2;
 
-const double rough_neutron_lifetime = 52.; // us
-const double mean_time_of_muon_capture_weighted_by_neutron_yield = 1.07; // us
+const double rough_neut_lifetime = 52.; // us
+const double mean_time_of_muon_capture_weighted_by_neut_yield = 1.07; // us
 const double timing_eff_difference_for_pions =
-  exp(-mean_time_of_muon_capture_weighted_by_neutron_yield/rough_neutron_lifetime);
+  exp(-mean_time_of_muon_capture_weighted_by_neut_yield/rough_neut_lifetime);
 
-// Ratio of the neutron yield from pions to that of muons, per stop,
-// slightly adjusted by the greater fraction of those from pions that
-// aren't captured.
-const double npimu_nominal = 14.29;
-double npimu_error = 2.52;
+// Ratio of the neutron yield from stopping pions to that of muons, per
+// stop, slightly adjusted by the greater fraction of neutrons from pions
+// that undergo invisible interactions isntead of being captured because of
+// their higher energy.
+const     double npimu_stop_nominal = 14.29;
+/*const*/ double npimu_stop_error   =  2.52;
+
+// Ratio of the neutron yield from *in flight* pions to that of muons.
+// Mostly a guess.
+const double npimu_flight_nominal = npimu_stop_nominal;
+
+// arbitrary inflated error
+const double npimu_flight_error =
+  npimu_stop_error/npimu_stop_nominal * npimu_flight_nominal * 3;
+
+// Arbitrarily invent a correlation coefficient for the neutron yield
+// for in-flight and stopped pions
+const double corr_pi_stop_flight = 0.5;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
 
 bool useb12 = false; // can be changed between fits
 
-TH1D *fhc_reco_numubar = new TH1D("fhc_reco_numubar","",100,0,10);
-TH1D *fhc_reco_numu = new TH1D("fhc_reco_numu","",100,0,10);
-TH1D *rhc_reco_numu = new TH1D("rhc_reco_numu","",100,0,10);
-TH1D *rhc_reco_numubar = new TH1D("rhc_reco_numubar","",100,0,10);
+enum trktypes{ numubar, numu, stoppi, piflight, MAXTRKTYPE };
+const char * const trktypenames[MAXTRKTYPE] =
+  { "numubar", "numu", "stoppi", "piflight" };
 
-TH1D *fhc_reco_nc = new TH1D("fhc_reco_nc","",100,0,10);
-TH1D *rhc_reco_nc = new TH1D("rhc_reco_nc","",100,0,10);
+TH1D * makehist(const char * const name)
+{
+  return new TH1D(name, "", nbins_e, bins_e);
+}
+
+TH1D ** makehistset(const char * const basename)
+{
+  TH1D ** set = (TH1D **)malloc(MAXTRKTYPE * sizeof(TH1D*));
+  for(int i = 0; i < MAXTRKTYPE; i++)
+    set[i] = makehist(Form("%s_%s", basename, trktypenames[i]));
+  return set;
+}
+
+TH1D ** fhc_reco = makehistset("fhc_reco");
+TH1D ** rhc_reco = makehistset("rhc_reco");
+
+TH1D ** rhc_neut = makehistset("rhc_neut");
+TH1D ** rhc_b12  = makehistset("rhc_b12");
+TH1D ** fhc_neut = makehistset("fhc_neut");
+TH1D ** fhc_b12  = makehistset("fhc_b12");
 
 TH1D * fhc_tracks = NULL;
 TH1D * rhc_tracks = NULL;
@@ -73,58 +102,49 @@ TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
 
 // Out here so we can draw them
-TH1D * rhc_neutrons = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons");
-TH1D * fhc_neutrons = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons");
-TH1D * rhc_b12 = (TH1D*)rhc_reco_numu->Clone("rhc_b12");
-TH1D * fhc_b12 = (TH1D*)fhc_reco_numu->Clone("fhc_b12");
+TH1D * tot_rhc_neut = makehist("tot_rhc_neut");
+TH1D * tot_fhc_neut = makehist("tot_fhc_neut");
+TH1D * tot_rhc_b12  = makehist("tot_rhc_b12");
+TH1D * tot_fhc_b12  = makehist("tot_fhc_b12");
 
-// Exist just for drawing
-TH1D * rhc_neutrons_nc = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons_nc");
-TH1D * rhc_neutrons_numu = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons_numu");
-TH1D * rhc_neutrons_numubar = (TH1D*)rhc_reco_numu->Clone("rhc_neutrons_numubar");
-TH1D * fhc_neutrons_nc = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons_nc");
-TH1D * fhc_neutrons_numu = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons_numu");
-TH1D * fhc_neutrons_numubar = (TH1D*)fhc_reco_numu->Clone("fhc_neutrons_numubar");
-TH1D * rhc_b12_nc = (TH1D*)rhc_reco_numu->Clone("rhc_b12_nc");
-TH1D * rhc_b12_numu = (TH1D*)rhc_reco_numu->Clone("rhc_b12_numu");
-TH1D * rhc_b12_numubar = (TH1D*)rhc_reco_numu->Clone("rhc_b12_numubar");
-TH1D * fhc_b12_nc = (TH1D*)fhc_reco_numu->Clone("fhc_b12_nc");
-TH1D * fhc_b12_numu = (TH1D*)fhc_reco_numu->Clone("fhc_b12_numu");
-TH1D * fhc_b12_numubar = (TH1D*)fhc_reco_numu->Clone("fhc_b12_numubar");
+static vector<double> getpars()
+{
+  vector<double> ans;
+  for(int i = 0; i < npar; i++) ans.push_back(getpar(i));
+  return ans;
+}
 
 static void reset_hists()
 {
-  fhc_b12->Reset();
-  fhc_b12_nc->Reset();
-  fhc_b12_numu->Reset();
-  fhc_b12_numubar->Reset();
+  tot_fhc_b12->Reset();
+  tot_fhc_neut->Reset();
+  tot_rhc_b12->Reset();
+  tot_rhc_neut->Reset();
 
-  fhc_neutrons->Reset();
-  fhc_neutrons_nc->Reset();
-  fhc_neutrons_numu->Reset();
-  fhc_neutrons_numubar->Reset();
-
-  rhc_b12->Reset();
-  rhc_b12_nc->Reset();
-  rhc_b12_numu->Reset();
-  rhc_b12_numubar->Reset();
-
-  rhc_neutrons->Reset();
-  rhc_neutrons_nc->Reset();
-  rhc_neutrons_numu->Reset();
-  rhc_neutrons_numubar->Reset();
+  for(int i = 0; i < MAXTRKTYPE; i++){
+    fhc_b12[i]->Reset();
+    fhc_neut[i]->Reset();
+    rhc_b12[i]->Reset();
+    rhc_neut[i]->Reset();
+  }
 }
 
-static void update_hists(const double mum_nyield, const double b12eff,
-                         const double neff, const double real_npimu,
-                         const double nmscale, const double ncscale)
+static void update_hists(const double * const pars)
 {
-  const double npimu = real_npimu * timing_eff_difference_for_pions;
+  const double ncscale         = pars[0];
+  const double nmscale         = pars[1];
+  const double real_npimu_stop = pars[2];
+  const double neff            = pars[3];
+  const double b12eff          = pars[4];
+  const double mum_nyield      = pars[5];
+  const double real_npimu_flight=pars[6];
+
+  const double npimu_stop = real_npimu_stop  *timing_eff_difference_for_pions;
+  const double npimu_flight=real_npimu_flight*timing_eff_difference_for_pions;
 
   // Probability of getting a neutron from a mu+ via
-  // electrodisintigration, roughly Then multipled by 0.5 because not
-  // all of the "mu+" are mu+, some are protons, or EM showers, or
-  // whatever.
+  // electrodisintigration, roughly. Then multipled by 0.5 because
+  // not all of the "mu+" are mu+, some are protons, EM showers, etc.
   const double mup_nyield = 1e-4 * 0.5;
 
   // this could be another nuisance parameter.  Don't want to double count
@@ -136,33 +156,30 @@ static void update_hists(const double mum_nyield, const double b12eff,
 
   reset_hists();
 
-  // Estimate of number of neutrons from RHC per muon, in total and for each truth
-  rhc_neutrons_nc     ->Add(rhc_reco_nc,   ncscale*npimu*mum_nyield*neff);
-  rhc_neutrons_numu   ->Add(rhc_reco_numu, nmscale      *mum_nyield*neff);
-  rhc_neutrons_numubar->Add(rhc_reco_numubar,            mup_nyield*neff);
-
-  rhc_neutrons->Add(rhc_neutrons_nc);
-  rhc_neutrons->Add(rhc_neutrons_numu);
-  rhc_neutrons->Add(rhc_neutrons_numubar);
-
-  rhc_neutrons        ->Divide(rhc_tracks);
-  rhc_neutrons_nc     ->Divide(rhc_tracks);
-  rhc_neutrons_numu   ->Divide(rhc_tracks);
-  rhc_neutrons_numubar->Divide(rhc_tracks);
+  // Estimate of neutrons from RHC per muon, in total and for each truth
+  rhc_neut[piflight]->Add(rhc_reco[piflight], ncscale*npimu_flight*mum_nyield*neff);
+  rhc_neut[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*npimu_stop  *mum_nyield*neff);
+  rhc_neut[numu]    ->Add(rhc_reco[numu],     nmscale             *mum_nyield*neff);
+  rhc_neut[numubar] ->Add(rhc_reco[numubar],                       mup_nyield*neff);
 
   // Ditto FHC
-  fhc_neutrons_nc     ->Add(fhc_reco_nc, ncscale*npimu*mum_nyield*neff);
-  fhc_neutrons_numu   ->Add(fhc_reco_numu,             mum_nyield*neff);
-  fhc_neutrons_numubar->Add(fhc_reco_numubar,          mup_nyield*neff);
+  fhc_neut[piflight]->Add(fhc_reco[piflight], ncscale*npimu_flight*mum_nyield*neff);
+  fhc_neut[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*npimu_stop  *mum_nyield*neff);
+  fhc_neut[numu]    ->Add(fhc_reco[numu],                          mum_nyield*neff);
+  fhc_neut[numubar] ->Add(fhc_reco[numubar],                       mup_nyield*neff);
 
-  fhc_neutrons->Add(fhc_neutrons_nc);
-  fhc_neutrons->Add(fhc_neutrons_numu);
-  fhc_neutrons->Add(fhc_neutrons_numubar);
+  for(int i = 0; i < MAXTRKTYPE; i++){
+    tot_rhc_neut->Add(rhc_neut[i]);
+    tot_fhc_neut->Add(fhc_neut[i]);
+  }
 
-  fhc_neutrons        ->Divide(fhc_tracks);
-  fhc_neutrons_nc     ->Divide(fhc_tracks);
-  fhc_neutrons_numu   ->Divide(fhc_tracks);
-  fhc_neutrons_numubar->Divide(fhc_tracks);
+  for(int i = 0; i < MAXTRKTYPE; i++){
+    rhc_neut[i]->Divide(rhc_tracks);
+    fhc_neut[i]->Divide(fhc_tracks);
+  }
+
+  tot_rhc_neut->Divide(rhc_tracks);
+  tot_fhc_neut->Divide(fhc_tracks);
 
   const double carbon_acap_frac = 0.82; // my evaluation
 
@@ -196,35 +213,34 @@ static void update_hists(const double mum_nyield, const double b12eff,
 
   // Do not have to correct for the atomic capture ratio, because Hilscher's
   // figures are per stop, not per nuclear capture
-  const double pim_b12yield = carbon_acap_frac * hilscher_b12_per_pim_acap;
+  const double stop_pim_b12yield = carbon_acap_frac * hilscher_b12_per_pim_acap;
 
-  // Estimate of number of B-12 from FHC per track
-  rhc_b12_nc     ->Add(rhc_reco_nc,   ncscale*pim_b12yield*b12eff);
-  rhc_b12_numu   ->Add(rhc_reco_numu, nmscale*mum_b12yield*b12eff);
-  rhc_b12_numubar->Add(rhc_reco_numubar,      mup_b12yield*b12eff);
+  // I assume the probability is much lower for in flight interactions.
+  // The factor of ten is only based on the number of fingers on my hands.
+  const double flight_pim_b12yield = stop_pim_b12yield / 10.;
 
-  rhc_b12->Add(rhc_b12_nc);
-  rhc_b12->Add(rhc_b12_numu);
-  rhc_b12->Add(rhc_b12_numubar);
+  // Estimate of number of B-12 from RHC per track
+  rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale*flight_pim_b12yield*b12eff);
+  rhc_b12[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*  stop_pim_b12yield*b12eff);
+  rhc_b12[numu]    ->Add(rhc_reco[numu],     nmscale*       mum_b12yield*b12eff);
+  rhc_b12[numubar] ->Add(rhc_reco[numubar],                 mup_b12yield*b12eff);
 
-  rhc_b12        ->Divide(rhc_tracks);
-  rhc_b12_nc     ->Divide(rhc_tracks);
-  rhc_b12_numu   ->Divide(rhc_tracks);
-  rhc_b12_numubar->Divide(rhc_tracks);
+  // Ditto FHC
+  fhc_b12[piflight]->Add(fhc_reco[piflight], ncscale*flight_pim_b12yield*b12eff);
+  fhc_b12[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*  stop_pim_b12yield*b12eff);
+  fhc_b12[numu]    ->Add(fhc_reco[numu],                    mum_b12yield*b12eff);
+  fhc_b12[numubar] ->Add(fhc_reco[numubar],                 mup_b12yield*b12eff);
 
-  // Estimate of number of b12 from FHC per track
-  fhc_b12_nc     ->Add(fhc_reco_nc, ncscale*pim_b12yield*b12eff);
-  fhc_b12_numu   ->Add(fhc_reco_numu,       mum_b12yield*b12eff);
-  fhc_b12_numubar->Add(fhc_reco_numubar,    mup_b12yield*b12eff);
-
-  fhc_b12->Add(fhc_b12_nc);
-  fhc_b12->Add(fhc_b12_numu);
-  fhc_b12->Add(fhc_b12_numubar);
-
-  fhc_b12        ->Divide(fhc_tracks);
-  fhc_b12_nc     ->Divide(fhc_tracks);
-  fhc_b12_numu   ->Divide(fhc_tracks);
-  fhc_b12_numubar->Divide(fhc_tracks);
+  for(int i = 0; i < MAXTRKTYPE; i++){
+    tot_rhc_b12->Add(rhc_b12[i]);
+    tot_fhc_b12->Add(fhc_b12[i]);
+  }
+  for(int i = 0; i < MAXTRKTYPE; i++){
+    rhc_b12[i]->Divide(rhc_tracks);
+    fhc_b12[i]->Divide(fhc_tracks);
+  }
+  tot_rhc_b12->Divide(rhc_tracks);
+  tot_fhc_b12->Divide(fhc_tracks);
 }
 
 static double compare(double * dat, double * datup, double * datdn,
@@ -258,24 +274,46 @@ static double compare(double * dat, double * datup, double * datdn,
   return chi2;
 }
 
+static double pi_penalty(const double npimu_stop, const double npimu_flight)
+{
+  const double delta_stop   = npimu_stop   - npimu_stop_nominal;
+  const double delta_flight = npimu_flight - npimu_flight_nominal;
+
+  const double cov = corr_pi_stop_flight * npimu_flight_error * npimu_stop_error;
+
+  const double det = pow(npimu_flight_error,2) * pow(npimu_stop_error,2) - cov*cov;
+  const double hessian[2][2] = {
+    { pow(npimu_flight_error, 2)/det, -cov/det                     },
+    {  -cov/det                     , pow(npimu_stop_error, 2)/det }
+  };
+
+  double chi2 = 0;
+
+  for(int i = 0; i < 2; i++)
+    for(int j = 0; j < 2; j++)
+      chi2 += hessian[i][j] * (i == 0?delta_stop: delta_flight)
+                            * (j == 0?delta_stop: delta_flight);
+  return chi2;
+}
+
 static void fcn(__attribute__((unused)) int & np,
   __attribute__((unused)) double * gin, double & chi2, double *par,
   __attribute__((unused)) int flag)  
 {
   chi2 = 0;
 
-  const double ncscale = par[0];
-  const double nmscale = par[1];
-  const double npimu   = par[2];
-  const double neff    = par[3];
-  const double b12eff  = par[4];
+  update_hists(par);
+  const double ncscale    = par[0];
+  const double nmscale    = par[1];
+  const double npimu_stop = par[2];
+  const double neff       = par[3];
+  const double b12eff     = par[4];
   const double mum_nyield = par[5];
-  update_hists(mum_nyield, b12eff, neff, npimu, nmscale, ncscale);
+  const double npimu_flight=par[6];
 
   // penalty terms
-  
-  // Justified by external data
-  chi2 += pow((npimu - npimu_nominal)/npimu_error, 2);
+
+  chi2 += pi_penalty(npimu_stop, npimu_flight);
 
   // Justified by external data
   chi2 += pow((mum_nyield - mum_nyield_nominal)/mum_nyield_error, 2);
@@ -295,7 +333,8 @@ static void fcn(__attribute__((unused)) int & np,
   static bool first = true;
   if(first){
     first = false;
-    TGraphAsymmErrors * ingraphs[4] = { g_n_rhc, g_n_fhc, g_b12_rhc, g_b12_fhc };
+    TGraphAsymmErrors * ingraphs[4] = {
+      g_n_rhc, g_n_fhc, g_b12_rhc, g_b12_fhc };
 
     int i = 0;
     for(int g = 0; g < 4; g++){
@@ -309,7 +348,7 @@ static void fcn(__attribute__((unused)) int & np,
   }
 
   double allmodel[nbins_e*4];
-  TH1D * inhists[4] = { rhc_neutrons, fhc_neutrons, rhc_b12, fhc_b12 };
+  TH1D * inhists[4] = { tot_rhc_neut, tot_fhc_neut, tot_rhc_b12, tot_fhc_b12 };
   int i = 0;
   for(int g = 0; g < 4; g++)
     for(int b = 1; b <= inhists[g]->GetNbinsX(); b++)
@@ -318,10 +357,22 @@ static void fcn(__attribute__((unused)) int & np,
   chi2 += compare(alldat, alldatup, alldatdn, allmodel);
 }
 
-/* Fill with the number of tracks in the MC for each category of truth */
-void fill_hists(const char * const file, TH1D * const numu,
-                TH1D * const numubar, TH1D * const nc)
+void setbranchaddress(const char * const name, float * d, TTree * t)
 {
+  t->SetBranchStatus(name, 1);
+  t->SetBranchAddress(name, d);
+}
+
+void setbranchaddress(const char * const name, int * d, TTree * t)
+{
+  t->SetBranchStatus(name, 1);
+  t->SetBranchAddress(name, d);
+}
+
+/* Fill with the number of tracks in the MC for each category of truth */
+void fill_hists(const char * const file, TH1D ** h)
+{
+  printf("Reading %s\n", file); fflush(stdout);
   TFile * f = new TFile(file, "read");
 
   if(!f || f->IsZombie()){
@@ -341,35 +392,34 @@ void fill_hists(const char * const file, TH1D * const numu,
   int i, primary, true_pdg, true_nupdg, true_nucc, contained, true_atom_cap;
   float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback, mcweight;
   t->SetBranchStatus("*", 0);
-  t->SetBranchStatus("slce", 1); t->SetBranchAddress("slce", &slce);
-  t->SetBranchStatus("i", 1); t->SetBranchAddress("i", &i);
-  t->SetBranchStatus("primary", 1); t->SetBranchAddress("primary", &primary);
-  t->SetBranchStatus("true_pdg", 1); t->SetBranchAddress("true_pdg", &true_pdg);
-  t->SetBranchStatus("true_nupdg", 1); t->SetBranchAddress("true_nupdg", &true_nupdg);
-  t->SetBranchStatus("true_nucc", 1); t->SetBranchAddress("true_nucc", &true_nucc);
-  t->SetBranchStatus("contained", 1); t->SetBranchAddress("contained", &contained);
-  t->SetBranchStatus("trkx", 1); t->SetBranchAddress("trkx", &trkx);
-  t->SetBranchStatus("trky", 1); t->SetBranchAddress("trky", &trky);
-  t->SetBranchStatus("trkz", 1); t->SetBranchAddress("trkz", &trkz);
-  t->SetBranchStatus("trklen", 1); t->SetBranchAddress("trklen", &trklen);
-  t->SetBranchStatus("remid", 1); t->SetBranchAddress("remid", &remid);
-  t->SetBranchStatus("timeleft", 1); t->SetBranchAddress("timeleft", &timeleft);
-  t->SetBranchStatus("timeback", 1); t->SetBranchAddress("timeback", &timeback);
-  t->SetBranchStatus("true_atom_cap", 1); t->SetBranchAddress("true_atom_cap", &true_atom_cap);
-  t->SetBranchStatus("mcweight", 1); t->SetBranchAddress("mcweight", &mcweight);
+
+  setbranchaddress("slce", &slce, t);
+  setbranchaddress("i", &i, t);
+  setbranchaddress("primary", &primary, t);
+  setbranchaddress("true_pdg", &true_pdg, t);
+  setbranchaddress("true_nupdg", &true_nupdg, t);
+  setbranchaddress("true_nucc", &true_nucc, t);
+  setbranchaddress("contained", &contained, t);
+  setbranchaddress("trkx", &trkx, t);
+  setbranchaddress("trky", &trky, t);
+  setbranchaddress("trkz", &trkz, t);
+  setbranchaddress("trklen", &trklen, t);
+  setbranchaddress("remid", &remid, t);
+  setbranchaddress("timeleft", &timeleft, t);
+  setbranchaddress("timeback", &timeback, t);
+  setbranchaddress("true_atom_cap", &true_atom_cap, t);
+  setbranchaddress("mcweight", &mcweight, t);
 
   for(int e = 0; e < t->GetEntries(); e++){
     t->GetEntry(e);
-    if(!(i == 0 && primary && contained)) continue;
 
+    if(!(i == 0 && primary && contained)) continue;
     if(fabs(trkx) > trkx_cut) continue;
     if(fabs(trky) > trky_cut) continue;
     if(     trkz  > trkz_cut) continue;
     if(trklen < trklen_cut) continue;
     if(remid  < remid_cut) continue;
-
-    // Check if this is a mu-, pi- or K- that truly stops.
-    if(!true_atom_cap) continue;
+    if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
 
     // Should have no effect, unless there is cosmic overlay
     // In fact, MC times seem to be totally different, so never mind
@@ -380,23 +430,51 @@ void fill_hists(const char * const file, TH1D * const numu,
 
     // based entirely on what the track actually is, NOT what the
     // neutrino interaction is. I think this makes more sense.
-    if(true_pdg == -321 /* take K- too, but they are very rare */
-       || true_pdg == -211) nc  ->Fill(slce, mcweight);
-    else if(true_pdg == 13) numu->Fill(slce, mcweight);
+    //
+    // true_atom_cap is true if this is a mu-, pi- or K- that truly stops.
+    //
+    // Pretty clearly pi- AND pi+ (and the few K- and K+) that
+    // interact in flight make lots of neutrons too and have to be
+    // accounted for as a separate category.
 
-    // Use numubar as a stand-in for all other tracks.  Can't just
-    // throw out tracks because everything is done per-track!
-    // This will make the guesses at neutron yield for mu+ a bit wrong,
-    // but they are only guesses anyhow
-    else /* if(true_pdg == -13) */ numubar->Fill(slce, mcweight);
+    // take K- too, but they are very rare
+    if(true_atom_cap && (true_pdg == -321 || true_pdg == -211)){
+       h[stoppi]->Fill(slce, mcweight);
+    }
 
+    // XXX should include pi+ and K+ too?
+    else if(abs(true_pdg) == 321 || abs(true_pdg) == 211){
+      h[piflight]->Fill(slce, mcweight);
+    }
+
+    // Can I neglect the case that true mu- don't stop?
+    // I think so, since Geant says that 99.9% of 500 MeV mu- stop
+    else if(true_pdg == 13){
+      h[numu]->Fill(slce, mcweight);
+    }
+
+    // Use numubar as a stand-in for all other tracks. Can't just throw
+    // out tracks because everything is done per-track! This will make
+    // the guesses at neutron yield for mu+ a bit wrong, but they are
+    // only guesses anyhow.
+    //
+    // XXX should see what "all other tracks" are!  I had lumped pions that
+    // interact in flight here, which was super wrong.
+    else{ /* if(true_pdg == -13) */
+      h[numubar]->Fill(slce, mcweight);
+    }
+
+    // Just curious how many of these are in the MC
     if(true_pdg == -321) printf("K-!\n");
   }
 
-  // can I safely close the file here?! You'd think so, but sometimes
-  // ROOT really surprises me!
-}
+  printf("Stopped pions: %9.1f\n", h[stoppi]->Integral());
+  printf("Flying  pions: %9.1f\n", h[piflight]->Integral());
+  printf("Stopped mu-:   %9.1f\n", h[numu]->Integral());
+  printf("Other:         %9.1f\n", h[numubar]->Integral());
 
+  f->Close();
+}
 
 void set_hists()
 {   
@@ -406,63 +484,26 @@ void set_hists()
   // are drawn without normalization.
   fill_hists(
     "prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1"
-    "/all-type3.root", fhc_reco_numu, fhc_reco_numubar, fhc_reco_nc);
+    "/all-type3.root", fhc_reco);
 
   fill_hists(
-    "prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_rhc_nova_v08_epoch4a_v3"
-    "/all-type3.root", rhc_reco_numu, rhc_reco_numubar, rhc_reco_nc);
+   // "prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_rhc_nova_v08_epoch4a_v3"
+   //"prod_pid_R16-12-20-prod3recopreview.d_nd_genie_nonswap_rhc_nova_v08_epoch4a_v5_nodbthresh"
+    //"/all-type3.root",
+   "all-rhc-mc-type3.root", rhc_reco);
 
-  rhc_reco_numubar=(TH1D*)rhc_reco_numubar->Rebin(nbins_e,"rhc_reco_numubar",bins_e);
-  fhc_reco_numubar=(TH1D*)fhc_reco_numubar->Rebin(nbins_e,"fhc_reco_numubar",bins_e);
-
-  rhc_reco_numu   =(TH1D*)rhc_reco_numu   ->Rebin(nbins_e,"rhc_reco_numu"   ,bins_e);
-  fhc_reco_numu   =(TH1D*)fhc_reco_numu   ->Rebin(nbins_e,"fhc_reco_numu"   ,bins_e);
-
-  fhc_reco_nc    = (TH1D*)fhc_reco_nc   ->Rebin(nbins_e, "fhc_reco_nc"   , bins_e);
-  rhc_reco_nc    = (TH1D*)rhc_reco_nc   ->Rebin(nbins_e, "rhc_reco_nc"   , bins_e);
-
-  rhc_neutrons     =
-    (TH1D*)rhc_neutrons     ->Rebin(nbins_e,"rhc_neutrons"     , bins_e);
-  rhc_neutrons_nc  =
-    (TH1D*)rhc_neutrons_nc  ->Rebin(nbins_e,"rhc_neutrons_nc"  , bins_e);
-  rhc_neutrons_numu=
-    (TH1D*)rhc_neutrons_numu->Rebin(nbins_e,"rhc_neutrons_numu", bins_e);
-  rhc_neutrons_numubar = 
-    (TH1D*)rhc_neutrons_numubar->Rebin(nbins_e, "rhc_neutrons_numubar", bins_e);
-  fhc_neutrons = 
-    (TH1D*)fhc_neutrons->Rebin(nbins_e, "fhc_neutrons", bins_e);
-  fhc_neutrons_nc = 
-    (TH1D*)fhc_neutrons_nc->Rebin(nbins_e, "fhc_neutrons_nc", bins_e);
-  fhc_neutrons_numu = 
-    (TH1D*)fhc_neutrons_numu->Rebin(nbins_e, "fhc_neutrons_numu", bins_e);
-  fhc_neutrons_numubar = 
-    (TH1D*)fhc_neutrons_numubar->Rebin(nbins_e, "fhc_neutrons_numubar", bins_e);
-
-  rhc_b12 = (TH1D*)rhc_b12->Rebin(nbins_e, "rhc_b12", bins_e);
-  rhc_b12_nc = (TH1D*)rhc_b12_nc->Rebin(nbins_e, "rhc_b12_nc", bins_e);
-  rhc_b12_numu = (TH1D*)rhc_b12_numu->Rebin(nbins_e, "rhc_b12_numu", bins_e);
-  rhc_b12_numubar = (TH1D*)rhc_b12_numubar->Rebin(nbins_e, "rhc_b12_numubar", bins_e);
-  fhc_b12 = (TH1D*)fhc_b12->Rebin(nbins_e, "fhc_b12", bins_e);
-  fhc_b12_nc = (TH1D*)fhc_b12_nc->Rebin(nbins_e, "fhc_b12_nc", bins_e);
-  fhc_b12_numu = (TH1D*)fhc_b12_numu->Rebin(nbins_e, "fhc_b12_numu", bins_e);
-  fhc_b12_numubar = (TH1D*)fhc_b12_numubar->Rebin(nbins_e, "fhc_b12_numubar", bins_e);
-
-
-  // Total number of tracks in RHC MC
-  rhc_tracks = (TH1D*)rhc_reco_numu->Clone("rhc_tracks");
-  rhc_tracks->Add(    rhc_reco_numubar);
-  rhc_tracks->Add(    rhc_reco_nc);
-
-  // Ditto FHC
-  fhc_tracks = (TH1D*)fhc_reco_numu->Clone("fhc_tracks");
-  fhc_tracks->Add(    fhc_reco_numubar);
-  fhc_tracks->Add(    fhc_reco_nc);
+  // Total number of tracks in each beam's MC
+  rhc_tracks = makehist("rhc_tracks");
+  fhc_tracks = makehist("fhc_tracks");
+  for(int i = 0; i < MAXTRKTYPE; i++){
+    rhc_tracks->Add(rhc_reco[i]);
+    fhc_tracks->Add(fhc_reco[i]);
+  }
 }
 
 void make_mn()
 {
   if(mn) delete mn;
-  const int npar = 6;
   mn = new TMinuit(npar);
   mn->fGraphicsMode = false;
 
@@ -487,13 +528,15 @@ void make_mn()
   int mnparmerr = 0;
   mn->mnparm(0, "NCscale", 1, 0.2, 0, 0, mnparmerr);
   mn->mnparm(1, "NMscale", 1, 0.1, 0, 0, mnparmerr);
-  mn->mnparm(2, "npimu", npimu_nominal, npimu_error, 0, 0, mnparmerr);
+  mn->mnparm(2, "npimu_stop", npimu_stop_nominal, npimu_stop_error,
+             0, 0, mnparmerr);
   mn->mnparm(3, "neff", neff_nominal, neff_error, 0, 0, mnparmerr);
   mn->mnparm(4, "b12eff", b12eff_nominal, b12eff_error, 0, 0, mnparmerr);
   mn->mnparm(5, "mum_nyield", mum_nyield_nominal, mum_nyield_error,
                 0, 0, mnparmerr);
+  mn->mnparm(6, "npimu_flight", npimu_flight_nominal, npimu_flight_error,
+             0, 0, mnparmerr);
 }
-
 
 static void styleleg(TLegend * leg)
 {
@@ -503,17 +546,37 @@ static void styleleg(TLegend * leg)
   leg->SetTextSize(tsize);
 }
 
-TGraph * get_the_stupid_contour(const char * const name)
+TGraph * wrest_contour(const char * const name)
 {
   TGraph * cont = dynamic_cast<TGraph *>(mn->GetPlot());
   if(cont) cont = (TGraph *)cont->Clone(name);
   return cont;
 }
 
+void stylehist(TH1 * h, const int color, const int width,
+               const int style = kSolid)
+{
+  h->SetLineColor(color);
+  h->SetMarkerColor(color);
+  h->SetLineWidth(width);
+  h->SetLineStyle(style);
+  h->GetYaxis()->CenterTitle();
+  h->GetXaxis()->CenterTitle();
+}
+
+void stylehistset(TH1D ** hh, const int color)
+{
+  stylehist(hh[piflight], color, 3, kDashed);
+  stylehist(hh[stoppi],   color, 1, kDotted);
+  stylehist(hh[numu],     color, 2, 9);
+  stylehist(hh[numubar],
+    color-9 /*probably bad except for blue and red */, 2, kDashDotted);
+}
+
 void draw(const int mindist)
 {
   //////////////////////////////////////////////////////////////////////
-  const double leftmargin = 0.12;
+  const double leftmargin = 0.15;
   const double topmargin  = 0.05;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
@@ -525,36 +588,19 @@ void draw(const int mindist)
   stylegraph(g_n_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
   stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
 
-  rhc_neutrons->SetLineColor(kRed);
-  rhc_neutrons->SetLineWidth(2);
-  rhc_neutrons_nc->SetLineColor(kRed);
-  rhc_neutrons_nc->SetLineStyle(kDotted);
-  rhc_neutrons_nc->SetLineWidth(2);
-  rhc_neutrons_numu->SetLineColor(kRed);
-  rhc_neutrons_numu->SetLineStyle(9);
-  rhc_neutrons_numu->SetLineWidth(2);
-  rhc_neutrons_numubar->SetLineColor(kRed);
-  rhc_neutrons_numubar->SetLineStyle(kDashDotted);
-  rhc_neutrons_numubar->SetLineWidth(2);
+  stylehist(tot_rhc_neut, kRed, 1);
+  stylehistset( rhc_neut, kRed);
 
-  fhc_neutrons->SetLineWidth(2);
-  fhc_neutrons_nc->SetLineWidth(2);
-  fhc_neutrons_numu->SetLineWidth(2);
-  fhc_neutrons_numubar->SetLineWidth(2);
-  fhc_neutrons->SetLineColor(kBlue);
-  fhc_neutrons_nc->SetLineColor(kBlue);
-  fhc_neutrons_numu->SetLineColor(kBlue);
-  fhc_neutrons_numubar->SetLineColor(kBlue);
-  fhc_neutrons_nc->SetLineStyle(kDotted);
-  fhc_neutrons_numu->SetLineStyle(9);
-  fhc_neutrons_numubar->SetLineStyle(kDashDotted);
+  stylehist(tot_fhc_neut, kBlue, 1);
+  stylehistset( fhc_neut, kBlue);
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    1.03*max(max(gdrawmax(g_n_rhc), rhc_neutrons->GetMaximum()),
-             max(gdrawmax(g_n_fhc), fhc_neutrons->GetMaximum())
+    1.03*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
+             max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum())
              ));
   dum2->GetYaxis()->SetTitle("Neutrons/track");
+  dum2->GetYaxis()->SetTitleOffset(1.25);
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
@@ -567,27 +613,39 @@ void draw(const int mindist)
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
+  const double one_entry_leg_y1  = 0.88;
+  const double four_entry_leg_y1 = 0.66;
+
+  // true if you want a copy of each plot that doesn't yet have the fit
+  // histograms drawn on it.
+  const bool print_wo_fit = false;
+
   g_n_rhc->Draw("pz");
-  TLegend * leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  TLegend * leg = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                              leftmargin+0.42, 1-topmargin);
   styleleg(leg);
   leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->Draw();
-  c2r->Print(outpdfname.c_str());
 
-  TH1D * c2hists[3] = {
-    rhc_neutrons,
-    rhc_neutrons_nc,
-    rhc_neutrons_numu,
+  if(print_wo_fit) c2r->Print(outpdfname.c_str());
+
+  TH1D * c2hists[4] = {
+    tot_rhc_neut,
+    rhc_neut[piflight],
+    rhc_neut[stoppi],
+    rhc_neut[numu],
   };
     
-  for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
+  for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
     for(int h = 0; h < 3; h++)
       c2hists[h]->Draw("histsame][");
-
-  leg->AddEntry(rhc_neutrons, "RHC fit", "l");
-  leg->AddEntry(rhc_neutrons_nc, "RHC NC", "l");
-  leg->AddEntry(rhc_neutrons_numu, "RHC #nu_{#mu}", "l");
+ 
+  leg->SetY1NDC(four_entry_leg_y1);
+  leg->AddEntry(tot_rhc_neut, "RHC fit", "l");
+  leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm} in flight", "l");
+  leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{-}", "l");
+  leg->AddEntry(rhc_neut[numu], "RHC #nu_{#mu}", "l");
 
   c2r->Print(outpdfname.c_str());
 
@@ -598,25 +656,29 @@ void draw(const int mindist)
   dum2->Draw();
 
   g_n_fhc->Draw("pz");
-  TLegend * legf = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  TLegend * legf = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                               leftmargin+0.42, 1-topmargin);
   styleleg(legf);
   legf->SetMargin(0.4);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
   legf->Draw();
-  c2f->Print(outpdfname.c_str());
+  if(print_wo_fit) c2f->Print(outpdfname.c_str());
     
-  TH1D * c2histsf[3] = {
-    fhc_neutrons,
-    fhc_neutrons_nc,
-    fhc_neutrons_numu,
+  TH1D * c2histsf[4] = {
+    tot_fhc_neut,
+    fhc_neut[piflight],
+    fhc_neut[stoppi],
+    fhc_neut[numu],
   };
-  for(int i = 1; i <= rhc_neutrons->GetNbinsX(); i++)
+  for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
     for(int h = 0; h < 3; h++)
       c2histsf[h]->Draw("histsame][");
 
-  legf->AddEntry(fhc_neutrons, "FHC fit", "l");
-  legf->AddEntry(fhc_neutrons_nc, "FHC NC", "l");
-  legf->AddEntry(fhc_neutrons_numu, "FHC #nu_{#mu}", "l");
+  legf->SetY1NDC(four_entry_leg_y1);
+  legf->AddEntry(tot_fhc_neut, "FHC fit", "l");
+  legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm} in flight", "l");
+  legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{-}", "l");
+  legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
 
   c2f->Print(outpdfname.c_str());
 
@@ -624,34 +686,16 @@ void draw(const int mindist)
   stylegraph(g_b12_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
   stylegraph(g_b12_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
 
-  rhc_b12->SetLineColor(kRed);
-  rhc_b12->SetLineWidth(2);
-  rhc_b12_nc->SetLineColor(kRed);
-  rhc_b12_nc->SetLineStyle(kDotted);
-  rhc_b12_nc->SetLineWidth(2);
-  rhc_b12_numu->SetLineColor(kRed);
-  rhc_b12_numu->SetLineStyle(9);
-  rhc_b12_numu->SetLineWidth(2);
-  rhc_b12_numubar->SetLineColor(kRed);
-  rhc_b12_numubar->SetLineStyle(kDashDotted);
-  rhc_b12_numubar->SetLineWidth(2);
+  stylehist(tot_rhc_b12, kRed, 2);
+  stylehistset( rhc_b12,  kRed);
 
-  fhc_b12->SetLineWidth(2);
-  fhc_b12_nc->SetLineWidth(2);
-  fhc_b12_numu->SetLineWidth(2);
-  fhc_b12_numubar->SetLineWidth(2);
-  fhc_b12->SetLineColor(kBlue);
-  fhc_b12_nc->SetLineColor(kBlue);
-  fhc_b12_numu->SetLineColor(kBlue);
-  fhc_b12_numubar->SetLineColor(kBlue);
-  fhc_b12_nc->SetLineStyle(kDotted);
-  fhc_b12_numu->SetLineStyle(9);
-  fhc_b12_numubar->SetLineStyle(kDashDotted);
-
+  stylehist(tot_fhc_b12, kBlue, 2);
+  stylehistset( fhc_b12,  kBlue);
+ 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(1.03*max(max(gdrawmax(g_b12_fhc), fhc_b12->GetMaximum()),
-                 max(gdrawmax(g_b12_rhc), rhc_b12->GetMaximum())),
+    min(1.03*max(max(gdrawmax(g_b12_fhc), tot_fhc_b12->GetMaximum()),
+                 max(gdrawmax(g_b12_rhc), tot_rhc_b12->GetMaximum())),
         0.25));
   dum2->GetYaxis()->SetTitle("^{12}B/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
@@ -665,26 +709,30 @@ void draw(const int mindist)
   dum2->Draw();
 
   g_b12_rhc->Draw("pz");
-  leg = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  leg = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                    leftmargin+0.42, 1-topmargin);
   styleleg(leg);
   leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->Draw();
-  c2rb->Print(outpdfname.c_str());
+  if(print_wo_fit) c2rb->Print(outpdfname.c_str());
 
-  TH1D * c2histsb[3] = {
-    rhc_b12,
-    rhc_b12_nc,
-    rhc_b12_numu,
+  TH1D * c2histsb[4] = {
+    tot_rhc_b12,
+    rhc_b12[piflight],
+    rhc_b12[stoppi],
+    rhc_b12[numu],
   };
     
-  for(int i = 1; i <= rhc_b12->GetNbinsX(); i++)
+  for(int i = 1; i <= tot_rhc_b12->GetNbinsX(); i++)
     for(int h = 0; h < 3; h++)
       c2histsb[h]->Draw("histsame][");
 
-  leg->AddEntry(rhc_b12, "RHC fit", "l");
-  leg->AddEntry(rhc_b12_nc, "RHC NC", "l");
-  leg->AddEntry(rhc_b12_numu, "RHC #nu_{#mu}", "l");
+  leg->SetY1NDC(four_entry_leg_y1);
+  leg->AddEntry(tot_rhc_b12, "RHC fit", "l");
+  leg->AddEntry(rhc_b12[piflight], "RHC #pi^{#pm} in flight", "l");
+  leg->AddEntry(rhc_b12[stoppi], "RHC stopped #pi^{-}", "l");
+  leg->AddEntry(rhc_b12[numu], "RHC #nu_{#mu}", "l");
 
   c2rb->Print(outpdfname.c_str());
 
@@ -695,25 +743,29 @@ void draw(const int mindist)
   dum2->Draw();
 
   g_b12_fhc->Draw("pz");
-  legf = new TLegend(leftmargin+0.1, 0.70, leftmargin+0.33, 1-topmargin);
+  legf = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                     leftmargin+0.42, 1-topmargin);
   styleleg(legf);
   legf->SetMargin(0.4);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
   legf->Draw();
-  c2fb->Print(outpdfname.c_str());
+  if(print_wo_fit) c2fb->Print(outpdfname.c_str());
 
-  TH1D * c2histsfb[3] = {
-    fhc_b12,
-    fhc_b12_nc,
-    fhc_b12_numu,
+  TH1D * c2histsfb[4] = {
+    tot_fhc_b12,
+    fhc_b12[piflight],
+    fhc_b12[stoppi],
+    fhc_b12[numu],
   };
-  for(int i = 1; i <= rhc_b12->GetNbinsX(); i++)
+  for(int i = 1; i <= tot_rhc_b12->GetNbinsX(); i++)
     for(int h = 0; h < 3; h++)
       c2histsfb[h]->Draw("histsame][");
 
-  legf->AddEntry(fhc_b12, "FHC fit", "l");
-  legf->AddEntry(fhc_b12_nc, "FHC NC", "l");
-  legf->AddEntry(fhc_b12_numu, "FHC #nu_{#mu}", "l");
+  legf->SetY1NDC(four_entry_leg_y1);
+  legf->AddEntry(tot_fhc_b12, "FHC fit", "l");
+  legf->AddEntry(fhc_b12[piflight], "FHC #pi^{#pm} in flight", "l");
+  legf->AddEntry(fhc_b12[stoppi], "FHC stopped #pi^{-}", "l");
+  legf->AddEntry(fhc_b12[numu], "FHC #nu_{#mu}", "l");
 
   c2fb->Print(outpdfname.c_str());
 
@@ -722,7 +774,7 @@ void draw(const int mindist)
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   const double ncmin = 0, ncmax = 1.9,
-    nmmin = 0.0, nmmax = 2.1;
+    nmmin = 0.0, nmmax = 2.6;
   TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
   dum3->GetYaxis()->SetTitle("#nu_{#mu} scale");
@@ -731,8 +783,10 @@ void draw(const int mindist)
   dum3->Draw();
 
   TLine * l1 = new TLine(1, nmmin, 1, nmmax);
+  l1->SetLineColor(kGray);
   l1->Draw();
   TLine * l2 = new TLine(ncmin, 1, ncmax, 1);
+  l2->SetLineColor(kGray);
   l2->Draw();
 
   mn->fGraphicsMode = true;
@@ -741,7 +795,7 @@ void draw(const int mindist)
   mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_full = get_the_stupid_contour("cont_full");
+  TGraph * cont_full = wrest_contour("cont_full");
 
   printf("NC scale: %f + %f - %f\n", getpar(0), getminerrup(0), getminerrdn(0));
   printf("NM scale: %f + %f - %f\n", getpar(1), getminerrup(1), getminerrdn(1));
@@ -749,22 +803,22 @@ void draw(const int mindist)
   /*useb12 = false;
   mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_nob12 = get_the_stupid_contour("cont_nob12");
+  TGraph * cont_nob12 = wrest_contour("cont_nob12");
 
   useb12 = true; */
-  const double proper_npimu_error = npimu_error;
-  npimu_error = 1.1;
+  const double proper_npimu_stop_error = npimu_stop_error;
+  npimu_stop_error = 1.1;
   mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_perfect_nuclear = get_the_stupid_contour("cont_perfect_nuclear");
+  TGraph * cont_perfect_nuclear = wrest_contour("cont_perfect_nuclear");
 
-  mn->Command(Form("SET PAR 3 %f", npimu_nominal));
+  mn->Command(Form("SET PAR 3 %f", npimu_stop_nominal));
   mn->Command("FIX 3");
   mn->Command("MNCONT 1 2 50");
-  TGraph * cont_perfect_ratio = get_the_stupid_contour("cont_perfect_ratio");
+  TGraph * cont_perfect_ratio = wrest_contour("cont_perfect_ratio");
 
   // restore
-  npimu_error = proper_npimu_error;
+  npimu_stop_error = proper_npimu_stop_error;
   mn->Command("REL 3");
   mn->Command("MIGRAD");
 
@@ -772,19 +826,25 @@ void draw(const int mindist)
     cont_perfect_ratio->SetLineColor(kViolet);
     cont_perfect_ratio->SetLineStyle(kDashed);
     // get rid of the visual gap 
-    cont_perfect_ratio->SetPoint(cont_perfect_ratio->GetN(), cont_perfect_ratio->GetX()[0], cont_perfect_ratio->GetY()[0]);
+    cont_perfect_ratio->SetPoint(cont_perfect_ratio->GetN(),
+                                 cont_perfect_ratio->GetX()[0],
+                                 cont_perfect_ratio->GetY()[0]);
     cont_perfect_ratio->Draw("l");
   }
   if(cont_perfect_nuclear != NULL){
     cont_perfect_nuclear->SetLineColor(kRed);
     cont_perfect_nuclear->SetLineStyle(kDotted);
-    cont_perfect_nuclear->SetPoint(cont_perfect_nuclear->GetN(), cont_perfect_nuclear->GetX()[0], cont_perfect_nuclear->GetY()[0]);
+    cont_perfect_nuclear->SetPoint(cont_perfect_nuclear->GetN(),
+                                   cont_perfect_nuclear->GetX()[0],
+                                   cont_perfect_nuclear->GetY()[0]);
     cont_perfect_nuclear->Draw("l");
   }
   if(cont_full != NULL){
     cont_full->SetLineColor(kBlue-2);
     cont_full->SetLineStyle(kSolid);
-    cont_full->SetPoint(cont_full->GetN(), cont_full->GetX()[0], cont_full->GetY()[0]);
+    cont_full->SetPoint(cont_full->GetN(),
+                        cont_full->GetX()[0],
+                        cont_full->GetY()[0]);
     cont_full->Draw("l");
   }
   /*if(cont_nob12 != NULL){
@@ -822,23 +882,28 @@ void draw(const int mindist)
                             TMath::ChisquareQuantile(0.9, 2)
   )); // put back
 
-  leg = new TLegend(0.42, 0.75, 1-rightmargin, 1-topmargin);
+  leg = new TLegend(leftmargin, 0.75, 1-rightmargin, 1-topmargin);
   styleleg(leg);
   leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
   if(cont_full != NULL) leg->AddEntry(cont_full,
-    Form("%s, #pi/#mu neutron yield is %.1f #pm %.1f",
+    Form("%s, stopped #pi^{-}/#mu^{-} neutron yield %.1f #pm %.1f",
     contour_type == oned68?"1D 68%":
     contour_type == twod68?"2D 68%":
                            "2D 90%",
-    npimu_nominal, npimu_error),
+    npimu_stop_nominal, npimu_stop_error,
+    npimu_flight_nominal, npimu_flight_error),
     "l");
-  leg->AddEntry(onederrs, "1D 68% errors", "lp");
-  //if(cont_nob12 != NULL) leg->AddEntry(cont_nob12, "without using ^{12}B", "l");
+  leg->AddEntry((TH1D*)NULL, Form("In flight #pi^{#pm}/stopped #mu^{-} %.1f #pm %.1f",
+    npimu_flight_nominal, npimu_flight_error), "");
+  //if(cont_nob12 != NULL)
+  //  leg->AddEntry(cont_nob12, "without using ^{12}B", "l");
   if(cont_perfect_nuclear != NULL)
-    leg->AddEntry(cont_perfect_nuclear, "perfectly known nuclear #pi/#mu neutron yield", "l");
+    leg->AddEntry(cont_perfect_nuclear,
+                  "perfectly known nuclear #pi/#mu neutron yield", "l");
   if(cont_perfect_ratio != NULL)
-    leg->AddEntry(cont_perfect_ratio, "and perfectly known atomic capture ratios", "l");
+    leg->AddEntry(cont_perfect_ratio,
+                  "and perfectly known atomic capture ratios", "l");
   leg->Draw();
   c3->Print(outpdfname.c_str());
 
@@ -846,59 +911,45 @@ void draw(const int mindist)
   TCanvas * c4 = new TCanvas("rhc4", "rhc4");
   c4->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  fhc_reco_numu->SetLineColor(kBlue);
-  fhc_reco_numu->SetMarkerColor(kBlue);
-  fhc_reco_numu->SetLineWidth(1);
+  stylehistset(fhc_reco, kBlue);
+  stylehistset(rhc_reco, kRed);
 
-  rhc_reco_numu->SetLineColor(kRed);
-  rhc_reco_numu->SetMarkerColor(kRed);
-  rhc_reco_numu->SetLineWidth(1);
-
-  fhc_reco_numubar->SetLineColor(kBlue-9);
-  fhc_reco_numubar->SetMarkerColor(kBlue-9);
-  fhc_reco_numubar->SetLineWidth(1);
-
-  rhc_reco_numubar->SetLineColor(kRed-9);
-  rhc_reco_numubar->SetMarkerColor(kRed-9);
-  rhc_reco_numubar->SetLineWidth(1);
-
-  fhc_reco_nc->SetLineColor(kBlue);
-  fhc_reco_nc->SetMarkerColor(kBlue);
-  fhc_reco_nc->SetLineWidth(3);
-
-  rhc_reco_nc->SetLineColor(kRed);
-  rhc_reco_nc->SetMarkerColor(kRed);
-  rhc_reco_nc->SetLineWidth(3);
- 
-  rhc_reco_numu->GetYaxis()->CenterTitle();
-  rhc_reco_numu->GetXaxis()->CenterTitle();
-  rhc_reco_numu->GetYaxis()->SetTitle("Probability/bin");
-  rhc_reco_numu->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
+  rhc_reco[numu]->GetYaxis()->SetTitle("Probability/bin");
+  rhc_reco[numu]->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
 
   // neutron producers
-  TH1 * norm1 = fhc_reco_numu->DrawNormalized("ehist");
-  TH1 * norm2 = rhc_reco_numu->DrawNormalized("ehistsame");
-  TH1 * norm3 = fhc_reco_nc->DrawNormalized("ehistsame");
-  TH1 * norm4 = rhc_reco_nc->DrawNormalized("ehistsame");
+  TH1 * norm1 = fhc_reco[numu]->DrawNormalized("ehist");
+  TH1 * norm2 = rhc_reco[numu]->DrawNormalized("ehistsame");
+  TH1 * norm3 = fhc_reco[stoppi]->DrawNormalized("ehistsame");
+  TH1 * norm4 = rhc_reco[stoppi]->DrawNormalized("ehistsame");
+  TH1 * norm5 = fhc_reco[piflight]->DrawNormalized("ehistsame");
+  TH1 * norm6 = rhc_reco[piflight]->DrawNormalized("ehistsame");
 
-  norm1->GetYaxis()->SetRangeUser(0, 1.1*max(
-    max(norm1->GetMaximum(), norm2->GetMaximum()),
-    max(norm3->GetMaximum(), norm4->GetMaximum())));
-   
+  if(norm1 && norm2 && norm3 && norm4 && norm5 && norm6){
+    double maxy = max(norm1->GetMaximum(), norm2->GetMaximum());
+    maxy = max(maxy, norm3->GetMaximum());
+    maxy = max(maxy, norm4->GetMaximum());
+    maxy = max(maxy, norm5->GetMaximum());
+    maxy = max(maxy, norm6->GetMaximum());
+    maxy *= 1.1;
 
-  TLegend * leg4 = new TLegend(0.73, 0.73, 1-rightmargin, 1-topmargin);
-  leg4->AddEntry((TH1D*)NULL, "Unscaled", "");
-  leg4->AddEntry(rhc_reco_numu, "#mu^{-} in RHC", "l");
-  leg4->AddEntry(fhc_reco_numu, "#mu^{-} in FHC", "l");
-  leg4->AddEntry(fhc_reco_nc, "#pi^{-} in FHC", "l");
-  leg4->AddEntry(rhc_reco_nc, "#pi^{-} in RHC", "l");
-  styleleg(leg4);
-  leg4->Draw();
+    TLegend * leg4 = new TLegend(0.65, 0.63, 1-rightmargin, 1-topmargin);
+    leg4->AddEntry((TH1D*)NULL, "Unscaled", "");
+    leg4->AddEntry(fhc_reco[numu], "#mu^{-} in FHC", "l");
+    leg4->AddEntry(rhc_reco[numu], "#mu^{-} in RHC", "l");
+    leg4->AddEntry(fhc_reco[stoppi], "Stopped #pi^{-} in FHC", "l");
+    leg4->AddEntry(rhc_reco[stoppi], "Stopped #pi^{-} in RHC", "l");
+    leg4->AddEntry(fhc_reco[piflight], "#pi^{#pm} in flight in FHC", "l");
+    leg4->AddEntry(rhc_reco[piflight], "#pi^{#pm} in flight in RHC", "l");
+    styleleg(leg4);
+    leg4->Draw();
 
-  c4->Print(outpdfname.c_str());
+    c4->Print(outpdfname.c_str());
+  }
 
 
-  TH2D * hresid = new TH2D("hresid", "", 20, 0, 20, 20, 0, 20);
+  TH2D * hresid = new TH2D("hresid", "", 2*2*nbins_e, 0, 2*2*nbins_e,
+                                         2*2*nbins_e, 0, 2*2*nbins_e);
   mn->Command("CALL");
 
   // If an input variable is up against a limit and the fit results
@@ -917,7 +968,6 @@ void draw(const int mindist)
   c4->Print((outpdfname + "]").c_str()); // doesn't print anything, just closes
 }
 
-
 void rhc_stage_two(const char * const input, const int mindist)
 {
   if(mindist < 0) return; // to compile only
@@ -930,20 +980,28 @@ void rhc_stage_two(const char * const input, const int mindist)
 
   make_mn();
 
-  mn->Command("SET LIM 1 0 5"); // NC scale
+  mn->Command("SET LIM 1 0 10"); // NC scale
   mn->Command("SET LIM 2 0 5");  // numubar scale
+
+  // stopped pion to muon neutron yield ratio
   mn->Command(Form("SET LIM 3 %f %f", 
-    max(0, npimu_nominal - 5*npimu_error),
-           npimu_nominal + 5*npimu_error)); // pion to muon neutron yield ratio
+    max(0, npimu_stop_nominal - 5*npimu_stop_error),
+           npimu_stop_nominal + 5*npimu_stop_error));
+
   mn->Command("SET LIM 4 0.01 1"); // neutron efficiency
   mn->Command("SET LIM 5 0.01 1.1"); // B-12 efficiency
   mn->Command("SET LIM 6 0.01 1"); // mu- neutron yield
+
+  // pion in flight to muon neutron yield ratio
+  mn->Command(Form("SET LIM 7 %f %f", 
+    max(0, npimu_flight_nominal - 5*npimu_flight_error),
+           npimu_flight_nominal + 5*npimu_flight_error));
 
   if(!useb12) mn->Command("FIX 5");
   mn->Command("MINIMIZE 10000");
   mn->Command("HESSE");
 
-  update_hists(getpar(5), getpar(4), getpar(3), getpar(2), getpar(1), getpar(0));
+  update_hists(&(getpars()[0]));
 
   draw(mindist);
 }
