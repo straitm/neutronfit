@@ -51,8 +51,8 @@ const     double npimu_stop_nominal = 14.29;
 /*const*/ double npimu_stop_error   =  2.52;
 
 // Ratio of the neutron yield from *in flight* pions to that of muons.
-// Mostly a guess.
-const double npimu_flight_nominal = npimu_stop_nominal;
+// Mostly a guess.  I took 0.5/pion off for pi+ making prompt protons.
+const double npimu_flight_nominal = 11.5;
 
 // arbitrary inflated error
 const double npimu_flight_error =
@@ -60,7 +60,7 @@ const double npimu_flight_error =
 
 // Arbitrarily invent a correlation coefficient for the neutron yield
 // for in-flight and stopped pions
-const double corr_pi_stop_flight = 0.5;
+const double corr_pi_stop_flight = 0.8;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -445,6 +445,7 @@ void fill_hists(const char * const file, TH1D ** h)
     // XXX should include pi+ and K+ too?
     else if(abs(true_pdg) == 321 || abs(true_pdg) == 211){
       h[piflight]->Fill(slce, mcweight);
+      printf("piflight entry: %d\n", true_pdg);
     }
 
     // Can I neglect the case that true mu- don't stop?
@@ -519,11 +520,6 @@ void make_mn()
   mn->Command("SET STRATEGY 2");
 
   mn->SetFCN(fcn);
-  mn->Command(Form("SET ERR %f",
-    contour_type == oned68? 1.00:
-    contour_type == twod68? 2.30:
-                            4.61
-  ));
 
   int mnparmerr = 0;
   mn->mnparm(0, "NCscale", 1, 0.2, 0, 0, mnparmerr);
@@ -638,7 +634,7 @@ void draw(const int mindist)
   };
     
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
-    for(int h = 0; h < 3; h++)
+    for(int h = 0; h < 4; h++)
       c2hists[h]->Draw("histsame][");
  
   leg->SetY1NDC(four_entry_leg_y1);
@@ -671,7 +667,7 @@ void draw(const int mindist)
     fhc_neut[numu],
   };
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
-    for(int h = 0; h < 3; h++)
+    for(int h = 0; h < 4; h++)
       c2histsf[h]->Draw("histsame][");
 
   legf->SetY1NDC(four_entry_leg_y1);
@@ -773,7 +769,7 @@ void draw(const int mindist)
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double ncmin = 0, ncmax = 1.9,
+  const double ncmin = 0, ncmax = 3.9,
     nmmin = 0.0, nmmax = 2.6;
   TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
@@ -792,13 +788,17 @@ void draw(const int mindist)
   mn->fGraphicsMode = true;
 
   TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
+
+  mn->Command(Form("SET ERR %f",
+    contour_type == oned68? 1.0:
+    contour_type == twod68? TMath::ChisquareQuantile(0.68269, 2):
+                            TMath::ChisquareQuantile(0.9, 2)
+  ));
+
   mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
   mn->Command("MNCONT 1 2 50");
   TGraph * cont_full = wrest_contour("cont_full");
-
-  printf("NC scale: %f + %f - %f\n", getpar(0), getminerrup(0), getminerrdn(0));
-  printf("NM scale: %f + %f - %f\n", getpar(1), getminerrup(1), getminerrdn(1));
 
   /*useb12 = false;
   mn->Command("MIGRAD");
@@ -871,6 +871,9 @@ void draw(const int mindist)
   mn->Command("MINOS 10000 4");
   if(useb12) mn->Command("MINOS 10000 5");
 
+  printf("NC scale: %f + %f - %f\n", getpar(0), getminerrup(0), getminerrdn(0));
+  printf("NM scale: %f + %f - %f\n", getpar(1), getminerrup(1), getminerrdn(1));
+
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
   onederrs->SetMarkerStyle(kFullCircle);
@@ -894,13 +897,13 @@ void draw(const int mindist)
     npimu_stop_nominal, npimu_stop_error,
     npimu_flight_nominal, npimu_flight_error),
     "l");
-  leg->AddEntry((TH1D*)NULL, Form("In flight #pi^{#pm}/stopped #mu^{-} %.1f #pm %.1f",
+  leg->AddEntry((TH1D*)NULL, Form("In flight #pi^{#pm}/stopped #mu^{-} %.0f #pm %.0f",
     npimu_flight_nominal, npimu_flight_error), "");
   //if(cont_nob12 != NULL)
   //  leg->AddEntry(cont_nob12, "without using ^{12}B", "l");
   if(cont_perfect_nuclear != NULL)
     leg->AddEntry(cont_perfect_nuclear,
-                  "perfectly known nuclear #pi/#mu neutron yield", "l");
+                  "perfectly known nuclear stopping #pi/#mu neutron yield", "l");
   if(cont_perfect_ratio != NULL)
     leg->AddEntry(cont_perfect_ratio,
                   "and perfectly known atomic capture ratios", "l");
@@ -931,7 +934,8 @@ void draw(const int mindist)
     maxy = max(maxy, norm4->GetMaximum());
     maxy = max(maxy, norm5->GetMaximum());
     maxy = max(maxy, norm6->GetMaximum());
-    maxy *= 1.1;
+    norm1->GetYaxis()->SetRangeUser(0, maxy*1.1);
+    
 
     TLegend * leg4 = new TLegend(0.65, 0.63, 1-rightmargin, 1-topmargin);
     leg4->AddEntry((TH1D*)NULL, "Unscaled", "");
@@ -958,7 +962,7 @@ void draw(const int mindist)
 
   for(int i = 0; i < nbins_e*nbeam*2; i++)
     for(int j = 0; j < nbins_e*nbeam*2; j++)
-      hresid->SetBinContent(i+1, j+1, residuals[i][j]);
+      hresid->SetBinContent(i+1, j+1, fabs(residuals[i][j]));
 
   c4->SetLogz();
   c4->SetRightMargin(0.18);
