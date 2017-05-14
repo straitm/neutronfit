@@ -12,6 +12,8 @@
 #include "TMath.h"
 #include <fstream>
 #include <iostream>
+#include <vector>
+#include <string>
 
 const int npar = 7;
 static TMinuit * mn = NULL;
@@ -48,28 +50,34 @@ const double timing_eff_difference_for_pions =
 // that undergo invisible interactions isntead of being captured because of
 // their higher energy.
 const     double npimu_stop_nominal = 14.29;
+
+// Not const because I want to adjust it to make different contours, and it 
+// is used by fcn().
 /*const*/ double npimu_stop_error   =  2.52;
 
-// Ratio of the neutron yield from *in flight* pions to that of muons.
-// Mostly a guess.  I took 0.5/pion off for pi+ making prompt protons.
-const double npimu_flight_nominal = 11.5;
+// Ratio of the neutron yield from strongly interacting particles *in flight*
+// to what Geant says. 
+const double n_flight_nominal = 1;
+// If you pick this one, it is scaling this by the correct yield for 
+// stopped pi- and what Geant produces.
+// const double n_flight_nominal = 2.59/1.34;
 
-// arbitrary inflated error
-const double npimu_flight_error =
-  npimu_stop_error/npimu_stop_nominal * npimu_flight_nominal * 3;
+// Somewhat arbitrary error on neutron production by things in
+// flight (mostly pions)
+const double n_flight_error = n_flight_nominal*0.333;
 
-// Arbitrarily invent a correlation coefficient for the neutron yield
-// for in-flight and stopped pions
-const double corr_pi_stop_flight = 0.8;
+// NOTE: Arbitrarily invent a correlation coefficient for the neutron
+// yield for in-flight interactions and stopped pions.
+const double corr_pi_stop_flight = 0.5;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
 
 bool useb12 = false; // can be changed between fits
 
-enum trktypes{ numubar, numu, stoppi, piflight, MAXTRKTYPE };
+enum trktypes{ numubar, numu, stoppi, piflight, noneutrons, MAXTRKTYPE };
 const char * const trktypenames[MAXTRKTYPE] =
-  { "numubar", "numu", "stoppi", "piflight" };
+  { "numubar", "numu", "stoppi", "piflight", "noneutrons" };
 
 TH1D * makehist(const char * const name)
 {
@@ -92,8 +100,8 @@ TH1D ** rhc_b12  = makehistset("rhc_b12");
 TH1D ** fhc_neut = makehistset("fhc_neut");
 TH1D ** fhc_b12  = makehistset("fhc_b12");
 
-TH1D * fhc_tracks = NULL;
-TH1D * rhc_tracks = NULL;
+TH1D * fhc_tracks = makehist("rhc_tracks");
+TH1D * rhc_tracks = makehist("fhc_tracks");
 
 TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
@@ -107,9 +115,9 @@ TH1D * tot_fhc_neut = makehist("tot_fhc_neut");
 TH1D * tot_rhc_b12  = makehist("tot_rhc_b12");
 TH1D * tot_fhc_b12  = makehist("tot_fhc_b12");
 
-static vector<double> getpars()
+static std::vector<double> getpars()
 {
-  vector<double> ans;
+  std::vector<double> ans;
   for(int i = 0; i < npar; i++) ans.push_back(getpar(i));
   return ans;
 }
@@ -137,36 +145,32 @@ static void update_hists(const double * const pars)
   const double neff            = pars[3];
   const double b12eff          = pars[4];
   const double mum_nyield      = pars[5];
-  const double real_npimu_flight=pars[6];
+  const double real_n_flight   = pars[6];
 
-  const double npimu_stop = real_npimu_stop  *timing_eff_difference_for_pions;
-  const double npimu_flight=real_npimu_flight*timing_eff_difference_for_pions;
+  const double npimu_stop = real_npimu_stop*timing_eff_difference_for_pions;
+  const double n_flight   = real_n_flight  *timing_eff_difference_for_pions;
 
   // Probability of getting a neutron from a mu+ via
-  // electrodisintigration, roughly. Then multipled by 0.5 because
-  // not all of the "mu+" are mu+, some are protons, EM showers, etc.
-  const double mup_nyield = 1e-4 * 0.5;
+  // electrodisintigration, roughly.
+  const double mup_nyield = 1e-4;
 
   // this could be another nuisance parameter.  Don't want to double count
   // it with the ratio of pion to muon yields, though, so careful.
   //const double muminus_capture_frac = 0.182;
 
-  /* We're going to ignore the corner case of pi+ -> mu+ Michel decays
-     making a neutron, since we've fudged lots of other bigger stuff. */
-
   reset_hists();
 
   // Estimate of neutrons from RHC per muon, in total and for each truth
-  rhc_neut[piflight]->Add(rhc_reco[piflight], ncscale*npimu_flight*mum_nyield*neff);
-  rhc_neut[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*npimu_stop  *mum_nyield*neff);
-  rhc_neut[numu]    ->Add(rhc_reco[numu],     nmscale             *mum_nyield*neff);
-  rhc_neut[numubar] ->Add(rhc_reco[numubar],                       mup_nyield*neff);
+  rhc_neut[piflight]->Add(rhc_reco[piflight], ncscale*n_flight             *neff);
+  rhc_neut[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
+  rhc_neut[numu]    ->Add(rhc_reco[numu],     nmscale           *mum_nyield*neff);
+  rhc_neut[numubar] ->Add(rhc_reco[numubar],                     mup_nyield*neff);
 
   // Ditto FHC
-  fhc_neut[piflight]->Add(fhc_reco[piflight], ncscale*npimu_flight*mum_nyield*neff);
-  fhc_neut[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*npimu_stop  *mum_nyield*neff);
-  fhc_neut[numu]    ->Add(fhc_reco[numu],                          mum_nyield*neff);
-  fhc_neut[numubar] ->Add(fhc_reco[numubar],                       mup_nyield*neff);
+  fhc_neut[piflight]->Add(fhc_reco[piflight], ncscale*n_flight             *neff);
+  fhc_neut[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
+  fhc_neut[numu]    ->Add(fhc_reco[numu],                        mum_nyield*neff);
+  fhc_neut[numubar] ->Add(fhc_reco[numubar],                     mup_nyield*neff);
 
   for(int i = 0; i < MAXTRKTYPE; i++){
     tot_rhc_neut->Add(rhc_neut[i]);
@@ -217,19 +221,19 @@ static void update_hists(const double * const pars)
 
   // I assume the probability is much lower for in flight interactions.
   // The factor of ten is only based on the number of fingers on my hands.
-  const double flight_pim_b12yield = stop_pim_b12yield / 10.;
+  const double flight_b12yield = stop_pim_b12yield / 10.;
 
   // Estimate of number of B-12 from RHC per track
-  rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale*flight_pim_b12yield*b12eff);
-  rhc_b12[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*  stop_pim_b12yield*b12eff);
-  rhc_b12[numu]    ->Add(rhc_reco[numu],     nmscale*       mum_b12yield*b12eff);
-  rhc_b12[numubar] ->Add(rhc_reco[numubar],                 mup_b12yield*b12eff);
+  rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale*  flight_b12yield*b12eff);
+  rhc_b12[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*stop_pim_b12yield*b12eff);
+  rhc_b12[numu]    ->Add(rhc_reco[numu],     nmscale*     mum_b12yield*b12eff);
+  rhc_b12[numubar] ->Add(rhc_reco[numubar],               mup_b12yield*b12eff);
 
   // Ditto FHC
-  fhc_b12[piflight]->Add(fhc_reco[piflight], ncscale*flight_pim_b12yield*b12eff);
-  fhc_b12[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*  stop_pim_b12yield*b12eff);
-  fhc_b12[numu]    ->Add(fhc_reco[numu],                    mum_b12yield*b12eff);
-  fhc_b12[numubar] ->Add(fhc_reco[numubar],                 mup_b12yield*b12eff);
+  fhc_b12[piflight]->Add(fhc_reco[piflight], ncscale*  flight_b12yield*b12eff);
+  fhc_b12[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*stop_pim_b12yield*b12eff);
+  fhc_b12[numu]    ->Add(fhc_reco[numu],                  mum_b12yield*b12eff);
+  fhc_b12[numubar] ->Add(fhc_reco[numubar],               mup_b12yield*b12eff);
 
   for(int i = 0; i < MAXTRKTYPE; i++){
     tot_rhc_b12->Add(rhc_b12[i]);
@@ -274,16 +278,16 @@ static double compare(double * dat, double * datup, double * datdn,
   return chi2;
 }
 
-static double pi_penalty(const double npimu_stop, const double npimu_flight)
+static double pi_penalty(const double npimu_stop, const double n_flight)
 {
-  const double delta_stop   = npimu_stop   - npimu_stop_nominal;
-  const double delta_flight = npimu_flight - npimu_flight_nominal;
+  const double delta_stop   = npimu_stop - npimu_stop_nominal;
+  const double delta_flight = n_flight   - n_flight_nominal;
 
-  const double cov = corr_pi_stop_flight * npimu_flight_error * npimu_stop_error;
+  const double cov = corr_pi_stop_flight * n_flight_error * npimu_stop_error;
 
-  const double det = pow(npimu_flight_error,2) * pow(npimu_stop_error,2) - cov*cov;
+  const double det = pow(n_flight_error,2) * pow(npimu_stop_error,2) - cov*cov;
   const double hessian[2][2] = {
-    { pow(npimu_flight_error, 2)/det, -cov/det                     },
+    { pow(n_flight_error, 2)/det, -cov/det                     },
     {  -cov/det                     , pow(npimu_stop_error, 2)/det }
   };
 
@@ -309,11 +313,11 @@ static void fcn(__attribute__((unused)) int & np,
   const double neff       = par[3];
   const double b12eff     = par[4];
   const double mum_nyield = par[5];
-  const double npimu_flight=par[6];
+  const double n_flight   = par[6];
 
   // penalty terms
 
-  chi2 += pi_penalty(npimu_stop, npimu_flight);
+  chi2 += pi_penalty(npimu_stop, n_flight);
 
   // Justified by external data
   chi2 += pow((mum_nyield - mum_nyield_nominal)/mum_nyield_error, 2);
@@ -373,23 +377,21 @@ void setbranchaddress(const char * const name, int * d, TTree * t)
 void fill_hists(const char * const file, TH1D ** h)
 {
   printf("Reading %s\n", file); fflush(stdout);
-  TFile * f = new TFile(file, "read");
 
+  TFile * f = new TFile(file, "read");
   if(!f || f->IsZombie()){
     fprintf(stderr, "Could not open the file %s\n", file);
     _exit(1);
   }
 
   TTree * t = dynamic_cast<TTree *>(f->Get("t"));
-
   if(!t){
     fprintf(stderr, "Could not get the tree from %s\n", file);
     _exit(1);
   }
 
-  // For I-don't-know-why TTree::Draw isn't working for me here, so
-  // do it the hard way
-  int i, primary, true_pdg, true_nupdg, true_nucc, contained, true_atom_cap;
+  int i, primary, true_pdg, true_nupdg, true_nucc, contained,
+      true_atom_cap, true_neutrons;
   float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback, mcweight;
   t->SetBranchStatus("*", 0);
 
@@ -409,70 +411,80 @@ void fill_hists(const char * const file, TH1D ** h)
   setbranchaddress("timeback", &timeback, t);
   setbranchaddress("true_atom_cap", &true_atom_cap, t);
   setbranchaddress("mcweight", &mcweight, t);
+  setbranchaddress("true_neutrons", &true_neutrons, t);
+
+  const int MUMINUS =  13, MUPLUS  =  -13, // leptons are backwards
+            EMINUS  =  11, EPLUS   =  -11, // from mesons!
+            PIPLUS  = 211, PIMINUS = -211,
+            KPLUS   = 321, KMINUS  = -321,
+            PROTON = 2212,
+            GAMMA = 22;
+  const int MU = MUMINUS, E = EMINUS,
+            PI = PIPLUS,  K = KPLUS;
 
   for(int e = 0; e < t->GetEntries(); e++){
     t->GetEntry(e);
 
     if(!(i == 0 && primary && contained)) continue;
-    if(fabs(trkx) > trkx_cut) continue;
-    if(fabs(trky) > trky_cut) continue;
-    if(     trkz  > trkz_cut) continue;
+    if(fabs(trkx) > trkx_cut || fabs(trky) > trky_cut) continue;
+    if(trkz > trkz_cut) continue;
     if(trklen < trklen_cut) continue;
-    if(remid  < remid_cut) continue;
+    if(remid < remid_cut) continue;
     if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
 
     // Should have no effect, unless there is cosmic overlay
     // In fact, MC times seem to be totally different, so never mind
     //if(timeleft < maxrealtime || timeback > -nnegbins) continue;
 
-    // If it's not filled (perhaps for data), let it have no effect
+    // If it's not filled (perhaps for data or old MC), let it have no effect
     if(mcweight == 0) mcweight = 1;
 
     // based entirely on what the track actually is, NOT what the
     // neutrino interaction is. I think this makes more sense.
-    //
-    // true_atom_cap is true if this is a mu-, pi- or K- that truly stops.
-    //
-    // Pretty clearly pi- AND pi+ (and the few K- and K+) that
-    // interact in flight make lots of neutrons too and have to be
-    // accounted for as a separate category.
 
-    // take K- too, but they are very rare
-    if(true_atom_cap && (true_pdg == -321 || true_pdg == -211)){
-       h[stoppi]->Fill(slce, mcweight);
-    }
-
-    // XXX should include pi+ and K+ too?
-    else if(abs(true_pdg) == 321 || abs(true_pdg) == 211){
-      h[piflight]->Fill(slce, mcweight);
-      printf("piflight entry: %d\n", true_pdg);
-    }
+    // true_atom_cap is 1 if this is a mu-, pi- or K- that truly stops.
+    // true_atom_cap is -1 if it is any particle that decays
 
     // Can I neglect the case that true mu- don't stop?
-    // I think so, since Geant says that 99.9% of 500 MeV mu- stop
-    else if(true_pdg == 13){
-      h[numu]->Fill(slce, mcweight);
-    }
+    // I think so, since Geant says that 99.90% of our mu- stop
+    if(true_pdg == MUMINUS) h[numu]->Fill(slce, mcweight);
 
-    // Use numubar as a stand-in for all other tracks. Can't just throw
-    // out tracks because everything is done per-track! This will make
-    // the guesses at neutron yield for mu+ a bit wrong, but they are
-    // only guesses anyhow.
-    //
-    // XXX should see what "all other tracks" are!  I had lumped pions that
-    // interact in flight here, which was super wrong.
-    else{ /* if(true_pdg == -13) */
+    // This category is primarily for mu+ that stop and decay and
+    // therefore mostly don't produce neutrons or B-12. But they do
+    // produce neutrons just a little bit through electrodisintigration.
+    // Put decaying pi+ into this category too, since they produce mu+
+    // which then decay. Include both pi+ decaying at rest and pi+ and
+    // pi- decaying in flight. The in-flight decays complicate things,
+    // but this whole electrodisintigration thing is a very minor
+    // contribution to the neutron yield, so don't worry about it. Also
+    // lump decaying kaons in here as another very minor thing.
+    else if(true_pdg == MUPLUS ||
+            (true_atom_cap == -1 && (abs(true_pdg) == PI || abs(true_pdg) == K)))
       h[numubar]->Fill(slce, mcweight);
-    }
 
-    // Just curious how many of these are in the MC
-    if(true_pdg == -321) printf("K-!\n");
+    // Lump K- into this category; they are very rare.
+    else if(true_atom_cap == 1 && (true_pdg == KMINUS || true_pdg == PIMINUS))
+       h[stoppi]->Fill(slce, mcweight);
+
+    // Strongly interacting particles that interact in flight. Mostly
+    // pions, with a substantial contribution from protons and a very
+    // few kaons. Include nuclei too, even though they are never the
+    // primary track for contained events (but do appear as tracks).
+    // For all these, I taking the Geant estimate of the neutron yield,
+    // which is highly questionable...
+    else if(true_atom_cap == 0 && 
+            (abs(true_pdg) == PI || abs(true_pdg) == K ||
+             abs(true_pdg) == PROTON || abs(true_pdg) > 1000000000))
+      h[piflight]->Fill(slce, mcweight * true_neutrons /* note */);
+
+    else if(abs(true_pdg) == E || abs(true_pdg) == GAMMA)
+      h[noneutrons]->Fill(slce, mcweight);
+
+    else
+      // Can't just throw out tracks because everything is done per-track!
+      fprintf(stderr, "Unused track! Fix! PDG = %d, true_atom_cap = %d\n",
+              true_pdg, true_atom_cap);
   }
-
-  printf("Stopped pions: %9.1f\n", h[stoppi]->Integral());
-  printf("Flying  pions: %9.1f\n", h[piflight]->Integral());
-  printf("Stopped mu-:   %9.1f\n", h[numu]->Integral());
-  printf("Other:         %9.1f\n", h[numubar]->Integral());
 
   f->Close();
 }
@@ -483,19 +495,10 @@ void set_hists()
   // between the number of primary tracks in the given beam type and the truth
   // of those tracks.  But it might be confusing if the individual histograms
   // are drawn without normalization.
-  fill_hists(
-    "prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1"
-    "/all-type3.root", fhc_reco);
-
-  fill_hists(
-   // "prod_pid_R16-12-20-prod3recopreview.b_nd_genie_nonswap_rhc_nova_v08_epoch4a_v3"
-   //"prod_pid_R16-12-20-prod3recopreview.d_nd_genie_nonswap_rhc_nova_v08_epoch4a_v5_nodbthresh"
-    //"/all-type3.root",
-   "all-rhc-mc-type3.root", rhc_reco);
+  fill_hists("fhc_mc/all-type3.root", fhc_reco);
+  fill_hists("rhc_mc/all-type3.root", rhc_reco);
 
   // Total number of tracks in each beam's MC
-  rhc_tracks = makehist("rhc_tracks");
-  fhc_tracks = makehist("fhc_tracks");
   for(int i = 0; i < MAXTRKTYPE; i++){
     rhc_tracks->Add(rhc_reco[i]);
     fhc_tracks->Add(fhc_reco[i]);
@@ -530,7 +533,7 @@ void make_mn()
   mn->mnparm(4, "b12eff", b12eff_nominal, b12eff_error, 0, 0, mnparmerr);
   mn->mnparm(5, "mum_nyield", mum_nyield_nominal, mum_nyield_error,
                 0, 0, mnparmerr);
-  mn->mnparm(6, "npimu_flight", npimu_flight_nominal, npimu_flight_error,
+  mn->mnparm(6, "n_flight", n_flight_nominal, n_flight_error,
              0, 0, mnparmerr);
 }
 
@@ -577,7 +580,7 @@ void draw(const int mindist)
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
   const bool logy = false;
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-6:0, 10);
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-6:0, 2);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
 
   //////////////////////////////////////////////////////////////////////
@@ -592,7 +595,7 @@ void draw(const int mindist)
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    1.03*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
+    1.01*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
              max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum())
              ));
   dum2->GetYaxis()->SetTitle("Neutrons/track");
@@ -603,7 +606,7 @@ void draw(const int mindist)
 
   //
   TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
-  const string outpdfname = Form("fit_stage_two_mindist%d.pdf", mindist);
+  const std::string outpdfname = Form("fit_stage_two_mindist%d.pdf", mindist);
   c2r->Print((outpdfname + "(").c_str()); // intentionally print a blank page
   c2r->SetLogy(logy);
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
@@ -611,14 +614,17 @@ void draw(const int mindist)
 
   const double one_entry_leg_y1  = 0.88;
   const double four_entry_leg_y1 = 0.66;
+  const double leg_x1 = leftmargin + 0.1;
+  const double leg_x2 = leftmargin + 0.45;
 
   // true if you want a copy of each plot that doesn't yet have the fit
   // histograms drawn on it.
   const bool print_wo_fit = false;
 
   g_n_rhc->Draw("pz");
-  TLegend * leg = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                              leftmargin+0.42, 1-topmargin);
+  TLegend * leg = new TLegend(leg_x1,
+                              print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                              leg_x2, 1-topmargin);
   styleleg(leg);
   leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
@@ -639,7 +645,7 @@ void draw(const int mindist)
  
   leg->SetY1NDC(four_entry_leg_y1);
   leg->AddEntry(tot_rhc_neut, "RHC fit", "l");
-  leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm} in flight", "l");
+  leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm}, p in flight", "l");
   leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{-}", "l");
   leg->AddEntry(rhc_neut[numu], "RHC #nu_{#mu}", "l");
 
@@ -652,8 +658,9 @@ void draw(const int mindist)
   dum2->Draw();
 
   g_n_fhc->Draw("pz");
-  TLegend * legf = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                               leftmargin+0.42, 1-topmargin);
+  TLegend * legf = new TLegend(leg_x1,
+                               print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                               leg_x2, 1-topmargin);
   styleleg(legf);
   legf->SetMargin(0.4);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
@@ -672,7 +679,7 @@ void draw(const int mindist)
 
   legf->SetY1NDC(four_entry_leg_y1);
   legf->AddEntry(tot_fhc_neut, "FHC fit", "l");
-  legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm} in flight", "l");
+  legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm}, p in flight", "l");
   legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{-}", "l");
   legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
 
@@ -705,8 +712,9 @@ void draw(const int mindist)
   dum2->Draw();
 
   g_b12_rhc->Draw("pz");
-  leg = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                    leftmargin+0.42, 1-topmargin);
+  leg = new TLegend(leg_x1,
+                    print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                    leg_x2, 1-topmargin);
   styleleg(leg);
   leg->SetMargin(0.4);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
@@ -726,7 +734,7 @@ void draw(const int mindist)
 
   leg->SetY1NDC(four_entry_leg_y1);
   leg->AddEntry(tot_rhc_b12, "RHC fit", "l");
-  leg->AddEntry(rhc_b12[piflight], "RHC #pi^{#pm} in flight", "l");
+  leg->AddEntry(rhc_b12[piflight], "RHC #pi^{#pm}, p in flight", "l");
   leg->AddEntry(rhc_b12[stoppi], "RHC stopped #pi^{-}", "l");
   leg->AddEntry(rhc_b12[numu], "RHC #nu_{#mu}", "l");
 
@@ -739,8 +747,9 @@ void draw(const int mindist)
   dum2->Draw();
 
   g_b12_fhc->Draw("pz");
-  legf = new TLegend(leftmargin+0.1, print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                     leftmargin+0.42, 1-topmargin);
+  legf = new TLegend(leg_x1,
+                     print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
+                     leg_x2, 1-topmargin);
   styleleg(legf);
   legf->SetMargin(0.4);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
@@ -759,7 +768,7 @@ void draw(const int mindist)
 
   legf->SetY1NDC(four_entry_leg_y1);
   legf->AddEntry(tot_fhc_b12, "FHC fit", "l");
-  legf->AddEntry(fhc_b12[piflight], "FHC #pi^{#pm} in flight", "l");
+  legf->AddEntry(fhc_b12[piflight], "FHC #pi^{#pm}, p in flight", "l");
   legf->AddEntry(fhc_b12[stoppi], "FHC stopped #pi^{-}", "l");
   legf->AddEntry(fhc_b12[numu], "FHC #nu_{#mu}", "l");
 
@@ -895,10 +904,10 @@ void draw(const int mindist)
     contour_type == twod68?"2D 68%":
                            "2D 90%",
     npimu_stop_nominal, npimu_stop_error,
-    npimu_flight_nominal, npimu_flight_error),
+    n_flight_nominal, n_flight_error),
     "l");
-  leg->AddEntry((TH1D*)NULL, Form("In flight #pi^{#pm}/stopped #mu^{-} %.0f #pm %.0f",
-    npimu_flight_nominal, npimu_flight_error), "");
+  leg->AddEntry((TH1D*)NULL, Form("#pi^{#pm}, p in-flight %.1f #pm %.1f of Geant",
+    n_flight_nominal, n_flight_error), "");
   //if(cont_nob12 != NULL)
   //  leg->AddEntry(cont_nob12, "without using ^{12}B", "l");
   if(cont_perfect_nuclear != NULL)
@@ -943,8 +952,8 @@ void draw(const int mindist)
     leg4->AddEntry(rhc_reco[numu], "#mu^{-} in RHC", "l");
     leg4->AddEntry(fhc_reco[stoppi], "Stopped #pi^{-} in FHC", "l");
     leg4->AddEntry(rhc_reco[stoppi], "Stopped #pi^{-} in RHC", "l");
-    leg4->AddEntry(fhc_reco[piflight], "#pi^{#pm} in flight in FHC", "l");
-    leg4->AddEntry(rhc_reco[piflight], "#pi^{#pm} in flight in RHC", "l");
+    leg4->AddEntry(fhc_reco[piflight], "#pi^{#pm}, p in flight in FHC", "l");
+    leg4->AddEntry(rhc_reco[piflight], "#pi^{#pm}, p in flight in RHC", "l");
     styleleg(leg4);
     leg4->Draw();
 
@@ -996,10 +1005,8 @@ void rhc_stage_two(const char * const input, const int mindist)
   mn->Command("SET LIM 5 0.01 1.1"); // B-12 efficiency
   mn->Command("SET LIM 6 0.01 1"); // mu- neutron yield
 
-  // pion in flight to muon neutron yield ratio
-  mn->Command(Form("SET LIM 7 %f %f", 
-    max(0, npimu_flight_nominal - 5*npimu_flight_error),
-           npimu_flight_nominal + 5*npimu_flight_error));
+  // other-in-flight neutron yield
+  mn->Command("SET LIM 7 0 20");
 
   if(!useb12) mn->Command("FIX 5");
   mn->Command("MINIMIZE 10000");

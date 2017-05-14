@@ -26,10 +26,11 @@ static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
 
 static const double markersize = 0.3;
 
-const int nbeam      = 2; // not really generalizable as it stands
+const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 5;
-const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
+const int nbins_e = 6;
+const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
+//const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
 //const double bins_e[nbins_e+1] = {0.5, 1.0, 2.0, 6.0 };
 
 double getpar(int i) // 0-indexed!
