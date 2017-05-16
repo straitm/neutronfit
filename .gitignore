@@ -8,3 +8,4 @@ savedhists_mindist*.C
 *_C.so
 *.root
 fit_stage_one_mindist*.out.txt
+nm_summary.pdf

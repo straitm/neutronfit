@@ -64,7 +64,7 @@ const double n_flight_nominal = 1;
 
 // Somewhat arbitrary error on neutron production by things in
 // flight (mostly pions)
-const double n_flight_error = n_flight_nominal*0.333;
+/*const*/ double n_flight_error = n_flight_nominal*0.333;
 
 // NOTE: Arbitrarily invent a correlation coefficient for the neutron
 // yield for in-flight interactions and stopped pions.
@@ -100,8 +100,9 @@ TH1D ** rhc_b12  = makehistset("rhc_b12");
 TH1D ** fhc_neut = makehistset("fhc_neut");
 TH1D ** fhc_b12  = makehistset("fhc_b12");
 
-TH1D * fhc_tracks = makehist("rhc_tracks");
-TH1D * rhc_tracks = makehist("fhc_tracks");
+// Total number of tracks in each beam's MC
+TH1D * fhc_tracks = makehist("fhc_tracks");
+TH1D * rhc_tracks = makehist("rhc_tracks");
 
 TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
@@ -189,7 +190,11 @@ static void update_hists(const double * const pars)
 
   // nucl cap frac on C-12, and Double Chooz (including C-13)!
   // If it ever mattered, the error on this should be taken into account.
-  const double mum_b12yield = carbon_acap_frac * (1-2028./2197.) * 0.177;
+  const double mum_b12yield = carbon_acap_frac * (1-2028./2197.) * 0.177
+  // Add in an ad-hoc estimate of how often capture results in a neutron
+  // over the 12C(n,p)12B threshold (call it 5%) and then does that reaction
+  // (call it 1% - cross section is ~30mb compared to few b elastic scattering).
+  + carbon_acap_frac * (1-2028./2197.) * 0.05 * 0.01;
 
   // I think really zero, although of course the mu+ in flight (or the
   // e+ Michel) could make N-12, which looks the same (in fact, doubled
@@ -211,17 +216,23 @@ static void update_hists(const double * const pars)
   // so this is activity produced over many cycles. My reanalysis, if I
   // assume zero uncorrelated background, says that the Li-8 yield is
   // about 4 times the B-12 yield, and with its half-life being 41 times
-  // longer, it only adds about 9% to the activity near t=0. Since the
-  // error on the B-12 yield is 22%, this can be neglected.
-  const double hilscher_b12_per_pim_acap = 3.8e-3;  // +- 1.3e-3
+  // longer, it only adds about 9% to the activity near t=0. Add this in, but
+  // note that since the error on the B-12 yield is 22%, it is negligible.
+  const double hilscher_b12_per_pim_acap = 3.8e-3 * 1.09;  // +- 1.3e-3
 
   // Do not have to correct for the atomic capture ratio, because Hilscher's
   // figures are per stop, not per nuclear capture
-  const double stop_pim_b12yield = carbon_acap_frac * hilscher_b12_per_pim_acap;
+  const double stop_pim_b12yield = carbon_acap_frac * hilscher_b12_per_pim_acap
+  // Add in an ad-hoc estimate of how often capture results in a neutron
+  // over the 12C(n,p)12B threshold (call it 10%) and then does that reaction
+  // (call it 1% - cross section is ~30mb compared to few b elastic scattering).
+  + carbon_acap_frac * 0.1 * 0.01;
 
   // I assume the probability is much lower for in flight interactions.
   // The factor of ten is only based on the number of fingers on my hands.
-  const double flight_b12yield = stop_pim_b12yield / 10.;
+  const double flight_b12yield = stop_pim_b12yield / 10.
+    // But add the same estimate for B-12 production via (n,p) as for stopped pions.
+    + 0.1 * 0.01;
 
   // Estimate of number of B-12 from RHC per track
   rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale*  flight_b12yield*b12eff);
@@ -374,7 +385,7 @@ void setbranchaddress(const char * const name, int * d, TTree * t)
 }
 
 /* Fill with the number of tracks in the MC for each category of truth */
-void fill_hists(const char * const file, TH1D ** h)
+void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
 {
   printf("Reading %s\n", file); fflush(stdout);
 
@@ -478,31 +489,16 @@ void fill_hists(const char * const file, TH1D ** h)
       h[piflight]->Fill(slce, mcweight * true_neutrons /* note */);
 
     else if(abs(true_pdg) == E || abs(true_pdg) == GAMMA)
-      h[noneutrons]->Fill(slce, mcweight);
+      h[noneutrons]->Fill(slce, mcweight); // not used at this time
 
     else
-      // Can't just throw out tracks because everything is done per-track!
-      fprintf(stderr, "Unused track! Fix! PDG = %d, true_atom_cap = %d\n",
+      fprintf(stderr, "Unused track. It's ok, but: PDG = %d, true_atom_cap = %d\n",
               true_pdg, true_atom_cap);
+
+    tracks->Fill(slce, mcweight);
   }
 
   f->Close();
-}
-
-void set_hists()
-{   
-  // I don't need to scale these by POT because everything is done in a ratio
-  // between the number of primary tracks in the given beam type and the truth
-  // of those tracks.  But it might be confusing if the individual histograms
-  // are drawn without normalization.
-  fill_hists("fhc_mc/all-type3.root", fhc_reco);
-  fill_hists("rhc_mc/all-type3.root", rhc_reco);
-
-  // Total number of tracks in each beam's MC
-  for(int i = 0; i < MAXTRKTYPE; i++){
-    rhc_tracks->Add(rhc_reco[i]);
-    fhc_tracks->Add(fhc_reco[i]);
-  }
 }
 
 void make_mn()
@@ -572,7 +568,7 @@ void stylehistset(TH1D ** hh, const int color)
     color-9 /*probably bad except for blue and red */, 2, kDashDotted);
 }
 
-void draw(const int mindist)
+void draw(const int mindist, const int minslc, const int maxslc)
 {
   //////////////////////////////////////////////////////////////////////
   const double leftmargin = 0.15;
@@ -606,7 +602,8 @@ void draw(const int mindist)
 
   //
   TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
-  const std::string outpdfname = Form("fit_stage_two_mindist%d.pdf", mindist);
+  const std::string outpdfname =
+    Form("fit_stage_two_mindist%d_nslc%d_%d.pdf", mindist, minslc, maxslc);
   c2r->Print((outpdfname + "(").c_str()); // intentionally print a blank page
   c2r->SetLogy(logy);
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
@@ -826,11 +823,26 @@ void draw(const int mindist)
   mn->Command("MNCONT 1 2 50");
   TGraph * cont_perfect_ratio = wrest_contour("cont_perfect_ratio");
 
+  mn->Command(Form("SET PAR 3 %f", npimu_stop_nominal));
+  mn->Command("FIX 7");
+  mn->Command("MNCONT 1 2 50");
+  TGraph * cont_double_perfect_ratio = wrest_contour("cont_double_perfect_ratio");
+
   // restore
   npimu_stop_error = proper_npimu_stop_error;
   mn->Command("REL 3");
+  mn->Command("REL 7");
   mn->Command("MIGRAD");
 
+  if(cont_double_perfect_ratio != NULL){
+    cont_double_perfect_ratio->SetLineColor(kOrange+2);
+    cont_double_perfect_ratio->SetLineStyle(7);
+    // get rid of the visual gap 
+    cont_double_perfect_ratio->SetPoint(cont_double_perfect_ratio->GetN(),
+                                 cont_double_perfect_ratio->GetX()[0],
+                                 cont_double_perfect_ratio->GetY()[0]);
+    cont_double_perfect_ratio->Draw("l");
+  }
   if(cont_perfect_ratio != NULL){
     cont_perfect_ratio->SetLineColor(kViolet);
     cont_perfect_ratio->SetLineStyle(kDashed);
@@ -870,8 +882,8 @@ void draw(const int mindist)
   mn->Command("MINOS 10000 2");
 
   TGraphAsymmErrors * onederrs = new TGraphAsymmErrors;
-  onederrs->SetPoint(0, getpar(0), getpar(1) - getminerrdn(1)*1.1);
-  onederrs->SetPoint(1, getpar(0)-getminerrdn(0)*1.1, getpar(1));
+  onederrs->SetPoint(0, getpar(0), getpar(1) - getminerrdn(1)*1.5);
+  onederrs->SetPoint(1, getpar(0)-getminerrdn(0)*1.5, getpar(1));
 
   mn->Command("SET ERR 1"); // get one D 68% errors
   mn->Command("MIGRAD");
@@ -880,8 +892,10 @@ void draw(const int mindist)
   mn->Command("MINOS 10000 4");
   if(useb12) mn->Command("MINOS 10000 5");
 
-  printf("NC scale: %f + %f - %f\n", getpar(0), getminerrup(0), getminerrdn(0));
-  printf("NM scale: %f + %f - %f\n", getpar(1), getminerrup(1), getminerrdn(1));
+  printf("NC scale mindist %d slcrange %d - %d : %f + %f - %f\n",
+    mindist, minslc, maxslc, getpar(0), getminerrup(0), getminerrdn(0));
+  printf("NM scale mindist %d slcrange %d - %d : %f + %f - %f\n",
+    mindist, minslc, maxslc, getpar(1), getminerrup(1), getminerrdn(1));
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
@@ -896,26 +910,30 @@ void draw(const int mindist)
 
   leg = new TLegend(leftmargin, 0.75, 1-rightmargin, 1-topmargin);
   styleleg(leg);
+  leg->SetTextSize(tsize*0.833);
   leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
-  if(cont_full != NULL) leg->AddEntry(cont_full,
-    Form("%s, stopped #pi^{-}/#mu^{-} neutron yield %.1f #pm %.1f",
-    contour_type == oned68?"1D 68%":
-    contour_type == twod68?"2D 68%":
-                           "2D 90%",
-    npimu_stop_nominal, npimu_stop_error,
-    n_flight_nominal, n_flight_error),
-    "l");
-  leg->AddEntry((TH1D*)NULL, Form("#pi^{#pm}, p in-flight %.1f #pm %.1f of Geant",
-    n_flight_nominal, n_flight_error), "");
-  //if(cont_nob12 != NULL)
-  //  leg->AddEntry(cont_nob12, "without using ^{12}B", "l");
+  if(cont_full != NULL){
+    leg->AddEntry(cont_full,
+      Form("%s, stopped #pi^{-}/#mu^{-} neutron yield %.1f#pm%.1f; "
+           "#pi, p in-flight %.1f#pm%.1f of Geant",
+      contour_type == oned68?"1D 68%":
+      contour_type == twod68?"2D 68%":
+                             "2D 90%",
+      npimu_stop_nominal, npimu_stop_error,
+      n_flight_nominal, n_flight_error),
+      "l");
+    leg->AddEntry(onederrs, "1D errors", "le");
+  }
   if(cont_perfect_nuclear != NULL)
     leg->AddEntry(cont_perfect_nuclear,
                   "perfectly known nuclear stopping #pi/#mu neutron yield", "l");
   if(cont_perfect_ratio != NULL)
     leg->AddEntry(cont_perfect_ratio,
                   "and perfectly known atomic capture ratios", "l");
+  if(cont_double_perfect_ratio != NULL)
+    leg->AddEntry(cont_double_perfect_ratio,
+                  "and perfectly known in-flight neutron yields", "l");
   leg->Draw();
   c3->Print(outpdfname.c_str());
 
@@ -969,9 +987,12 @@ void draw(const int mindist)
   // are garbage, check if one of these is huge.  If so, probably
   // the hessian is messed up.
 
-  for(int i = 0; i < nbins_e*nbeam*2; i++)
-    for(int j = 0; j < nbins_e*nbeam*2; j++)
+  for(int i = 0; i < nbins_e*nbeam*2; i++){
+    for(int j = 0; j < nbins_e*nbeam*2; j++){
       hresid->SetBinContent(i+1, j+1, fabs(residuals[i][j]));
+      printf("residuals[%d][%d] = %f\n", i, j, residuals[i][j]);
+    }
+  }
 
   c4->SetLogz();
   c4->SetRightMargin(0.18);
@@ -981,13 +1002,19 @@ void draw(const int mindist)
   c4->Print((outpdfname + "]").c_str()); // doesn't print anything, just closes
 }
 
-void rhc_stage_two(const char * const input, const int mindist)
+void rhc_stage_two(const char * const input, const int mindist,
+                   const int minslc, const int maxslc)
 {
   if(mindist < 0) return; // to compile only
 
   TH1::SetDefaultSumw2();
 
-  set_hists();
+  // I don't need to scale these by POT because everything is done in a ratio
+  // between the number of primary tracks in the given beam type and the truth
+  // of those tracks.  But it might be confusing if the individual histograms
+  // are drawn without normalization.
+  fill_hists("fhc_mc/all-type3.root", fhc_reco, fhc_tracks);
+  fill_hists("rhc_mc/all-type3.root", rhc_reco, rhc_tracks);
 
   gROOT->Macro(input);
 
@@ -1014,5 +1041,5 @@ void rhc_stage_two(const char * const input, const int mindist)
 
   update_hists(&(getpars()[0]));
 
-  draw(mindist);
+  draw(mindist, minslc, maxslc);
 }

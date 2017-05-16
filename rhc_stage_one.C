@@ -30,22 +30,14 @@ const double n_lifetime_nominal = 52.7;
 // From external considerations.  It doesn't substantively change the
 // result of this program if a smaller number is put here, but it would
 // be circular to do so in most cases, so don't.
-//const double n_lifetime_priorerr = 5.;
-const double n_lifetime_priorerr = 2.;
+const double n_lifetime_priorerr = 5.;
+//const double n_lifetime_priorerr = 2.;
 
 // This is the *effective* muon lifetime, with all detector effects
 const double tmich_nominal = 2.1;
 const double tmich_priorerr = 0.3;
 
-/*
-  Based on my MC, 400us is reasonable for a mindist of 6, but more like
-  25us for a mindist of 2. However, it's murky because we don't measure
-  the capture point, but rather the position where the gammas compton,
-  and that usually only in 2D. Assuming 2D, I get more like 80us. And
-  of course the functional form isn't quite right for 2D...
-*/
-const double n_diffusion_nominal = 200.;
-const double n_diffusion_priorerr = n_diffusion_nominal*0.5;
+double n_diffusion_nominal = 0; // set below using mindist
 
 // I am modeling the time of neutron captures as the convolution of
 // two exponentials. This comes from two effects. (1) Neutrons are not
@@ -196,8 +188,6 @@ static std::vector<PAR> makeparameters()
 
   return p;
 }
-
-static std::vector<PAR> PARAMETERS = makeparameters();
 
 static TF1 * ee_flat =
   new TF1("ee_flat", "[8]*abs([6])", -nnegbins, maxrealtime+additional);
@@ -368,9 +358,9 @@ static void fcn(__attribute__((unused)) int & np,
   like += 0.5 *
     pow((par[tneut_nc] - n_lifetime_nominal)/n_lifetime_priorerr, 2);
 
-  // penalty on neutron diffusion constant
+  // penalty on neutron diffusion constant - factor of 2 on a log scale
   like += 0.5 *
-    pow((par[aneut_nc] - n_diffusion_nominal)/n_diffusion_priorerr, 2);
+    pow((log(par[aneut_nc]) - log(n_diffusion_nominal))/M_LN2, 2);
 }
 
 void make_mn()
@@ -391,6 +381,7 @@ void make_mn()
   mn->Command("SET ERR 0.5"); // log likelihood
 
   int mnparmerr = 0;
+  std::vector<PAR> PARAMETERS = makeparameters();
   for(int i = 0; i < npar; i++)
     mn->mnparm(i, PARAMETERS[i].name,
                   PARAMETERS[i].start,
@@ -798,9 +789,11 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
                                TGraphAsymmErrors * g_n_fhc,
                                TGraphAsymmErrors * g_b12_rhc,
                                TGraphAsymmErrors * g_b12_fhc,
-                               const int mindist)
+                               const int mindist,
+                               const int minslc, const int maxslc)
 {
-  ofstream for_stage_two(Form("for_stage_two_mindist%d.C", mindist));
+  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%d_%d.C",
+                              mindist, minslc, maxslc));
   for_stage_two << "{\n";
   g_n_rhc->SetName("g_n_rhc");
   g_n_fhc->SetName("g_n_fhc");
@@ -834,9 +827,24 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
   for_stage_two << "}\n";
 }
 
-void rhc_stage_one(const char * const savedhistfile, const int mindist)
+void rhc_stage_one(const char * const savedhistfile, const int mindist,
+                   const int minslc, const int maxslc)
 {
   if(mindist < 0) return; // to compile only
+
+  /*
+    Based on my MC, 400us is reasonable for a mindist of 6, but more like
+    25us for a mindist of 2. However, it's murky because we don't measure
+    the capture point, but rather the position where the gammas compton,
+    and that usually only in 2D. Assuming 2D, I get more like 80us. And
+    of course the functional form isn't quite right for 2D...
+    
+    Anyway, here's a stupid parameterization that skewers the 2D case.
+    Note the addition of 5/8 of a cellwidth because that's how much you
+    get for mindist == 0 on average. In fcn() this is given a factor of
+    2 error. Mostly we just measure it.
+  */
+  n_diffusion_nominal = 14.94 * pow(mindist + 0.625, 1.74);
 
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod; i++){
@@ -935,18 +943,18 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist)
                   rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
   }
 
-  c1->Print(Form("fit_mindist%d.pdf[", mindist));
+  c1->Print(Form("fit_mindist%d_nslc%d_%d.pdf[", mindist, minslc, maxslc));
 
   for(int i = 0; i < nbins_e; i++)
     for(int beam = 0; beam < nbeam; beam++)
-      draw_ee_beam(beam, i, Form("fit_mindist%d.pdf", mindist));
+      draw_ee_beam(beam, i, Form("fit_mindist%d_nslc%d_%d.pdf", mindist, minslc, maxslc));
 
   for(int i = 0; i < nbins_e; i++)
     for(int period = 0; period < nperiod; period++)
-      draw_ee(period, i, Form("fit_mindist%d.pdf", mindist));
+      draw_ee(period, i, Form("fit_mindist%d_nslc%d_%d.pdf", mindist, minslc, maxslc));
 
-  c1->Print(Form("fit_mindist%d.pdf]", mindist));
+  c1->Print(Form("fit_mindist%d_nslc%d_%d.pdf]", mindist, minslc, maxslc));
 
   save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc,
-                     g_b12_rhc, g_b12_fhc, mindist);
+                     g_b12_rhc, g_b12_fhc, mindist, minslc, maxslc);
 }

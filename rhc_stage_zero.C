@@ -97,7 +97,7 @@ void setbranchaddresses(data * dat, TTree * t)
 }
 
 // true if it passes the cut
-bool track_itself_cut(data * dat)
+bool track_itself_cut(data * dat, const int minslc, const int maxslc)
 {
   return dat->run != 11601 // noise at t = 106 in this run.
                    // Will go away with a better run list.
@@ -115,7 +115,7 @@ bool track_itself_cut(data * dat)
     && fabs(dat->trkx) < trkx_cut
     && fabs(dat->trky) < trky_cut
     && dat->trkz < trkz_cut
-    //&& dat->nslc <= 6 // reduce pileup
+    && dat->nslc >= minslc && dat->nslc <= maxslc
     ;
 }
 
@@ -154,8 +154,8 @@ bool track_followers_cut(const vector<data> & dats)
       ){
        has_pion_gamma = true;
        printf("Pion-gamma: %d %d %d %6.1f %6.1f %4.2f %5.2f %5.2f %6.3f\n",
-              dat->run, dat->subrun, dat->event,
-              dat->trkz, dat->e, dat->mindist, dat->cosx, dat->cosy, dat->remid);
+         dat->run, dat->subrun, dat->event,
+         dat->trkz, dat->e, dat->mindist, dat->cosx, dat->cosy, dat->remid);
     }
 
     // Or try to preferentially select muon captures on Ti and Sn using
@@ -165,8 +165,8 @@ bool track_followers_cut(const vector<data> & dats)
        dat->pe > 35 && dat->e > 1 && dat->e/0.7 < 8){
        has_xray = true;
        printf("Ti-xray: %d %d %d %6.1f %6.1f %4.2f %5.2f %5.2f %6.3f\n",
-              dat->run, dat->subrun, dat->event,
-              dat->trkz, dat->e, dat->mindist, dat->cosx, dat->cosy, dat->remid);
+         dat->run, dat->subrun, dat->event,
+         dat->trkz, dat->e, dat->mindist, dat->cosx, dat->cosy, dat->remid);
     }
     */
   }
@@ -199,7 +199,7 @@ bool clustercut(data * dat, const int mindist)
 }
 
 void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
-                 const int mindist)
+                 const int mindist, const int minslc, const int maxslc)
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
   vector<data> dats;
@@ -216,12 +216,13 @@ void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
     else{
       if(track_followers_cut(dats)){
         for(unsigned int j = 0; j < dats.size(); j++){
-          if(track_itself_cut(&dats[j]) && clustercut(&dats[j], mindist))
+          if(track_itself_cut(&dats[j], minslc, maxslc) &&
+             clustercut(&dats[j], mindist))
             h->Fill(dats[j].t, dats[j].slce);
 
           // In this scheme, only tracks that pass go into the denominator
           if(!ALL_TRACKS_GO_IN_THE_DENOMINATOR)
-            if(dats[j].i == 0 && track_itself_cut(&dats[j]))
+            if(dats[j].i == 0 && track_itself_cut(&dats[j], minslc, maxslc))
                trackcounts->Fill(dat->slce);
         }
       }
@@ -236,22 +237,22 @@ void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
 }
 
 // In this scheme, all tracks go into the denominator
-void fill_1dhist(TH1D * h, data * dat, TTree * t)
+void fill_1dhist(TH1D * h, data * dat, TTree * t, const int minslc,
+                 const int maxslc)
 {
   for(int i = 0; i < t->GetEntries(); i++){
     t->GetEntry(i);
-    if(track_itself_cut(dat) && dat->i == 0) h->Fill(dat->slce);
+    if(track_itself_cut(dat, minslc, maxslc) && dat->i == 0)
+      h->Fill(dat->slce);
   }
 }
 
-void rhc_stage_zero(const int mindist)
+void rhc_stage_zero(const int mindist, const int minslc, const int maxslc)
 {
   if(mindist < 0) return; // used to compile only
 
   const char * const inputfiles[nperiod] = {
-  //"postmuon_12104_7.20170308.ntuple.root",
-  //"prod_pid_R17-03-01-prod3reco.d_nd_genie_nonswap_fhc_nova_v08_full_v1/postmuon_11392_18.20170308.ntuple.root",
-  "prod_pid_S16-12-07_nd_period6_keepup/1508-type3.root",
+  "prod_pid_S16-12-07_nd_period6_keepup/1745-type3.root",
   "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
@@ -262,7 +263,8 @@ void rhc_stage_zero(const int mindist)
 
   data dat;
 
-  std::ofstream o(Form("savedhists_mindist%d.C", mindist));
+  std::ofstream o(
+    Form("savedhists_mindist%d_nslc%d_%d.C", mindist, minslc, maxslc));
   o << "{\n";
   for(int i = 0; i < nperiod; i++){
     TFile * inputTFiles = NULL;
@@ -287,9 +289,9 @@ void rhc_stage_zero(const int mindist)
       nnegbins + maxrealtime + additional,
       -nnegbins, maxrealtime + additional, nbins_e, bins_e);
 
-    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist);
-    if(ALL_TRACKS_GO_IN_THE_DENOMINATOR)
-      fill_1dhist(all_tcounts, &dat, trees); // see comments above
+    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc);
+    if(ALL_TRACKS_GO_IN_THE_DENOMINATOR) // see comments above
+      fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc);
 
     printf("Got %s_s\n", Speriodnames[i]);
     fflush(stdout);
