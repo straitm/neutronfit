@@ -554,45 +554,6 @@ static void draw_ee(const int per, const int bin, const char * const outname)
   draw_ee_common(x, rebin, outname);
 }
 
-  /* Cheating for sensitivity study! */
-#if 0
-  // Assume that we look at cosmic trigger data or some such to get
-  // the noise level to high precision.
-  mn->Command(Form("FIX %d", flat_nf));
-
-  set_ee_to_mn(0 /* XXX */);
-
-  // Keep however many neutrons the fit above said.
-  // And put in how many B-12 there ought to be.
-  ee_pos->SetParameter(nb12_nc,
-    ntrack * (is_rhc? 0.2: 0.9) // mu- fraction
-           * 0.82  // atomic capture
-           * 0.077 // nuclear capture
-           * 0.177 // B-12 yield
-           * 0.4); // efficiency
-  printf("Generating fake data with B-12 = %f\n", ee_pos->GetParameter(nb12_nc));
-
-  for(int i = nnegbins + maxrealtime + 1; i <= hist->GetNbinsX(); i++)
-    hist->SetBinContent(i, gRandom->Poisson(ee->Eval(hist->GetBinCenter(i))));
-
-  maxfitt = maxrealtime + additional;
-
-  for(int i = 0; i < migrad_tries; i++)
-    if(0 == (status = mn->Command("MIGRAD")))
-      break;
-  if(!status)
-    for(int i = 0; i < 2; i++){
-      gMinuit->Command(Form("MINOS 30000 %d", nb12_nf));
-      gMinuit->Command(Form("MINOS 30000 %d", nneut_nf));
-    }
-
-  gMinuit->Command("show min");
-  for(int b = 0; b < nbeam; b++)
-    for(int i = 0; i < nbins_e; i++)
-      draw_ee(b, i, ntrack[beam][i]);
-#endif
-  /* End cheating for sensitivity study! */
-
 static std::vector< std::vector<fitanswers> > dothefit()
 {
   maxfitt = maxrealtime; // modified later for sensitivity study
