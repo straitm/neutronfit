@@ -62,10 +62,6 @@ const double n_flight_nominal = 1;
 // stopped pi- and what Geant produces.
 // const double n_flight_nominal = 2.59/1.34;
 
-// Somewhat arbitrary error on neutron production by things in
-// flight (mostly pions)
-/*const*/ double n_flight_error = n_flight_nominal*0.333;
-
 // NOTE: Arbitrarily invent a correlation coefficient for the neutron
 // yield for in-flight interactions and stopped pions.
 const double corr_pi_stop_flight = 0.5;
@@ -291,8 +287,13 @@ static double compare(double * dat, double * datup, double * datdn,
 
 static double pi_penalty(const double npimu_stop, const double n_flight)
 {
+  // Somewhat arbitrary error on neutron production by things in
+  // flight (mostly pions) - factor of two on a log scale, i.e.
+  // 1 unit of chi2 for down 50% (half) or up 100% (double).
+  const double n_flight_error = M_LN2;
+
   const double delta_stop   = npimu_stop - npimu_stop_nominal;
-  const double delta_flight = n_flight   - n_flight_nominal;
+  const double delta_flight = log(n_flight) - log(n_flight_nominal);
 
   const double cov = corr_pi_stop_flight * n_flight_error * npimu_stop_error;
 
@@ -529,7 +530,7 @@ void make_mn()
   mn->mnparm(4, "b12eff", b12eff_nominal, b12eff_error, 0, 0, mnparmerr);
   mn->mnparm(5, "mum_nyield", mum_nyield_nominal, mum_nyield_error,
                 0, 0, mnparmerr);
-  mn->mnparm(6, "n_flight", n_flight_nominal, n_flight_error,
+  mn->mnparm(6, "n_flight", n_flight_nominal, 0.1,
              0, 0, mnparmerr);
 }
 
@@ -694,9 +695,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
  
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
   if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
-    min(1.03*max(max(gdrawmax(g_b12_fhc), tot_fhc_b12->GetMaximum()),
+    min(1.01*max(max(gdrawmax(g_b12_fhc), tot_fhc_b12->GetMaximum()),
                  max(gdrawmax(g_b12_rhc), tot_rhc_b12->GetMaximum())),
-        0.25));
+        0.4));
   dum2->GetYaxis()->SetTitle("^{12}B/track");
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
@@ -916,14 +917,14 @@ void draw(const int mindist, const int minslc, const int maxslc)
   if(cont_full != NULL){
     leg->AddEntry(cont_full,
       Form("%s, stopped #pi^{-}/#mu^{-} neutron yield %.1f#pm%.1f; "
-           "#pi, p in-flight %.1f#pm%.1f of Geant",
+           "#pi, p in-flight %.1f*/2 of Geant",
       contour_type == oned68?"1D 68%":
       contour_type == twod68?"2D 68%":
                              "2D 90%",
       npimu_stop_nominal, npimu_stop_error,
-      n_flight_nominal, n_flight_error),
+      n_flight_nominal),
       "l");
-    leg->AddEntry(onederrs, "1D errors", "le");
+    leg->AddEntry(onederrs, "1D errors", "lp");
   }
   if(cont_perfect_nuclear != NULL)
     leg->AddEntry(cont_perfect_nuclear,
