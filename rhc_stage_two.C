@@ -27,8 +27,6 @@ double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
 
 enum conttype { oned68, twod68, twod90 };
 
-const conttype contour_type = twod90;
-
 static const double tsize = 0.04;
 
 const double mum_nyield_nominal = 0.1810;
@@ -49,22 +47,54 @@ const double timing_eff_difference_for_pions =
 // stop, slightly adjusted by the greater fraction of neutrons from pions
 // that undergo invisible interactions isntead of being captured because of
 // their higher energy.
-const     double npimu_stop_nominal = 14.29;
+//
+// Multiplied by a pretty ad hoc correction for tracking difficulties, see
+// below.
+const double npimu_stop_nominal = 14.29 * 0.75;
 
 // Not const because I want to adjust it to make different contours, and it 
 // is used by fcn().
-/*const*/ double npimu_stop_error   =  2.52;
+//
+// This is the error from physics added in quadrature with an error
+// I made up for bad tracking which makes us miss the pions' neutrons
+// more often than the muons'.
+/*const*/ double npimu_stop_error   =  sqrt(pow(2.52, 2) + pow(npimu_stop_nominal*0.1,2));
 
 // Ratio of the neutron yield from strongly interacting particles *in flight*
 // to what Geant says. 
 const double n_flight_nominal = 1;
-// If you pick this one, it is scaling this by the correct yield for 
-// stopped pi- and what Geant produces.
-// const double n_flight_nominal = 2.59/1.34;
 
-// NOTE: Arbitrarily invent a correlation coefficient for the neutron
+// Somewhat arbitrary error on neutron production by things in
+// flight (mostly pions) - factor of two on a log scale, i.e.
+// 1 unit of chi2 for down 50% (half) or up 100% (double).
+//const double n_flight_error = M_LN2;
+
+// Put a 20% error on the actual yield. I justify this as follows:
+// The real physics error on the *stopping* pion yield is 8%.  Geant
+// is off by 22%, but I can explain 12% as it doing way too much
+// capture on hydrogen, which is not a problem with in-flight 
+// interactions.  So without that mistake, Geant is off by about 1 sigma, i.e.
+// we agree on the size of the error.  Let's suppose in-flight interactions
+// are twice as hard.  Twice 8% plus a bit is 20%.
+//
+// Put a 20% error on the problems identifiying the neutron production
+// point using the track end.  I justify this because it is double
+// the error I put on the stopping pion case.
+//
+// Since this is a big error, I implement it as symmetric on a log scale.
+//
+// Silly extra work to make a error that averages to what I said on a linear scale
+// but is asymmetric on that scale
+const double desired_average_n_flight_error = sqrt(pow(0.2, 2) + pow(0.2,2));
+const double so_this_is_the_error =
+  (-2+2*desired_average_n_flight_error +
+  sqrt(pow(2-2*desired_average_n_flight_error,2)
+  + 8*desired_average_n_flight_error))/2;
+const double n_flight_error = log(1 + so_this_is_the_error);
+
+// NOTE: Arbitrarily invent a small correlation coefficient for the neutron
 // yield for in-flight interactions and stopped pions.
-const double corr_pi_stop_flight = 0.5;
+const double corr_pi_stop_flight = 0.2;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -287,11 +317,6 @@ static double compare(double * dat, double * datup, double * datdn,
 
 static double pi_penalty(const double npimu_stop, const double n_flight)
 {
-  // Somewhat arbitrary error on neutron production by things in
-  // flight (mostly pions) - factor of two on a log scale, i.e.
-  // 1 unit of chi2 for down 50% (half) or up 100% (double).
-  const double n_flight_error = M_LN2;
-
   const double delta_stop   = npimu_stop - npimu_stop_nominal;
   const double delta_flight = log(n_flight) - log(n_flight_nominal);
 
@@ -459,7 +484,11 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
 
     // Can I neglect the case that true mu- don't stop?
     // I think so, since Geant says that 99.90% of our mu- stop
-    if(true_pdg == MUMINUS) h[numu]->Fill(slce, mcweight);
+    // 
+    // If the track is a pi- that decays in flight, it is now a mu- and
+    // should be counted here.
+    if(true_pdg == MUMINUS || (true_pdg == PIMINUS && true_atom_cap == -1))
+      h[numu]->Fill(slce, mcweight);
 
     // This category is primarily for mu+ that stop and decay and
     // therefore mostly don't produce neutrons or B-12. But they do
@@ -471,7 +500,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     // contribution to the neutron yield, so don't worry about it. Also
     // lump decaying kaons in here as another very minor thing.
     else if(true_pdg == MUPLUS ||
-            (true_atom_cap == -1 && (abs(true_pdg) == PI || abs(true_pdg) == K)))
+            (true_atom_cap == -1 && (true_pdg == PIPLUS || abs(true_pdg) == K)))
       h[numubar]->Fill(slce, mcweight);
 
     // Lump K- into this category; they are very rare.
@@ -481,9 +510,9 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     // Strongly interacting particles that interact in flight. Mostly
     // pions, with a substantial contribution from protons and a very
     // few kaons. Include nuclei too, even though they are never the
-    // primary track for contained events (but do appear as tracks).
-    // For all these, I taking the Geant estimate of the neutron yield,
-    // which is highly questionable...
+    // primary track for contained events (but do appear as tracks). For
+    // all these, I'm taking the Geant estimate of the effective neutron
+    // yield, which is questionable...
     else if(true_atom_cap == 0 && 
             (abs(true_pdg) == PI || abs(true_pdg) == K ||
              abs(true_pdg) == PROTON || abs(true_pdg) > 1000000000))
@@ -617,7 +646,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   // true if you want a copy of each plot that doesn't yet have the fit
   // histograms drawn on it.
-  const bool print_wo_fit = false;
+  const bool print_wo_fit = true;
 
   g_n_rhc->Draw("pz");
   TLegend * leg = new TLegend(leg_x1,
@@ -776,7 +805,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   TCanvas * c3 = new TCanvas("rhc3", "rhc3");
   c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double ncmin = 0, ncmax = 3.9,
+  const double ncmin = 0, ncmax = 1.9,
     nmmin = 0.0, nmmax = 2.6;
   TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetXaxis()->SetTitle("NC scale");
@@ -796,16 +825,17 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
 
-  mn->Command(Form("SET ERR %f",
-    contour_type == oned68? 1.0:
-    contour_type == twod68? TMath::ChisquareQuantile(0.68269, 2):
-                            TMath::ChisquareQuantile(0.9, 2)
-  ));
+  mn->Command(Form("SET ERR %f", TMath::ChisquareQuantile(0.90, 2)));
 
   mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
   mn->Command("MNCONT 1 2 50");
   TGraph * cont_full = wrest_contour("cont_full");
+
+  const double twodminerrdn = getminerrdn(1);
+  const double twodminerrup = getminerrup(1);
+  const double twodminerrleft  = getminerrdn(0);
+  const double twodminerrright = getminerrup(0);
 
   /*useb12 = false;
   mn->Command("MIGRAD");
@@ -883,8 +913,8 @@ void draw(const int mindist, const int minslc, const int maxslc)
   mn->Command("MINOS 10000 2");
 
   TGraphAsymmErrors * onederrs = new TGraphAsymmErrors;
-  onederrs->SetPoint(0, getpar(0), getpar(1) - getminerrdn(1)*1.5);
-  onederrs->SetPoint(1, getpar(0)-getminerrdn(0)*1.5, getpar(1));
+  onederrs->SetPoint(0, getpar(0), getpar(1) - twodminerrdn*1.2);
+  onederrs->SetPoint(1, getpar(0)-twodminerrleft*1.2, getpar(1));
 
   mn->Command("SET ERR 1"); // get one D 68% errors
   mn->Command("MIGRAD");
@@ -903,26 +933,20 @@ void draw(const int mindist, const int minslc, const int maxslc)
   onederrs->SetMarkerStyle(kFullCircle);
   onederrs->Draw("pz");
 
-  mn->Command(Form("SET ERR %f",
-    contour_type == oned68? 1.0:
-    contour_type == twod68? TMath::ChisquareQuantile(0.68269, 2):
-                            TMath::ChisquareQuantile(0.9, 2)
-  )); // put back
+  mn->Command(Form("SET ERR %f", TMath::ChisquareQuantile(0.90, 2))); // put back
 
-  leg = new TLegend(leftmargin, 0.75, 1-rightmargin, 1-topmargin);
+  leg = new TLegend(leftmargin, 0.72, 1-rightmargin, 1-topmargin);
   styleleg(leg);
   leg->SetTextSize(tsize*0.833);
   leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
   if(cont_full != NULL){
+    leg->AddEntry((TH1D*)NULL, "", "");
     leg->AddEntry(cont_full,
-      Form("%s, stopped #pi^{-}/#mu^{-} neutron yield %.1f#pm%.1f; "
-           "#pi, p in-flight %.1f*/2 of Geant",
-      contour_type == oned68?"1D 68%":
-      contour_type == twod68?"2D 68%":
-                             "2D 90%",
+      Form("90%, effective stopped #pi^{-}/#mu^{-} n yield %.1f#pm%.1f; "
+           "#pi,p in-flight %.2f^{+%.2f}_{-%.2f} #times Geant",
       npimu_stop_nominal, npimu_stop_error,
-      n_flight_nominal),
+      n_flight_nominal, n_flight_nominal*exp(n_flight_error) - 1, 1 - n_flight_nominal/exp(n_flight_error)),
       "l");
     leg->AddEntry(onederrs, "1D errors", "lp");
   }
@@ -988,12 +1012,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   // are garbage, check if one of these is huge.  If so, probably
   // the hessian is messed up.
 
-  for(int i = 0; i < nbins_e*nbeam*2; i++){
-    for(int j = 0; j < nbins_e*nbeam*2; j++){
+  for(int i = 0; i < nbins_e*nbeam*2; i++)
+    for(int j = 0; j < nbins_e*nbeam*2; j++)
       hresid->SetBinContent(i+1, j+1, fabs(residuals[i][j]));
-      printf("residuals[%d][%d] = %f\n", i, j, residuals[i][j]);
-    }
-  }
 
   c4->SetLogz();
   c4->SetRightMargin(0.18);

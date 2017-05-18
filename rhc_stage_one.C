@@ -30,7 +30,7 @@ const double n_lifetime_nominal = 52.7;
 // From external considerations.  It doesn't substantively change the
 // result of this program if a smaller number is put here, but it would
 // be circular to do so in most cases, so don't.
-const double n_lifetime_priorerr = 5.;
+double n_lifetime_priorerr = 5.; // changed below
 //const double n_lifetime_priorerr = 2.;
 
 // This is the *effective* muon lifetime, with all detector effects
@@ -806,6 +806,10 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     2 error. Mostly we just measure it.
   */
   n_diffusion_nominal = 14.94 * pow(mindist + 0.625, 1.74);
+
+  // Hackily provide information from the more data-rich fits to the 
+  // data-poor fits so they don't spin out of control.
+  if(mindist <= 2) n_lifetime_priorerr = 2.;
 
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod; i++){
