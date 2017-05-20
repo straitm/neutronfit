@@ -25,12 +25,12 @@ struct fitanswers{
 };
 
 // From a loose cut running of this program
-const double n_lifetime_nominal = 52.7;
+const double n_lifetime_nominal = muoncatcher?45:52.7;
 
 // From external considerations.  It doesn't substantively change the
 // result of this program if a smaller number is put here, but it would
 // be circular to do so in most cases, so don't.
-double n_lifetime_priorerr = 5.; // changed below
+double n_lifetime_priorerr = muoncatcher?10:5.; // changed below
 //const double n_lifetime_priorerr = 2.;
 
 // This is the *effective* muon lifetime, with all detector effects
@@ -753,8 +753,8 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
                                const int mindist,
                                const int minslc, const int maxslc)
 {
-  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%d_%d.C",
-                              mindist, minslc, maxslc));
+  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%d_%d_%s.C",
+                              mindist, minslc, maxslc, muoncatcher?"muoncatcher":"main"));
   for_stage_two << "{\n";
   g_n_rhc->SetName("g_n_rhc");
   g_n_fhc->SetName("g_n_fhc");
@@ -789,9 +789,11 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
 }
 
 void rhc_stage_one(const char * const savedhistfile, const int mindist,
-                   const int minslc, const int maxslc)
+                   const int minslc, const int maxslc, const string region)
 {
   if(mindist < 0) return; // to compile only
+
+  muoncatcher = region == "muoncatcher";
 
   /*
     Based on my MC, 400us is reasonable for a mindist of 6, but more like
@@ -908,17 +910,19 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
                   rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
   }
 
-  c1->Print(Form("fit_mindist%d_nslc%d_%d.pdf[", mindist, minslc, maxslc));
+  const string filename = Form("fit_mindist%d_nslc%d_%d_%s.pdf", mindist, minslc, maxslc, region.c_str());
+
+  c1->Print(Form("%s[", filename.c_str()));
 
   for(int i = 0; i < nbins_e; i++)
     for(int beam = 0; beam < nbeam; beam++)
-      draw_ee_beam(beam, i, Form("fit_mindist%d_nslc%d_%d.pdf", mindist, minslc, maxslc));
+      draw_ee_beam(beam, i, filename.c_str());
 
   for(int i = 0; i < nbins_e; i++)
     for(int period = 0; period < nperiod; period++)
-      draw_ee(period, i, Form("fit_mindist%d_nslc%d_%d.pdf", mindist, minslc, maxslc));
+      draw_ee(period, i, filename.c_str());
 
-  c1->Print(Form("fit_mindist%d_nslc%d_%d.pdf]", mindist, minslc, maxslc));
+  c1->Print(Form("%s]", filename.c_str()));
 
   save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc,
                      g_b12_rhc, g_b12_fhc, mindist, minslc, maxslc);

@@ -113,8 +113,10 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
     && fabs(dat->trkx) < trkx_cut
-    && fabs(dat->trky) < trky_cut
-    && dat->trkz < trkz_cut
+    && ( (!muoncatcher && fabs(dat->trky) < trky_cut) ||
+         ( muoncatcher && dat->trky < 45. && dat->trky > -170))
+    && ( (!muoncatcher && dat->trkz < trkz_cut) ||
+         ( muoncatcher && dat->trkz > 1310 && dat->trkz < 1530))
     && dat->nslc >= minslc && dat->nslc <= maxslc
     ;
 }
@@ -195,7 +197,7 @@ bool clustercut(data * dat, const int mindist)
   return !(dat->t >= -1 && dat->t < 2) &&
     dat->t > -nnegbins && dat->t < maxrealtime &&
     dat->nhit >= 1 && dat->mindist <= mindist
-    && dat->pe > 35 && dat->e < 20;
+    && (muoncatcher || dat->pe > 35) && dat->e < 20;
 }
 
 void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
@@ -247,9 +249,11 @@ void fill_1dhist(TH1D * h, data * dat, TTree * t, const int minslc,
   }
 }
 
-void rhc_stage_zero(const int mindist, const int minslc, const int maxslc)
+void rhc_stage_zero(const int mindist, const int minslc, const int maxslc, const string region)
 {
   if(mindist < 0) return; // used to compile only
+
+  muoncatcher = region == "muoncatcher";
 
   const char * const inputfiles[nperiod] = {
   "prod_pid_S16-12-07_nd_period6_keepup/1745-type3.root",
@@ -264,7 +268,7 @@ void rhc_stage_zero(const int mindist, const int minslc, const int maxslc)
   data dat;
 
   std::ofstream o(
-    Form("savedhists_mindist%d_nslc%d_%d.C", mindist, minslc, maxslc));
+    Form("savedhists_mindist%d_nslc%d_%d_%s.C", mindist, minslc, maxslc, region.c_str()));
   o << "{\n";
   for(int i = 0; i < nperiod; i++){
     TFile * inputTFiles = NULL;

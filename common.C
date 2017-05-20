@@ -1,8 +1,10 @@
+bool muoncatcher = true;// not const 'cause I evilly set it at top of each stage
+
 // We aren't going to use anything between -1 and 2 microseconds because
 // the detector conditions are just too awful.  And then don't use
-// anything before 10 microseconds because I'm now using that region
+// anything before holex_hi microseconds because I'm now using that region
 // to define Michels that cut further interactions.
-const double holex_lo = -1, holex_hi = 8;
+const double holex_lo = -1, holex_hi = muoncatcher?2:8;
 
 const double nnegbins = 209;
 const double maxrealtime = 269;
@@ -28,10 +30,10 @@ static const double markersize = 0.3;
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 6;
-const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
+const int nbins_e = 3;
+//const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
 //const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
-//const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 };
+const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 };
 
 double getpar(int i) // 0-indexed!
 {

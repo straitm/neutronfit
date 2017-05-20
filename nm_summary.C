@@ -14,7 +14,7 @@ void nm_summary(const string name)
 
   const double minx = mindistscan?-0.5:0.5, maxx = mindistscan?7:15;
 
-  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 100, 0, 2.5);
+  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 100, 0, 5.5);
 
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
@@ -27,16 +27,17 @@ void nm_summary(const string name)
     g.SetPoint(g.GetN(), mindistscan?mindist:(maxslc+minslc)/2, y);
     g.SetPointError(g.GetN()-1, mindistscan?0:(maxslc-minslc)/2+0.25, mindistscan?0:(maxslc-minslc)/2+0.25, yedn, yeup);
 
-    // Put the center point in the RHC-weighted mean number of slices
+    // Put the center point in the R(F)HC-weighted mean number of slices for
+    // numu (NC)
     if(!mindistscan && minslc == 2 && maxslc == 4) {
-      const double mid = 3.49;
+      const double mid = nm?3.49:3.61;
       g.SetPoint(g.GetN()-1, mid, y);
-      g.SetPointError(g.GetN()-1, mid-1.75, 4.25-mid, yedn, yeup);
+      g.SetPointError(g.GetN()-1, mid-minslc-0.25, maxslc+0.25-mid, yedn, yeup);
     }
     if(!mindistscan && minslc == 8 && maxslc == 12) {
-      const double mid = 8.81;
+      const double mid = nm?8.81:9.39;
       g.SetPoint(g.GetN()-1, mid, y);
-      g.SetPointError(g.GetN()-1, mid-7.75, 12.25-mid, yedn, yeup);
+      g.SetPointError(g.GetN()-1, mid-minslc-0.25, maxslc+0.25-mid, yedn, yeup);
     }
 
   }
@@ -83,14 +84,20 @@ void nm_summary(const string name)
     const double val = g.GetFunction("f")->Eval(2);
 
     // Crudely factor out the systematic error by making the 
-    // reduced chi2 = 1
-    const double fiterror = g.GetFunction("f")->GetParError(0)
+    // reduced chi2 = 1.
+    const double staterror = g.GetFunction("f")->GetParError(0)
      * g.GetFunction("f")->GetChisquare() / g.GetFunction("f")->GetNDF();
 
-    const double edn = sqrt(pow(g.GetErrorYlow(0),  2) + pow(fiterror, 2)),
-                 eup = sqrt(pow(g.GetErrorYhigh(0), 2) + pow(fiterror, 2));
+    double syserrorup = 0, syserrordn;
+    for(int i = 0; i < g.GetN(); i++){
+      syserrorup += sqrt(pow(g.GetErrorYhigh(i)[i], 2) - pow(staterror, 2))/g.GetN();
+      syserrordn += sqrt(pow(g.GetErrorYlow (i)[i], 2) - pow(staterror, 2))/g.GetN();
+    }
 
-    printf("%.2f + %.2f - %.2f (%.2f)\n", val, eup, edn, fiterror);
+    const double edn = sqrt(pow(syserrordn, 2) + pow(staterror, 2)),
+                 eup = sqrt(pow(syserrorup, 2) + pow(staterror, 2));
+
+    printf("%.2f + %.2f - %.2f (+%.2f -%.2f, %.2f)\n", val, eup, edn, syserrordn, syserrorup, staterror);
 
     ideal->SetPoint(0, 2, val);
     ideal->SetPointError(0, 0, 0, edn, eup);

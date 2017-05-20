@@ -15,7 +15,7 @@
 #include <vector>
 #include <string>
 
-const int npar = 7;
+const int npar = 9;
 static TMinuit * mn = NULL;
 
 #include "common.C"
@@ -29,8 +29,8 @@ enum conttype { oned68, twod68, twod90 };
 
 static const double tsize = 0.04;
 
-const double mum_nyield_nominal = 0.1810;
-const double mum_nyield_error   = 0.0305;
+const double mum_nyield_nominal = muoncatcher?0.85:0.1810;
+const double mum_nyield_error   = muoncatcher?0.04:0.0305;
 
 const double neff_nominal = 0.3;
 const double neff_error = 0.03;
@@ -38,19 +38,21 @@ const double neff_error = 0.03;
 const double b12eff_nominal = 0.5;
 const double b12eff_error = 0.2;
 
-const double rough_neut_lifetime = 52.; // us
-const double mean_time_of_muon_capture_weighted_by_neut_yield = 1.07; // us
+const double rough_neut_lifetime = muoncatcher?60:52.; // us
+const double mean_time_of_muon_capture_weighted_by_neut_yield =
+muoncatcher?0.21:1.07; // us
 const double timing_eff_difference_for_pions =
   exp(-mean_time_of_muon_capture_weighted_by_neut_yield/rough_neut_lifetime);
 
 // Ratio of the neutron yield from stopping pions to that of muons, per
 // stop, slightly adjusted by the greater fraction of neutrons from pions
-// that undergo invisible interactions isntead of being captured because of
+// that undergo invisible interactions instead of being captured because of
 // their higher energy.
 //
 // Multiplied by a pretty ad hoc correction for tracking difficulties, see
 // below.
-const double npimu_stop_nominal = 14.29 * 0.75;
+const double npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) * 
+(muoncatcher? 1 : 0.75);
 
 // Not const because I want to adjust it to make different contours, and it 
 // is used by fcn().
@@ -58,7 +60,7 @@ const double npimu_stop_nominal = 14.29 * 0.75;
 // This is the error from physics added in quadrature with an error
 // I made up for bad tracking which makes us miss the pions' neutrons
 // more often than the muons'.
-/*const*/ double npimu_stop_error   =  sqrt(pow(2.52, 2) + pow(npimu_stop_nominal*0.1,2));
+/*const*/ double npimu_stop_error   =  sqrt(pow(muoncatcher?0.6:2.52, 2) + pow(npimu_stop_nominal*0.1,2));
 
 // Ratio of the neutron yield from strongly interacting particles *in flight*
 // to what Geant says. 
@@ -101,9 +103,10 @@ const double nm_error = 0.1;
 
 bool useb12 = false; // can be changed between fits
 
-enum trktypes{ numubar, numu, stoppi, piflight, noneutrons, MAXTRKTYPE };
+enum trktypes{ numubar, numu, stoppi, piflight, noneutrons,
+               pileup /* not really a track type... */, MAXTRKTYPE };
 const char * const trktypenames[MAXTRKTYPE] =
-  { "numubar", "numu", "stoppi", "piflight", "noneutrons" };
+  { "numubar", "numu", "stoppi", "piflight", "noneutrons", "pileup" };
 
 TH1D * makehist(const char * const name)
 {
@@ -173,6 +176,8 @@ static void update_hists(const double * const pars)
   const double b12eff          = pars[4];
   const double mum_nyield      = pars[5];
   const double real_n_flight   = pars[6];
+  const double pileup_rhc      = pars[7];
+  const double pileup_fhc      = pars[8];
 
   const double npimu_stop = real_npimu_stop*timing_eff_difference_for_pions;
   const double n_flight   = real_n_flight  *timing_eff_difference_for_pions;
@@ -192,12 +197,14 @@ static void update_hists(const double * const pars)
   rhc_neut[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
   rhc_neut[numu]    ->Add(rhc_reco[numu],     nmscale           *mum_nyield*neff);
   rhc_neut[numubar] ->Add(rhc_reco[numubar],                     mup_nyield*neff);
+  rhc_neut[pileup]  ->Add(rhc_reco[pileup],   pileup_rhc);
 
   // Ditto FHC
   fhc_neut[piflight]->Add(fhc_reco[piflight], ncscale*n_flight             *neff);
   fhc_neut[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
   fhc_neut[numu]    ->Add(fhc_reco[numu],                        mum_nyield*neff);
   fhc_neut[numubar] ->Add(fhc_reco[numubar],                     mup_nyield*neff);
+  rhc_neut[pileup]  ->Add(fhc_reco[pileup],   pileup_fhc);
 
   for(int i = 0; i < MAXTRKTYPE; i++){
     tot_rhc_neut->Add(rhc_neut[i]);
@@ -211,6 +218,8 @@ static void update_hists(const double * const pars)
 
   tot_rhc_neut->Divide(rhc_tracks);
   tot_fhc_neut->Divide(fhc_tracks);
+
+  /*******************************************************************/
 
   const double carbon_acap_frac = 0.82; // my evaluation
 
@@ -351,6 +360,8 @@ static void fcn(__attribute__((unused)) int & np,
   const double b12eff     = par[4];
   const double mum_nyield = par[5];
   const double n_flight   = par[6];
+  const double pileup_rhc = par[7];
+  const double pileup_fhc = par[8];
 
   // penalty terms
 
@@ -463,8 +474,13 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     t->GetEntry(e);
 
     if(!(i == 0 && primary && contained)) continue;
-    if(fabs(trkx) > trkx_cut || fabs(trky) > trky_cut) continue;
-    if(trkz > trkz_cut) continue;
+    if(fabs(trkx) > trkx_cut) continue;
+
+    // XXX should be consts for muon catcher cuts
+    if((!muoncatcher && fabs(trky) > trky_cut) ||
+       ( muoncatcher && (trky > 45. || trky < -trky_cut))) continue;
+    if((!muoncatcher && trkz > trkz_cut) ||
+       ( muoncatcher && (trkz < 1310 || trkz > 1530))) continue;
     if(trklen < trklen_cut) continue;
     if(remid < remid_cut) continue;
     if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
@@ -528,6 +544,9 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     tracks->Fill(slce, mcweight);
   }
 
+  for(int i = 1; i <= h[pileup]->GetNbinsX(); i++)
+    h[pileup]->SetBinContent(i, 1);
+
   f->Close();
 }
 
@@ -561,6 +580,10 @@ void make_mn()
                 0, 0, mnparmerr);
   mn->mnparm(6, "n_flight", n_flight_nominal, 0.1,
              0, 0, mnparmerr);
+  mn->mnparm(7, "pileup_rhc", rhc_tracks->GetMaximum()/10.,
+                              rhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
+  mn->mnparm(8, "pileup_fhc", fhc_tracks->GetMaximum()/10.,
+                              fhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
 }
 
 static void styleleg(TLegend * leg)
@@ -633,7 +656,8 @@ void draw(const int mindist, const int minslc, const int maxslc)
   //
   TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
   const std::string outpdfname =
-    Form("fit_stage_two_mindist%d_nslc%d_%d.pdf", mindist, minslc, maxslc);
+    Form("fit_stage_two_mindist%d_nslc%d_%d_%s.pdf", mindist, minslc, maxslc,
+         muoncatcher?"muoncatcher":"main");
   c2r->Print((outpdfname + "(").c_str()); // intentionally print a blank page
   c2r->SetLogy(logy);
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
@@ -851,11 +875,13 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   mn->Command(Form("SET PAR 3 %f", npimu_stop_nominal));
   mn->Command("FIX 3");
+  mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
   TGraph * cont_perfect_ratio = wrest_contour("cont_perfect_ratio");
 
-  mn->Command(Form("SET PAR 3 %f", npimu_stop_nominal));
+  mn->Command(Form("SET PAR 7 %f", n_flight_nominal));
   mn->Command("FIX 7");
+  mn->Command("MIGRAD");
   mn->Command("MNCONT 1 2 50");
   TGraph * cont_double_perfect_ratio = wrest_contour("cont_double_perfect_ratio");
 
@@ -923,9 +949,11 @@ void draw(const int mindist, const int minslc, const int maxslc)
   mn->Command("MINOS 10000 4");
   if(useb12) mn->Command("MINOS 10000 5");
 
-  printf("NC scale mindist %d slcrange %d - %d : %f + %f - %f\n",
+  printf("NC %s mindist %d slcrange %d - %d : %f + %f - %f\n",
+    muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(0), getminerrup(0), getminerrdn(0));
-  printf("NM scale mindist %d slcrange %d - %d : %f + %f - %f\n",
+  printf("NM %s mindist %d slcrange %d - %d : %f + %f - %f\n",
+    muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(1), getminerrup(1), getminerrdn(1));
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
@@ -1025,9 +1053,11 @@ void draw(const int mindist, const int minslc, const int maxslc)
 }
 
 void rhc_stage_two(const char * const input, const int mindist,
-                   const int minslc, const int maxslc)
+                   const int minslc, const int maxslc, const string region)
 {
   if(mindist < 0) return; // to compile only
+
+  muoncatcher = region == "muoncatcher";
 
   TH1::SetDefaultSumw2();
 
@@ -1056,6 +1086,10 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   // other-in-flight neutron yield
   mn->Command("SET LIM 7 0 20");
+
+  // pile-up
+  mn->Command(Form("SET LIM 8 0 %f", rhc_tracks->GetMaximum()));
+  mn->Command(Form("SET LIM 9 0 %f", fhc_tracks->GetMaximum()));
 
   if(!useb12) mn->Command("FIX 5");
   mn->Command("MINIMIZE 10000");
