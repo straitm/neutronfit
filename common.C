@@ -12,7 +12,10 @@ const double additional = 0;
 
 const double trkx_cut = 170,
              trky_cut = 170,
-             trkz_cut = 1250;
+             mucatch_trky_cut = 45,
+             trkz_cut = 1250,
+             mucatch_trkz_cutlo = 1310,
+             mucatch_trkz_cuthi = 1530;
 const double trklen_cut = 200;
 const double remid_cut = 0.75;
 
@@ -30,10 +33,10 @@ static const double markersize = 0.3;
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 3;
-//const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
+const int nbins_e = 6;
+const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
 //const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
-const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 };
+//const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 };
 
 double getpar(int i) // 0-indexed!
 {

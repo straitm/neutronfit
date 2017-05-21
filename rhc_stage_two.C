@@ -32,15 +32,15 @@ static const double tsize = 0.04;
 const double mum_nyield_nominal = muoncatcher?0.85:0.1810;
 const double mum_nyield_error   = muoncatcher?0.04:0.0305;
 
-const double neff_nominal = 0.3;
-const double neff_error = 0.03;
+const double neff_nominal = 0.5  * (muoncatcher?0.5:1);
+const double neff_error   = 0.05 * (muoncatcher?0.5:1);
 
 const double b12eff_nominal = 0.5;
 const double b12eff_error = 0.2;
 
 const double rough_neut_lifetime = muoncatcher?60:52.; // us
 const double mean_time_of_muon_capture_weighted_by_neut_yield =
-muoncatcher?0.21:1.07; // us
+  muoncatcher?0.21:1.07; // us
 const double timing_eff_difference_for_pions =
   exp(-mean_time_of_muon_capture_weighted_by_neut_yield/rough_neut_lifetime);
 
@@ -52,7 +52,7 @@ const double timing_eff_difference_for_pions =
 // Multiplied by a pretty ad hoc correction for tracking difficulties, see
 // below.
 const double npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) * 
-(muoncatcher? 1 : 0.75);
+                                  (muoncatcher? 0.9 : 0.75);
 
 // Not const because I want to adjust it to make different contours, and it 
 // is used by fcn().
@@ -60,7 +60,9 @@ const double npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) *
 // This is the error from physics added in quadrature with an error
 // I made up for bad tracking which makes us miss the pions' neutrons
 // more often than the muons'.
-/*const*/ double npimu_stop_error   =  sqrt(pow(muoncatcher?0.6:2.52, 2) + pow(npimu_stop_nominal*0.1,2));
+/*const*/ double npimu_stop_error =
+  sqrt(pow(muoncatcher?0.6:2.52  , 2)
+     + pow(npimu_stop_nominal*0.1, 2));
 
 // Ratio of the neutron yield from strongly interacting particles *in flight*
 // to what Geant says. 
@@ -204,20 +206,23 @@ static void update_hists(const double * const pars)
   fhc_neut[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
   fhc_neut[numu]    ->Add(fhc_reco[numu],                        mum_nyield*neff);
   fhc_neut[numubar] ->Add(fhc_reco[numubar],                     mup_nyield*neff);
-  rhc_neut[pileup]  ->Add(fhc_reco[pileup],   pileup_fhc);
+  fhc_neut[pileup]  ->Add(fhc_reco[pileup],   pileup_fhc);
 
-  for(int i = 0; i < MAXTRKTYPE; i++){
+  for(int i = 0; i < pileup; i++){
     tot_rhc_neut->Add(rhc_neut[i]);
     tot_fhc_neut->Add(fhc_neut[i]);
   }
 
-  for(int i = 0; i < MAXTRKTYPE; i++){
+  for(int i = 0; i < pileup; i++){
     rhc_neut[i]->Divide(rhc_tracks);
     fhc_neut[i]->Divide(fhc_tracks);
   }
 
   tot_rhc_neut->Divide(rhc_tracks);
   tot_fhc_neut->Divide(fhc_tracks);
+
+  tot_rhc_neut->Add(rhc_neut[pileup]);
+  tot_fhc_neut->Add(fhc_neut[pileup]);
 
   /*******************************************************************/
 
@@ -476,11 +481,10 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     if(!(i == 0 && primary && contained)) continue;
     if(fabs(trkx) > trkx_cut) continue;
 
-    // XXX should be consts for muon catcher cuts
     if((!muoncatcher && fabs(trky) > trky_cut) ||
-       ( muoncatcher && (trky > 45. || trky < -trky_cut))) continue;
+       ( muoncatcher && (trky > mucatch_trky_cut || trky < -trky_cut))) continue;
     if((!muoncatcher && trkz > trkz_cut) ||
-       ( muoncatcher && (trkz < 1310 || trkz > 1530))) continue;
+       ( muoncatcher && (trkz < mucatch_trkz_cutlo || trkz > mucatch_trkz_cuthi))) continue;
     if(trklen < trklen_cut) continue;
     if(remid < remid_cut) continue;
     if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
@@ -618,7 +622,8 @@ void stylehistset(TH1D ** hh, const int color)
   stylehist(hh[stoppi],   color, 1, kDotted);
   stylehist(hh[numu],     color, 2, 9);
   stylehist(hh[numubar],
-    color-9 /*probably bad except for blue and red */, 2, kDashDotted);
+    color-9 /*probably bad except for blue and red */, 1, kDashDotted);
+  stylehist(hh[pileup], color-9, 2, kDashDotted);
 }
 
 void draw(const int mindist, const int minslc, const int maxslc)
@@ -670,7 +675,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   // true if you want a copy of each plot that doesn't yet have the fit
   // histograms drawn on it.
-  const bool print_wo_fit = true;
+  const bool print_wo_fit = false;
 
   g_n_rhc->Draw("pz");
   TLegend * leg = new TLegend(leg_x1,
@@ -683,15 +688,18 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   if(print_wo_fit) c2r->Print(outpdfname.c_str());
 
-  TH1D * c2hists[4] = {
+  const int ndrawhists = 5;
+
+  TH1D * c2hists[ndrawhists] = {
     tot_rhc_neut,
     rhc_neut[piflight],
     rhc_neut[stoppi],
     rhc_neut[numu],
+    rhc_neut[pileup],
   };
     
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
-    for(int h = 0; h < 4; h++)
+    for(int h = 0; h < ndrawhists; h++)
       c2hists[h]->Draw("histsame][");
  
   leg->SetY1NDC(four_entry_leg_y1);
@@ -699,6 +707,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm}, p in flight", "l");
   leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{-}", "l");
   leg->AddEntry(rhc_neut[numu], "RHC #nu_{#mu}", "l");
+  leg->AddEntry(rhc_neut[pileup], "Pileup", "l");
 
   c2r->Print(outpdfname.c_str());
 
@@ -718,14 +727,15 @@ void draw(const int mindist, const int minslc, const int maxslc)
   legf->Draw();
   if(print_wo_fit) c2f->Print(outpdfname.c_str());
     
-  TH1D * c2histsf[4] = {
+  TH1D * c2histsf[ndrawhists] = {
     tot_fhc_neut,
     fhc_neut[piflight],
     fhc_neut[stoppi],
     fhc_neut[numu],
+    fhc_neut[pileup],
   };
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
-    for(int h = 0; h < 4; h++)
+    for(int h = 0; h < ndrawhists; h++)
       c2histsf[h]->Draw("histsame][");
 
   legf->SetY1NDC(four_entry_leg_y1);
@@ -733,6 +743,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm}, p in flight", "l");
   legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{-}", "l");
   legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
+  legf->AddEntry(fhc_neut[pileup], "Pileup", "l");
 
   c2f->Print(outpdfname.c_str());
 
@@ -780,7 +791,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   };
     
   for(int i = 1; i <= tot_rhc_b12->GetNbinsX(); i++)
-    for(int h = 0; h < 3; h++)
+    for(int h = 0; h < 4; h++)
       c2histsb[h]->Draw("histsame][");
 
   leg->SetY1NDC(four_entry_leg_y1);
@@ -814,7 +825,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
     fhc_b12[numu],
   };
   for(int i = 1; i <= tot_rhc_b12->GetNbinsX(); i++)
-    for(int h = 0; h < 3; h++)
+    for(int h = 0; h < 4; h++)
       c2histsfb[h]->Draw("histsame][");
 
   legf->SetY1NDC(four_entry_leg_y1);
@@ -1088,8 +1099,10 @@ void rhc_stage_two(const char * const input, const int mindist,
   mn->Command("SET LIM 7 0 20");
 
   // pile-up
-  mn->Command(Form("SET LIM 8 0 %f", rhc_tracks->GetMaximum()));
-  mn->Command(Form("SET LIM 9 0 %f", fhc_tracks->GetMaximum()));
+  mn->Command(Form("SET PAR 8 %f", 0.05));
+  mn->Command(Form("SET PAR 9 %f", 0.05));
+  mn->Command(Form("SET LIM 8 0.01 0.5"));
+  mn->Command(Form("SET LIM 9 0.01 0.5"));
 
   if(!useb12) mn->Command("FIX 5");
   mn->Command("MINIMIZE 10000");

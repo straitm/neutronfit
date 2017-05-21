@@ -114,9 +114,9 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     // probably don't ever come back? Or do they?
     && fabs(dat->trkx) < trkx_cut
     && ( (!muoncatcher && fabs(dat->trky) < trky_cut) ||
-         ( muoncatcher && dat->trky < 45. && dat->trky > -170))
+         ( muoncatcher && dat->trky < mucatch_trky_cut && dat->trky > -trky_cut))
     && ( (!muoncatcher && dat->trkz < trkz_cut) ||
-         ( muoncatcher && dat->trkz > 1310 && dat->trkz < 1530))
+         ( muoncatcher && dat->trkz > mucatch_trkz_cutlo && dat->trkz < mucatch_trkz_cuthi))
     && dat->nslc >= minslc && dat->nslc <= maxslc
     ;
 }
@@ -197,7 +197,7 @@ bool clustercut(data * dat, const int mindist)
   return !(dat->t >= -1 && dat->t < 2) &&
     dat->t > -nnegbins && dat->t < maxrealtime &&
     dat->nhit >= 1 && dat->mindist <= mindist
-    && (muoncatcher || dat->pe > 35) && dat->e < 20;
+    && dat->pe > 35 && dat->e < 20;
 }
 
 void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,

@@ -1,4 +1,4 @@
-void nm_summary(const string name)
+void nm_summary(const string name, const string region)
 {
   const bool mindistscan = name.size() == 2;
   const bool nm = name.substr(0,2) == "nm";
@@ -20,7 +20,6 @@ void nm_summary(const string name)
   g.SetMarkerStyle(kFullCircle);
   double mindist, y, yeup, yedn, minslc, maxslc;
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
-    printf("%f %f %f\n", y, minslc, maxslc);
     if(!mindistscan && minslc == 0 && maxslc >= 20) continue;
     if(minslc < 1) minslc = 1;
 
@@ -61,7 +60,7 @@ void nm_summary(const string name)
 
   g.Draw("pz");
 
-  TLegend leg(leftmargin+0.05, 1-topmargin-0.16, leftmargin+0.2, 1-topmargin);
+  TLegend leg(leftmargin+0.05, 1-topmargin-0.19, leftmargin+0.2, 1-topmargin-0.01);
   leg.SetMargin(0.01);
   leg.SetTextFont(42);
   leg.SetBorderSize(0);
@@ -70,42 +69,52 @@ void nm_summary(const string name)
 
   leg.AddEntry((TH1D*)NULL, nm?"#nu_{#mu} RHC":"Neutral Current", "");
   leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":Form("Searching %.0f cell widths from track end", mindist), "");
+  leg.AddEntry((TH1D*)NULL, region == "main"?"Main":"Muon Catcher", "");
   leg.Draw();
 
   if(!mindistscan){
 
     TF1 * f = new TF1("f", "[0] + [1]*(x-2)", 2, 20);
 
-    g.Fit("f", "", "", 2, 12);
-    g.GetFunction("f")->SetLineColor(kGray);
-
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
 
-    const double val = g.GetFunction("f")->Eval(2);
-
-    // Crudely factor out the systematic error by making the 
-    // reduced chi2 = 1.
-    const double staterror = g.GetFunction("f")->GetParError(0)
-     * g.GetFunction("f")->GetChisquare() / g.GetFunction("f")->GetNDF();
-
-    double syserrorup = 0, syserrordn;
-    for(int i = 0; i < g.GetN(); i++){
-      syserrorup += sqrt(pow(g.GetErrorYhigh(i)[i], 2) - pow(staterror, 2))/g.GetN();
-      syserrordn += sqrt(pow(g.GetErrorYlow (i)[i], 2) - pow(staterror, 2))/g.GetN();
+    g.Fit("f", "", "", 2, 12);
+    if(g.GetFunction("f") == NULL){
+      fprintf(stderr, "Fit failed\n");
     }
+    else{
+      g.GetFunction("f")->SetLineColor(kGray);
 
-    const double edn = sqrt(pow(syserrordn, 2) + pow(staterror, 2)),
-                 eup = sqrt(pow(syserrorup, 2) + pow(staterror, 2));
+      const double val = g.GetFunction("f")->Eval(2);
 
-    printf("%.2f + %.2f - %.2f (+%.2f -%.2f, %.2f)\n", val, eup, edn, syserrordn, syserrorup, staterror);
+      // Crudely factor out the systematic error by making the 
+      // reduced chi2 = 1.
+      const double staterror = g.GetFunction("f")->GetParError(0)
+       * g.GetFunction("f")->GetChisquare() / g.GetFunction("f")->GetNDF();
 
-    ideal->SetPoint(0, 2, val);
-    ideal->SetPointError(0, 0, 0, edn, eup);
-    ideal->SetMarkerStyle(kFullCircle);
-    ideal->SetMarkerColor(kGray);
-    ideal->SetLineColor(kGray);
-    ideal->Draw("pz");
+      double syserrorup = 0, syserrordn;
+      for(int i = 0; i < g.GetN(); i++){
+        const double argup = pow(g.GetErrorYhigh(i)[i], 2) - pow(staterror, 2);
+        const double argdn = pow(g.GetErrorYlow (i)[i], 2) - pow(staterror, 2);
+        syserrorup += sqrt(argup > 0? argup:0)/g.GetN();
+        syserrordn += sqrt(argdn > 0? argdn:0)/g.GetN();
+      }
+
+      const double edn = sqrt(pow(syserrordn, 2) + pow(staterror, 2)),
+                   eup = sqrt(pow(syserrorup, 2) + pow(staterror, 2));
+
+      printf("%.2f + %.2f - %.2f (+%.2f -%.2f, %.2f)\n",
+             val, eup, edn, syserrordn, syserrorup, staterror);
+
+      ideal->SetPoint(0, 2, val);
+      ideal->SetPointError(0, 0, 0, edn, eup);
+
+      ideal->SetMarkerStyle(kFullCircle);
+      ideal->SetMarkerColor(kGray);
+      ideal->SetLineColor(kGray);
+      ideal->Draw("pz");
+    }
   }
   
-  c1->Print(Form("%s_summary.pdf", name.c_str()));
+  c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }
