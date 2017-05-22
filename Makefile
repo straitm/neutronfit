@@ -37,14 +37,14 @@ $(foreach region, $(REGIONS), \
  )
 
 define summary_rule
-$(1)_slc_summary_$(2).pdf: nm_summary.C nm_summary.sh \
+$(1)_slc_summary_$(2).pdf: common.C nm_summary.C nm_summary.sh \
                 fit_stage_two_mindist4_nslc2_4_$(2).out.txt \
                 fit_stage_two_mindist4_nslc5_5_$(2).out.txt \
                 fit_stage_two_mindist4_nslc6_6_$(2).out.txt \
                 fit_stage_two_mindist4_nslc7_7_$(2).out.txt \
                 fit_stage_two_mindist4_nslc8_12_$(2).out.txt
 	./nm_summary.sh $(1)_slc $(2) 'fit_stage_two_mindist4_nslc*_$(2).out.txt'
-$(1)_summary_$(2).pdf: nm_summary.C nm_summary.sh \
+$(1)_summary_$(2).pdf: common.C nm_summary.C nm_summary.sh \
                 fit_stage_two_mindist6_nslc0_20_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_20_$(2).out.txt \
 		fit_stage_two_mindist4_nslc0_20_$(2).out.txt \

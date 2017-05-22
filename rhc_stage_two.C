@@ -29,20 +29,19 @@ enum conttype { oned68, twod68, twod90 };
 
 static const double tsize = 0.04;
 
-const double mum_nyield_nominal = muoncatcher?0.85:0.1810;
-const double mum_nyield_error   = muoncatcher?0.04:0.0305;
-
-const double neff_nominal = 0.5  * (muoncatcher?0.5:1);
-const double neff_error   = 0.05 * (muoncatcher?0.5:1);
 
 const double b12eff_nominal = 0.5;
 const double b12eff_error = 0.2;
 
-const double rough_neut_lifetime = muoncatcher?60:52.; // us
-const double mean_time_of_muon_capture_weighted_by_neut_yield =
-  muoncatcher?0.21:1.07; // us
-const double timing_eff_difference_for_pions =
-  exp(-mean_time_of_muon_capture_weighted_by_neut_yield/rough_neut_lifetime);
+/*********************************************************************/
+
+bool muoncatcher = true; // set at entry point
+
+double mum_nyield_nominal = 0;
+double mum_nyield_error   = 0;
+double neff_nominal = 0;
+double neff_error   = 0;
+double timing_eff_difference_for_pions = 0;
 
 // Ratio of the neutron yield from stopping pions to that of muons, per
 // stop, slightly adjusted by the greater fraction of neutrons from pions
@@ -51,8 +50,7 @@ const double timing_eff_difference_for_pions =
 //
 // Multiplied by a pretty ad hoc correction for tracking difficulties, see
 // below.
-const double npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) * 
-                                  (muoncatcher? 0.9 : 0.75);
+double npimu_stop_nominal = 0;
 
 // Not const because I want to adjust it to make different contours, and it 
 // is used by fcn().
@@ -60,9 +58,9 @@ const double npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) *
 // This is the error from physics added in quadrature with an error
 // I made up for bad tracking which makes us miss the pions' neutrons
 // more often than the muons'.
-/*const*/ double npimu_stop_error =
-  sqrt(pow(muoncatcher?0.6:2.52  , 2)
-     + pow(npimu_stop_nominal*0.1, 2));
+double npimu_stop_error = 0;
+
+/*********************************************************************/
 
 // Ratio of the neutron yield from strongly interacting particles *in flight*
 // to what Geant says. 
@@ -172,7 +170,7 @@ static void reset_hists()
 static void update_hists(const double * const pars)
 {
   const double ncscale         = pars[0];
-  const double nmscale         = pars[1];
+  const double r_nmscale       = pars[1];
   const double real_npimu_stop = pars[2];
   const double neff            = pars[3];
   const double b12eff          = pars[4];
@@ -197,7 +195,7 @@ static void update_hists(const double * const pars)
   // Estimate of neutrons from RHC per muon, in total and for each truth
   rhc_neut[piflight]->Add(rhc_reco[piflight], ncscale*n_flight             *neff);
   rhc_neut[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
-  rhc_neut[numu]    ->Add(rhc_reco[numu],     nmscale           *mum_nyield*neff);
+  rhc_neut[numu]    ->Add(rhc_reco[numu],     r_nmscale         *mum_nyield*neff);
   rhc_neut[numubar] ->Add(rhc_reco[numubar],                     mup_nyield*neff);
   rhc_neut[pileup]  ->Add(rhc_reco[pileup],   pileup_rhc);
 
@@ -277,7 +275,7 @@ static void update_hists(const double * const pars)
   // Estimate of number of B-12 from RHC per track
   rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale*  flight_b12yield*b12eff);
   rhc_b12[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*stop_pim_b12yield*b12eff);
-  rhc_b12[numu]    ->Add(rhc_reco[numu],     nmscale*     mum_b12yield*b12eff);
+  rhc_b12[numu]    ->Add(rhc_reco[numu],     r_nmscale*   mum_b12yield*b12eff);
   rhc_b12[numubar] ->Add(rhc_reco[numubar],               mup_b12yield*b12eff);
 
   // Ditto FHC
@@ -359,7 +357,7 @@ static void fcn(__attribute__((unused)) int & np,
 
   update_hists(par);
   const double ncscale    = par[0];
-  const double nmscale    = par[1];
+  const double r_nmscale  = par[1];
   const double npimu_stop = par[2];
   const double neff       = par[3];
   const double b12eff     = par[4];
@@ -382,7 +380,7 @@ static void fcn(__attribute__((unused)) int & np,
   // Can use this if we really think we have an external handle
   // on the numu contamination in RHC, but better to leave it out
   // and see that the fit finds a reasonable value
-  //chi2 += pow((nmscale - nm_nominal)/nm_error, 2);
+  //chi2 += pow((r_nmscale - nm_nominal)/nm_error, 2);
 
   static double alldat[nbins_e*4],
                 alldatup[nbins_e*4],
@@ -414,18 +412,6 @@ static void fcn(__attribute__((unused)) int & np,
   chi2 += compare(alldat, alldatup, alldatdn, allmodel);
 }
 
-void setbranchaddress(const char * const name, float * d, TTree * t)
-{
-  t->SetBranchStatus(name, 1);
-  t->SetBranchAddress(name, d);
-}
-
-void setbranchaddress(const char * const name, int * d, TTree * t)
-{
-  t->SetBranchStatus(name, 1);
-  t->SetBranchAddress(name, d);
-}
-
 /* Fill with the number of tracks in the MC for each category of truth */
 void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
 {
@@ -449,15 +435,15 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
   t->SetBranchStatus("*", 0);
 
   setbranchaddress("slce", &slce, t);
-  setbranchaddress("i", &i, t);
-  setbranchaddress("primary", &primary, t);
+  TBranch *       ibranch   = setbranchaddress("i", &i, t);
+  TBranch *   primarybranch = setbranchaddress("primary", &primary, t);
+  TBranch * containedbranch = setbranchaddress("contained", &contained, t);
+  TBranch *      trkzbranch = setbranchaddress("trkz", &trkz, t);
   setbranchaddress("true_pdg", &true_pdg, t);
   setbranchaddress("true_nupdg", &true_nupdg, t);
   setbranchaddress("true_nucc", &true_nucc, t);
-  setbranchaddress("contained", &contained, t);
   setbranchaddress("trkx", &trkx, t);
   setbranchaddress("trky", &trky, t);
-  setbranchaddress("trkz", &trkz, t);
   setbranchaddress("trklen", &trklen, t);
   setbranchaddress("remid", &remid, t);
   setbranchaddress("timeleft", &timeleft, t);
@@ -476,15 +462,25 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
             PI = PIPLUS,  K = KPLUS;
 
   for(int e = 0; e < t->GetEntries(); e++){
-    t->GetEntry(e);
+    containedbranch->GetEntry(e);
+    if(contained) continue;
 
-    if(!(i == 0 && primary && contained)) continue;
+    primarybranch->GetEntry(e);
+    if(primary) continue;
+
+    ibranch->GetEntry(e);
+    if(i != 0) continue;
+
+    trkzbranch->GetEntry(e);
+    if((!muoncatcher && trkz > trkz_cut) ||
+       ( muoncatcher && (trkz < mucatch_trkz_cutlo || trkz > mucatch_trkz_cuthi)))
+      continue;
+
+    t->GetEntry(e);
     if(fabs(trkx) > trkx_cut) continue;
 
     if((!muoncatcher && fabs(trky) > trky_cut) ||
        ( muoncatcher && (trky > mucatch_trky_cut || trky < -trky_cut))) continue;
-    if((!muoncatcher && trkz > trkz_cut) ||
-       ( muoncatcher && (trkz < mucatch_trkz_cutlo || trkz > mucatch_trkz_cuthi))) continue;
     if(trklen < trklen_cut) continue;
     if(remid < remid_cut) continue;
     if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
@@ -1070,6 +1066,38 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   muoncatcher = region == "muoncatcher";
 
+  mum_nyield_nominal = muoncatcher?0.85:0.1810;
+  mum_nyield_error   = muoncatcher?0.04:0.0305;
+
+  neff_nominal = 0.5  * (muoncatcher?0.5:1);
+  neff_error   = 0.05 * (muoncatcher?0.5:1);
+
+  const double rough_neut_lifetime = muoncatcher?60:52.; // us
+  const double mean_time_of_muon_capture_weighted_by_neut_yield =
+  muoncatcher?0.21:1.07; // us
+  timing_eff_difference_for_pions =
+  exp(-mean_time_of_muon_capture_weighted_by_neut_yield/rough_neut_lifetime);
+
+  // Ratio of the neutron yield from stopping pions to that of muons, per
+  // stop, slightly adjusted by the greater fraction of neutrons from pions
+  // that undergo invisible interactions instead of being captured because of
+  // their higher energy.
+  //
+  // Multiplied by a pretty ad hoc correction for tracking difficulties, see
+  // below.
+  npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) * 
+                       (muoncatcher? 0.9 : 0.75);
+
+  // Not const because I want to adjust it to make different contours, and it 
+  // is used by fcn().
+  //
+  // This is the error from physics added in quadrature with an error
+  // I made up for bad tracking which makes us miss the pions' neutrons
+  // more often than the muons'.
+  npimu_stop_error = sqrt(pow(muoncatcher?0.6:2.52  , 2)
+                        + pow(npimu_stop_nominal*0.1, 2));
+
+
   TH1::SetDefaultSumw2();
 
   // I don't need to scale these by POT because everything is done in a ratio
@@ -1084,7 +1112,7 @@ void rhc_stage_two(const char * const input, const int mindist,
   make_mn();
 
   mn->Command("SET LIM 1 0 10"); // NC scale
-  mn->Command("SET LIM 2 0 5");  // numubar scale
+  mn->Command("SET LIM 2 0 10");  // numubar scale
 
   // stopped pion to muon neutron yield ratio
   mn->Command(Form("SET LIM 3 %f %f", 
@@ -1099,10 +1127,10 @@ void rhc_stage_two(const char * const input, const int mindist,
   mn->Command("SET LIM 7 0 20");
 
   // pile-up
-  mn->Command(Form("SET PAR 8 %f", 0.05));
-  mn->Command(Form("SET PAR 9 %f", 0.05));
-  mn->Command(Form("SET LIM 8 0.01 0.5"));
-  mn->Command(Form("SET LIM 9 0.01 0.5"));
+  mn->Command(Form("SET PAR 8 %f", 0.01));
+  mn->Command(Form("SET PAR 9 %f", 0.01));
+  mn->Command(Form("SET LIM 8 0 0.02"));
+  mn->Command(Form("SET LIM 9 0 0.02"));
 
   if(!useb12) mn->Command("FIX 5");
   mn->Command("MINIMIZE 10000");

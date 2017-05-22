@@ -1,3 +1,21 @@
+#include "common.C"
+
+double mean_slice(const bool nm, const int minslc, const int maxslc)
+{
+  if(minslc == maxslc) return minslc;
+
+  TChain c("t");
+  if(nm)
+    for(int i = 0; i < nperiodrhc; i++)
+      c.Add(inputfiles[i]);
+  for(int i = nperiodrhc; i < nperiod; i++)
+    c.Add(inputfiles[i]);
+  TH1D tmp("tmp", "", 100, 1, 101);
+  c.Draw("nslc >> tmp", Form("i == 0 && contained && primary && nslc >= %d && nslc <= %d", minslc, maxslc));
+
+  return tmp.GetMean();
+}
+
 void nm_summary(const string name, const string region)
 {
   const bool mindistscan = name.size() == 2;
@@ -14,7 +32,7 @@ void nm_summary(const string name, const string region)
 
   const double minx = mindistscan?-0.5:0.5, maxx = mindistscan?7:15;
 
-  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 100, 0, 5.5);
+  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 100, 0, 90.5);
 
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
@@ -28,15 +46,10 @@ void nm_summary(const string name, const string region)
 
     // Put the center point in the R(F)HC-weighted mean number of slices for
     // numu (NC)
-    if(!mindistscan && minslc == 2 && maxslc == 4) {
-      const double mid = nm?3.49:3.61;
+    if(!mindistscan) {
+      const double mid = mean_slice(nm, minslc, maxslc);
       g.SetPoint(g.GetN()-1, mid, y);
-      g.SetPointError(g.GetN()-1, mid-minslc-0.25, maxslc+0.25-mid, yedn, yeup);
-    }
-    if(!mindistscan && minslc == 8 && maxslc == 12) {
-      const double mid = nm?8.81:9.39;
-      g.SetPoint(g.GetN()-1, mid, y);
-      g.SetPointError(g.GetN()-1, mid-minslc-0.25, maxslc+0.25-mid, yedn, yeup);
+      g.SetPointError(g.GetN()-1, mid-minslc+0.25, maxslc+0.25-mid, yedn, yeup);
     }
 
   }

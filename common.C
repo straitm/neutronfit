@@ -1,10 +1,8 @@
-bool muoncatcher = true;// not const 'cause I evilly set it at top of each stage
-
 // We aren't going to use anything between -1 and 2 microseconds because
 // the detector conditions are just too awful.  And then don't use
 // anything before holex_hi microseconds because I'm now using that region
 // to define Michels that cut further interactions.
-const double holex_lo = -1, holex_hi = muoncatcher?2:8;
+const double holex_lo = -1, holex_hi = 8;
 
 const double nnegbins = 209;
 const double maxrealtime = 269;
@@ -15,13 +13,23 @@ const double trkx_cut = 170,
              mucatch_trky_cut = 45,
              trkz_cut = 1250,
              mucatch_trkz_cutlo = 1310,
-             mucatch_trkz_cuthi = 1530;
+             mucatch_trkz_cuthi = 1560;
 const double trklen_cut = 200;
 const double remid_cut = 0.75;
 
 const int nperiodrhc = 2; // 4, 6
 const int nperiodfhc = 4; // 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
+
+const char * const inputfiles[nperiod] = {
+  "prod_pid_S16-12-07_nd_period6_keepup/1745-type3.root",
+  "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
+
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+};
 
 const char * const Speriodnames[nperiod] =
     { "P6", "P4", "P1", "P2", "P3", "P5" };
@@ -204,3 +212,16 @@ static double gdrawmax(const TGraphAsymmErrors * const g)
   return max;
 }
 
+TBranch * setbranchaddress(const char * const name, float * d, TTree * t)
+{
+  t->SetBranchStatus(name, 1);
+  t->SetBranchAddress(name, d);
+  return t->GetBranch(name);
+}
+
+TBranch * setbranchaddress(const char * const name, int * d, TTree * t)
+{
+  t->SetBranchStatus(name, 1);
+  t->SetBranchAddress(name, d);
+  return t->GetBranch(name);
+}

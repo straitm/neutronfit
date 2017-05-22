@@ -16,6 +16,8 @@ TMinuit * mn = NULL;
 
 #include "common.C"
 
+bool muoncatcher = true;// set at entry point
+
 double maxfitt = maxrealtime; // varies
 
 struct fitanswers{
@@ -24,14 +26,12 @@ struct fitanswers{
          b12mag, b12mage_up, b12mage_dn;
 };
 
-// From a loose cut running of this program
-const double n_lifetime_nominal = muoncatcher?45:52.7;
+double n_lifetime_nominal = 0; // set below
 
 // From external considerations.  It doesn't substantively change the
 // result of this program if a smaller number is put here, but it would
 // be circular to do so in most cases, so don't.
-double n_lifetime_priorerr = muoncatcher?10:5.; // changed below
-//const double n_lifetime_priorerr = 2.;
+double n_lifetime_priorerr = 0; // changed below
 
 // This is the *effective* muon lifetime, with all detector effects
 const double tmich_nominal = 2.1;
@@ -809,9 +809,14 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
   */
   n_diffusion_nominal = 14.94 * pow(mindist + 0.625, 1.74);
 
+  // From external Monte Carlo
+  n_lifetime_priorerr = muoncatcher?10:5.;
   // Hackily provide information from the more data-rich fits to the 
   // data-poor fits so they don't spin out of control.
   if(mindist <= 2) n_lifetime_priorerr = 2.;
+
+  // From a loose cut running of this program
+  n_lifetime_nominal = muoncatcher?45:52.7;
 
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod; i++){

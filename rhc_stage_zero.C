@@ -22,6 +22,8 @@ TMinuit * mn = NULL; // dumb, because of common.C
 // For my standard study, "true" is the correct choice.
 const bool ALL_TRACKS_GO_IN_THE_DENOMINATOR = true;
 
+bool muoncatcher = true;// set at entry point
+
 struct data{
   int run;
   int subrun;
@@ -51,18 +53,6 @@ struct data{
   float cosx;
   float cosy;
 };
-
-void setbranchaddress(const char * const name, float * d, TTree * t)
-{
-  t->SetBranchStatus(name, 1);
-  t->SetBranchAddress(name, d);
-}
-
-void setbranchaddress(const char * const name, int * d, TTree * t)
-{
-  t->SetBranchStatus(name, 1);
-  t->SetBranchAddress(name, d);
-}
 
 void setbranchaddresses(data * dat, TTree * t)
 {
@@ -254,16 +244,6 @@ void rhc_stage_zero(const int mindist, const int minslc, const int maxslc, const
   if(mindist < 0) return; // used to compile only
 
   muoncatcher = region == "muoncatcher";
-
-  const char * const inputfiles[nperiod] = {
-  "prod_pid_S16-12-07_nd_period6_keepup/1745-type3.root",
-  "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
-
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
-  };
 
   data dat;
 
