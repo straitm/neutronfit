@@ -16,7 +16,7 @@ double mean_slice(const bool nm, const int minslc, const int maxslc)
   return tmp.GetMean();
 }
 
-void nm_summary(const string name, const string region)
+void rhc_stage_three(const string name, const string region)
 {
   const bool mindistscan = name.size() == 2;
   const bool nm = name.substr(0,2) == "nm";
