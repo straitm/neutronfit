@@ -40,6 +40,11 @@ void rhc_stage_three(const string name, const string region)
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
   double mindist, y, yeup, yedn, minslc, maxslc;
+
+  // Do not want to set the xerrors before fitting because they get used 
+  // in appropriately by TGraph::Fit().  Set them afterwards for display.
+  vector<double> drawxerr_dn, drawxerr_up;
+
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
     if(!mindistscan && minslc == 0 && maxslc >= 20) continue;
     if(minslc < 1) minslc = 1;
@@ -53,7 +58,9 @@ void rhc_stage_three(const string name, const string region)
     if(!mindistscan) {
       const double mid = mean_slice(nm, minslc, maxslc);
       g.SetPoint(g.GetN()-1, mid, y);
-      g.SetPointError(g.GetN()-1, mid-minslc+0.25, maxslc+0.25-mid, yedn, yeup);
+      drawxerr_dn.push_back(mid-minslc+0.25);
+      drawxerr_up.push_back(maxslc+0.25-mid);
+      g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
     }
   }
 
@@ -136,6 +143,9 @@ void rhc_stage_three(const string name, const string region)
       ideal->Draw("pz");
     }
   }
+
+  for(int i = 0; i < drawxerr_dn.size(); i++)
+    g.SetPointError(i, drawxerr_dn[i], drawxerr_up[i], g.GetErrorYlow(i), g.GetErrorYhigh(i));
   
   c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }
