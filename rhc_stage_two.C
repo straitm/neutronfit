@@ -1141,10 +1141,10 @@ void rhc_stage_two(const char * const input, const int mindist,
   mn->Command("SET LIM 7 0 20");
 
   // pile-up
-  mn->Command(Form("SET PAR 8 %f", 0.01));
-  mn->Command(Form("SET PAR 9 %f", 0.01));
-  mn->Command(Form("SET LIM 8 0 0.02"));
-  mn->Command(Form("SET LIM 9 0 0.02"));
+  mn->Command(Form("SET PAR 8 %f", 0));
+  mn->Command(Form("SET PAR 9 %f", 0));
+  mn->Command(Form("FIX 8"));
+  mn->Command(Form("FIX 9")); // Let's try later
 
   if(!useb12) mn->Command("FIX 5");
   mn->Command("MINIMIZE 10000");
