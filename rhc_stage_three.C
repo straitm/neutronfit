@@ -21,6 +21,8 @@ double mean_slice(const bool nm, const int minslc, const int maxslc)
 
 void rhc_stage_three(const string name, const string region)
 {
+  gErrorIgnoreLevel = kError;
+
   const bool mindistscan = name.size() == 2;
   const bool nm = name.substr(0,2) == "nm";
 
@@ -35,7 +37,7 @@ void rhc_stage_three(const string name, const string region)
 
   const double minx = mindistscan?-0.5:0.5, maxx = mindistscan?7:15;
 
-  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 1000, 0, 100);
+  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 1000, 0, 6);
 
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
@@ -45,9 +47,20 @@ void rhc_stage_three(const string name, const string region)
   // in appropriately by TGraph::Fit().  Set them afterwards for display.
   vector<double> drawxerr_dn, drawxerr_up;
 
+  double systval = 0, systup = 0, systdn = 0;
+
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
     if(!mindistscan && minslc == 0 && maxslc >= 20) continue;
     if(minslc < 1) minslc = 1;
+
+    // Very conservatively take the error on the combined sample
+    // with "any" number of slices to be the systematic error
+    if(minslc == 2 && maxslc >= 10){
+      systval = y;
+      systup = yeup;
+      systdn = yedn;
+      continue;
+    }
 
     g.SetPoint(g.GetN(), mindistscan?mindist:(maxslc+minslc)/2, y);
     g.SetPointError(g.GetN()-1, mindistscan?0:(maxslc-minslc)/2+0.25,
@@ -65,7 +78,7 @@ void rhc_stage_three(const string name, const string region)
   }
 
   double maxy = dum->GetYaxis()->GetBinLowEdge(dum->GetNbinsY()+1);
-  while(gdrawmax(&g) > 0 && gdrawmax(&g) < maxy/2) maxy /= 2;
+  while(gdrawmax(&g) > 0 && gdrawmax(&g)*1.5 < maxy) maxy *= 0.8;
   dum->GetYaxis()->SetRangeUser(0, maxy);
 
   dum->GetYaxis()->SetTitle("Scale relative to MC");
@@ -106,7 +119,7 @@ void rhc_stage_three(const string name, const string region)
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
 
-    g.Fit("f", "em", "", 1, 13);
+    g.Fit("f", "em", "", 2, 13);
     if(g.GetFunction("f") == NULL){
       fprintf(stderr, "Fit failed\n");
     }
@@ -116,23 +129,19 @@ void rhc_stage_three(const string name, const string region)
       const double val = g.GetFunction("f")->Eval(2);
 
       // Crudely factor out the systematic error by making the 
-      // reduced chi2 = 1.
-      const double staterror = g.GetFunction("f")->GetParError(0)
-       * g.GetFunction("f")->GetChisquare() / g.GetFunction("f")->GetNDF();
+      // reduced chi2 = 1 if it is smaller than 1.
+      const double reduced_chi2 = g.GetFunction("f")->GetChisquare() /
+                                  g.GetFunction("f")->GetNDF();
+      double eup = +MINUIT->fErp[0]*
+        (reduced_chi2 > 1? sqrt(reduced_chi2): 1);
+      double edn = -MINUIT->fErn[0]*
+        (reduced_chi2 > 1? sqrt(reduced_chi2): 1);
 
-      double syserrorup = 0, syserrordn;
-      for(int i = 0; i < g.GetN(); i++){
-        const double argup = pow(g.GetErrorYhigh(i)[i], 2) - pow(staterror, 2);
-        const double argdn = pow(g.GetErrorYlow (i)[i], 2) - pow(staterror, 2);
-        syserrorup += sqrt(argup > 0? argup:0)/g.GetN();
-        syserrordn += sqrt(argdn > 0? argdn:0)/g.GetN();
-      }
+      eup = sqrt(pow(eup,2) + pow(systup * val/systval, 2));
+      edn = sqrt(pow(edn,2) + pow(systdn * val/systval, 2));
 
-      const double edn = sqrt(pow(syserrordn, 2) + pow(staterror, 2)),
-                   eup = sqrt(pow(syserrorup, 2) + pow(staterror, 2));
-
-      printf("%.2f + %.2f - %.2f (+%.2f -%.2f, %.2f)\n",
-             val, eup, edn, syserrordn, syserrorup, staterror);
+      printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
+             val, eup, edn);
 
       ideal->SetPoint(0, 2, val);
       ideal->SetPointError(0, 0, 0, edn, eup);

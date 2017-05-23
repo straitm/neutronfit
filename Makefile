@@ -43,7 +43,8 @@ $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist4_nslc5_5_$(2).out.txt \
                 fit_stage_two_mindist4_nslc6_6_$(2).out.txt \
                 fit_stage_two_mindist4_nslc7_7_$(2).out.txt \
-                fit_stage_two_mindist4_nslc8_10_$(2).out.txt
+                fit_stage_two_mindist4_nslc8_10_$(2).out.txt \
+                fit_stage_two_mindist4_nslc2_10_$(2).out.txt
 	./stage_three.sh $(1)_slc $(2) 'fit_stage_two_mindist4_nslc[1-9]*_$(2).out.txt'
 $(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \

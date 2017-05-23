@@ -296,8 +296,10 @@ static void update_hists(const double * const pars)
   tot_fhc_b12->Divide(fhc_tracks);
 }
 
-static double compare(double * dat, double * datup, double * datdn,
-                      double * model)
+static double compare(const double * const __restrict__ dat,
+                      const double * const __restrict__ datup,
+                      const double * const __restrict__ datdn,
+                      const double * const __restrict__ model)
 {
   double chi2 = 0;
   for(int i = 0; i < nbins_e*nbeam*2 /* n and b12 */; i++){
@@ -319,8 +321,28 @@ static double compare(double * dat, double * datup, double * datdn,
       // we're only looking at the top half.
       const double offdiagonalmult = i == j? 1 : 2;
 
+      // If the error and the hessian disagree sharply, it probably means that
+      // there was a problem inverting the error matrix.  However, the error
+      // itself can still be fine, and probably in this case the errors are
+      // large and we can neglect the covariances. (Actually, I bet we could
+      // always neglect the covariances...)
+      if((rup*rup)*hessian[i][j] > 100 || 
+         (i == j && (rup*rup)*hessian[i][j] < 1./100)){
+        if(i == j){
+          chi2 += pow((predi - datai)/(rup/2 +rdn/2), 2);
+           fprintf(stderr, "Hessian for %d is crazy nuts: %g. "
+                  "Using raw error instead.\n", i, hessian[i][i]);
+        }
+        else{
+           fprintf(stderr, "Hessian for %d %d is crazy nuts: %f.\n"
+                  "Skipping.  Fit results dubious.\n", i, j, hessian[i][j]);
+        }
+        continue;
+      }
+
       chi2 += offdiagonalmult * (residuals[i][j]
                = correction*hessian[i][j]*(predi - datai)*(predj - dataj));
+ 
     }
   }
 
@@ -413,7 +435,8 @@ static void fcn(__attribute__((unused)) int & np,
 }
 
 /* Fill with the number of tracks in the MC for each category of truth */
-void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
+void fill_hists(const char * const file, TH1D ** h, TH1D * tracks,
+                const int minslc, const int maxslc)
 {
   printf("Reading %s\n", file); fflush(stdout);
 
@@ -430,7 +453,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
   }
 
   int i, primary, true_pdg, true_nupdg, true_nucc, contained,
-      true_atom_cap, true_neutrons;
+      true_atom_cap, true_neutrons, nslc;
   float slce, trkx, trky, trkz, trkstartz, trklen, remid, timeleft, timeback, mcweight;
   t->SetBranchStatus("*", 0);
 
@@ -452,6 +475,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
   setbranchaddress("true_atom_cap", &true_atom_cap, t);
   setbranchaddress("mcweight", &mcweight, t);
   setbranchaddress("true_neutrons", &true_neutrons, t);
+  setbranchaddress("nslc", &nslc, t);
 
   const int MUMINUS =  13, MUPLUS  =  -13, // leptons are backwards
             EMINUS  =  11, EPLUS   =  -11, // from mesons!
@@ -498,6 +522,8 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     if(trklen < trklen_cut) continue;
     if(remid < remid_cut) continue;
     if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
+
+    //if(nslc < minslc || nslc > maxslc) continue;
 
     // Should have no effect, unless there is cosmic overlay
     // In fact, MC times seem to be totally different, so never mind
@@ -972,10 +998,10 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   printf("NC %s mindist %d slcrange %d - %d : %f + %f - %f\n",
     muoncatcher?"muoncatcher":"main",
-    mindist, minslc, maxslc, getpar(0), getminerrup(0), getminerrdn(0));
+    mindist, minslc, maxslc, getpar(0), getbesterrup(0), getbesterrdn(0));
   printf("NM %s mindist %d slcrange %d - %d : %f + %f - %f\n",
     muoncatcher?"muoncatcher":"main",
-    mindist, minslc, maxslc, getpar(1), getminerrup(1), getminerrdn(1));
+    mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1));
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
@@ -1022,12 +1048,12 @@ void draw(const int mindist, const int minslc, const int maxslc)
   rhc_reco[numu]->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
 
   // neutron producers
-  TH1 * norm1 = fhc_reco[numu]->DrawNormalized("ehist");
-  TH1 * norm2 = rhc_reco[numu]->DrawNormalized("ehistsame");
-  TH1 * norm3 = fhc_reco[stoppi]->DrawNormalized("ehistsame");
-  TH1 * norm4 = rhc_reco[stoppi]->DrawNormalized("ehistsame");
+  TH1 * norm1 = fhc_reco[numu]->DrawNormalized("hist");
+  TH1 * norm2 = rhc_reco[numu]->DrawNormalized("histsame");
+  TH1 * norm3 = fhc_reco[stoppi]->DrawNormalized("histsame");
+  TH1 * norm4 = rhc_reco[stoppi]->DrawNormalized("histsame");
   TH1 * norm5 = fhc_reco[piflight]->DrawNormalized("ehistsame");
-  TH1 * norm6 = rhc_reco[piflight]->DrawNormalized("ehistsame");
+  TH1 * norm6 = rhc_reco[piflight]->DrawNormalized("histsame");
 
   if(norm1 && norm2 && norm3 && norm4 && norm5 && norm6){
     double maxy = max(norm1->GetMaximum(), norm2->GetMaximum());
@@ -1080,8 +1106,8 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   muoncatcher = region == "muoncatcher";
 
-  mum_nyield_nominal = muoncatcher?0.85:0.1810;
-  mum_nyield_error   = muoncatcher?0.04:0.0305;
+  mum_nyield_nominal = muoncatcher?0.855:0.1810;
+  mum_nyield_error   = muoncatcher?0.036:0.0305;
 
   neff_nominal = 0.5  * (muoncatcher?0.5:1);
   neff_error   = 0.05 * (muoncatcher?0.5:1);
@@ -1099,8 +1125,8 @@ void rhc_stage_two(const char * const input, const int mindist,
   //
   // Multiplied by a pretty ad hoc correction for tracking difficulties, see
   // below.
-  npimu_stop_nominal = (muoncatcher? 4.0 : 14.29) * 
-                       (muoncatcher? 0.9 : 0.75);
+  npimu_stop_nominal = (muoncatcher? 3.98 : 14.29) * 
+                       (muoncatcher? 0.9  : 0.75);
 
   // Not const because I want to adjust it to make different contours, and it 
   // is used by fcn().
@@ -1118,23 +1144,23 @@ void rhc_stage_two(const char * const input, const int mindist,
   // between the number of primary tracks in the given beam type and the truth
   // of those tracks.  But it might be confusing if the individual histograms
   // are drawn without normalization.
-  fill_hists("fhc_mc/all-type3.root", fhc_reco, fhc_tracks);
-  fill_hists("rhc_mc/all-type3.root", rhc_reco, rhc_tracks);
+  fill_hists("fhc_mc/all-type3.root", fhc_reco, fhc_tracks, minslc, maxslc);
+  fill_hists("rhc_mc/all-type3.root", rhc_reco, rhc_tracks, minslc, maxslc);
 
   gROOT->Macro(input);
 
   make_mn();
 
-  mn->Command("SET LIM 1 0 10"); // NC scale
-  mn->Command("SET LIM 2 0 10");  // numubar scale
+  mn->Command("SET LIM 1 0 50"); // NC scale
+  mn->Command("SET LIM 2 0 50");  // numubar scale
 
   // stopped pion to muon neutron yield ratio
   mn->Command(Form("SET LIM 3 %f %f", 
     max(0, npimu_stop_nominal - 5*npimu_stop_error),
            npimu_stop_nominal + 5*npimu_stop_error));
 
-  mn->Command("SET LIM 4 0.01 1.1"); // neutron efficiency
-  mn->Command("SET LIM 5 0.01 1.1"); // B-12 efficiency
+  mn->Command("SET LIM 4 0.01 1.05"); // neutron efficiency
+  mn->Command("SET LIM 5 0.01 1.05"); // B-12 efficiency
   mn->Command("SET LIM 6 0.01 1.5"); // mu- neutron yield
 
   // other-in-flight neutron yield
