@@ -5,13 +5,16 @@ double mean_slice(const bool nm, const int minslc, const int maxslc)
   if(minslc == maxslc) return minslc;
 
   TChain c("t");
-  if(nm)
-    for(int i = 0; i < nperiodrhc; i++)
+  if(!nm)
+    for(int i = nperiodrhc; i < nperiod; i++)
       c.Add(inputfiles[i]);
-  for(int i = nperiodrhc; i < nperiod; i++)
+  for(int i = 0; i < nperiodrhc; i++)
     c.Add(inputfiles[i]);
+
   TH1D tmp("tmp", "", 100, 1, 101);
-  c.Draw("nslc >> tmp", Form("i == 0 && contained && primary && nslc >= %d && nslc <= %d", minslc, maxslc));
+  c.Draw("nslc >> tmp",
+    Form("i == 0 && contained && primary && nslc >= %d && nslc <= %d",
+         minslc, maxslc));
 
   return tmp.GetMean();
 }
@@ -32,7 +35,7 @@ void rhc_stage_three(const string name, const string region)
 
   const double minx = mindistscan?-0.5:0.5, maxx = mindistscan?7:15;
 
-  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 100, 0, 90.5);
+  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 1000, 0, 100);
 
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
@@ -42,7 +45,8 @@ void rhc_stage_three(const string name, const string region)
     if(minslc < 1) minslc = 1;
 
     g.SetPoint(g.GetN(), mindistscan?mindist:(maxslc+minslc)/2, y);
-    g.SetPointError(g.GetN()-1, mindistscan?0:(maxslc-minslc)/2+0.25, mindistscan?0:(maxslc-minslc)/2+0.25, yedn, yeup);
+    g.SetPointError(g.GetN()-1, mindistscan?0:(maxslc-minslc)/2+0.25,
+                    mindistscan?0:(maxslc-minslc)/2+0.25, yedn, yeup);
 
     // Put the center point in the R(F)HC-weighted mean number of slices for
     // numu (NC)
@@ -51,8 +55,11 @@ void rhc_stage_three(const string name, const string region)
       g.SetPoint(g.GetN()-1, mid, y);
       g.SetPointError(g.GetN()-1, mid-minslc+0.25, maxslc+0.25-mid, yedn, yeup);
     }
-
   }
+
+  double maxy = dum->GetYaxis()->GetBinLowEdge(dum->GetNbinsY()+1);
+  while(gdrawmax(&g) > 0 && gdrawmax(&g) < maxy/2) maxy /= 2;
+  dum->GetYaxis()->SetRangeUser(0, maxy);
 
   dum->GetYaxis()->SetTitle("Scale relative to MC");
   dum->GetXaxis()->SetTitle(mindistscan?
@@ -80,7 +87,7 @@ void rhc_stage_three(const string name, const string region)
   leg.SetFillStyle(0);
   leg.SetTextSize(tsize);
 
-  leg.AddEntry((TH1D*)NULL, nm?"#nu_{#mu} RHC":"Neutral Current", "");
+  leg.AddEntry((TH1D*)NULL, nm?"#nu_{#mu} RHC":"Neutral current", "");
   leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":Form("Searching %.0f cell widths from track end", mindist), "");
   leg.AddEntry((TH1D*)NULL, region == "main"?"Main":"Muon Catcher", "");
   leg.Draw();
@@ -88,10 +95,11 @@ void rhc_stage_three(const string name, const string region)
   if(!mindistscan){
 
     TF1 * f = new TF1("f", "[0] + [1]*(x-2)", 2, 20);
+    f->SetParameters(1, 0);
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
 
-    g.Fit("f", "", "", 2, 12);
+    g.Fit("f", "em", "", 1, 13);
     if(g.GetFunction("f") == NULL){
       fprintf(stderr, "Fit failed\n");
     }
