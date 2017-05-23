@@ -13,7 +13,8 @@ const double trkx_cut = 170,
              mucatch_trky_cut = 45,
              trkz_cut = 1250,
              mucatch_trkz_cutlo = 1310,
-             mucatch_trkz_cuthi = 1560;
+             mucatch_trkz_cuthi = 1560,
+             mucatch_trkstartz_cut = 1100;
 const double trklen_cut = 200;
 const double remid_cut = 0.75;
 

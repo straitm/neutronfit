@@ -431,7 +431,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
 
   int i, primary, true_pdg, true_nupdg, true_nucc, contained,
       true_atom_cap, true_neutrons;
-  float slce, trkx, trky, trkz, trklen, remid, timeleft, timeback, mcweight;
+  float slce, trkx, trky, trkz, trkstartz, trklen, remid, timeleft, timeback, mcweight;
   t->SetBranchStatus("*", 0);
 
   setbranchaddress("slce", &slce, t);
@@ -439,6 +439,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
   TBranch *   primarybranch = setbranchaddress("primary", &primary, t);
   TBranch * containedbranch = setbranchaddress("contained", &contained, t);
   TBranch *      trkzbranch = setbranchaddress("trkz", &trkz, t);
+  TBranch * trkstartzbranch = setbranchaddress("trkstartz", &trkstartz, t);
   setbranchaddress("true_pdg", &true_pdg, t);
   setbranchaddress("true_nupdg", &true_nupdg, t);
   setbranchaddress("true_nucc", &true_nucc, t);
@@ -472,9 +473,14 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
     if(i != 0) continue;
 
     trkzbranch->GetEntry(e);
-    if((!muoncatcher && trkz > trkz_cut) ||
-       ( muoncatcher && (trkz < mucatch_trkz_cutlo || trkz > mucatch_trkz_cuthi)))
-      continue;
+    if(muoncatcher){
+      if(trkz < mucatch_trkz_cutlo || trkz > mucatch_trkz_cuthi) continue;
+      trkstartzbranch->GetEntry(e);
+      if(trkstartz > mucatch_trkstartz_cut) continue;
+    }
+    else{
+      if(trkz > trkz_cut) continue;
+    }
 
     t->GetEntry(e);
     if(fabs(trkx) > trkx_cut) continue;

@@ -44,6 +44,7 @@ struct data{
   float trkx;
   float trky;
   float trkz;
+  float trkstartz;
   float mindist;
   float maxdist;
   float pe;
@@ -76,6 +77,7 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("trkx", &dat->trkx, t);
   setbranchaddress("trky", &dat->trky, t);
   setbranchaddress("trkz", &dat->trkz, t);
+  setbranchaddress("trkstartz", &dat->trkstartz, t);
   setbranchaddress("mindist", &dat->mindist, t);
   setbranchaddress("maxdist", &dat->maxdist, t);
   setbranchaddress("pe", &dat->pe, t);
@@ -107,6 +109,20 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
          ( muoncatcher && dat->trky < mucatch_trky_cut && dat->trky > -trky_cut))
     && ( (!muoncatcher && dat->trkz < trkz_cut) ||
          ( muoncatcher && dat->trkz > mucatch_trkz_cutlo && dat->trkz < mucatch_trkz_cuthi))
+
+    // Try to patch up a deficiency in my ntuples: because calibration
+    // is/was broken for the muon catcher in my input files, I don't
+    // have the CAF variables that limit the amount of hadronic energy
+    // in the muon catcher. So instead make sure that the track starts
+    // solidly in the main detector, which should do much of the same
+    // job. I put this cut in because I saw a large excess of neutrons
+    // with events reconstructed over 3 GeV with the primary track
+    // ending in the muon catcher. The data was much higher than the MC
+    // no matter how the NC fraction was floated. Let's see if avoiding
+    // muon catcher mismodeling/miscalibration of hadronic energy
+    // reduces that discrepancy.
+    && (!muoncatcher || dat->trkstartz < mucatch_trkstartz_cut)
+
     && dat->nslc >= minslc && dat->nslc <= maxslc
     ;
 }
