@@ -1119,9 +1119,9 @@ void rhc_stage_two(const char * const input, const int mindist,
     max(0, npimu_stop_nominal - 5*npimu_stop_error),
            npimu_stop_nominal + 5*npimu_stop_error));
 
-  mn->Command("SET LIM 4 0.01 1"); // neutron efficiency
+  mn->Command("SET LIM 4 0.01 1.1"); // neutron efficiency
   mn->Command("SET LIM 5 0.01 1.1"); // B-12 efficiency
-  mn->Command("SET LIM 6 0.01 1"); // mu- neutron yield
+  mn->Command("SET LIM 6 0.01 1.5"); // mu- neutron yield
 
   // other-in-flight neutron yield
   mn->Command("SET LIM 7 0 20");

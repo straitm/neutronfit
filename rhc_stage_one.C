@@ -655,9 +655,9 @@ static std::vector< std::vector<fitanswers> > dothefit()
   if(!status)
     for(int beam = 0; beam < nbeam; beam++)
       for(int bin = 0; bin < nbins_e; bin++){
-        // This is realy slow and only marginally useful
-        gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
-        gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));
+        // XXX This is realy slow and only marginally useful
+        //gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+beam*nbins_e+bin));
+        //gMinuit->Command(Form("MINOS 50000 %d", nb12_nf +beam*nbins_e+bin));
       }
 
   gMinuit->Command("show min");
