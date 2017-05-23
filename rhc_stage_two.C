@@ -96,7 +96,7 @@ const double n_flight_error = log(1 + so_this_is_the_error);
 
 // NOTE: Arbitrarily invent a small correlation coefficient for the neutron
 // yield for in-flight interactions and stopped pions.
-const double corr_pi_stop_flight = 0.2;
+const double corr_pi_stop_flight = 0.5;
 
 const double nm_nominal = 1;
 const double nm_error = 0.1;
@@ -438,13 +438,13 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
   TBranch *       ibranch   = setbranchaddress("i", &i, t);
   TBranch *   primarybranch = setbranchaddress("primary", &primary, t);
   TBranch * containedbranch = setbranchaddress("contained", &contained, t);
+  TBranch *      trkxbranch = setbranchaddress("trkx", &trkx, t);
+  TBranch *      trkybranch = setbranchaddress("trky", &trky, t);
   TBranch *      trkzbranch = setbranchaddress("trkz", &trkz, t);
   TBranch * trkstartzbranch = setbranchaddress("trkstartz", &trkstartz, t);
   setbranchaddress("true_pdg", &true_pdg, t);
   setbranchaddress("true_nupdg", &true_nupdg, t);
   setbranchaddress("true_nucc", &true_nucc, t);
-  setbranchaddress("trkx", &trkx, t);
-  setbranchaddress("trky", &trky, t);
   setbranchaddress("trklen", &trklen, t);
   setbranchaddress("remid", &remid, t);
   setbranchaddress("timeleft", &timeleft, t);
@@ -464,10 +464,10 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
 
   for(int e = 0; e < t->GetEntries(); e++){
     containedbranch->GetEntry(e);
-    if(contained) continue;
+    if(!contained) continue;
 
     primarybranch->GetEntry(e);
-    if(primary) continue;
+    if(!primary) continue;
 
     ibranch->GetEntry(e);
     if(i != 0) continue;
@@ -482,11 +482,19 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks)
       if(trkz > trkz_cut) continue;
     }
 
-    t->GetEntry(e);
+    trkxbranch->GetEntry(e);
     if(fabs(trkx) > trkx_cut) continue;
 
-    if((!muoncatcher && fabs(trky) > trky_cut) ||
-       ( muoncatcher && (trky > mucatch_trky_cut || trky < -trky_cut))) continue;
+    trkybranch->GetEntry(e);
+    if(muoncatcher){
+      if(trky > mucatch_trky_cut || trky < -trky_cut) continue;
+    }
+    else{
+      if(fabs(trky) > trky_cut) continue;
+    }
+
+    t->GetEntry(e);
+
     if(trklen < trklen_cut) continue;
     if(remid < remid_cut) continue;
     if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
