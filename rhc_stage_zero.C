@@ -202,8 +202,8 @@ bool clustercut(data * dat, const int mindist)
 {
   return !(dat->t >= -1 && dat->t < 2) &&
     dat->t > -nnegbins && dat->t < maxrealtime &&
-    dat->nhit >= 1 && dat->mindist <= mindist
-    && dat->pe > 35 && dat->e < 20;
+    dat->nhitx >= 1 && dat->nhity >= 1 && dat->mindist <= mindist
+    && dat->pe > 35;
 }
 
 void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,

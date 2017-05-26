@@ -23,7 +23,7 @@ const int nperiodfhc = 4; // 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
-  "prod_pid_S16-12-07_nd_period6_keepup/1745-type3.root",
+  "prod_pid_S16-12-07_nd_period6_keepup/1947-type3.root",
   "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
@@ -42,9 +42,9 @@ static const double markersize = 0.3;
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 8;
-const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 };
-//const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 }; // 6
+const int nbins_e = 6;
+//const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 };
+const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 }; // 6
 //const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 }; // 5
 //const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 }; // 3
 

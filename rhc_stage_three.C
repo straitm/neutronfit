@@ -128,17 +128,10 @@ void rhc_stage_three(const string name, const string region)
 
       const double val = g.GetFunction("f")->Eval(2);
 
-      // Crudely factor out the systematic error by making the 
-      // reduced chi2 = 1 if it is smaller than 1.
-      const double reduced_chi2 = g.GetFunction("f")->GetChisquare() /
-                                  g.GetFunction("f")->GetNDF();
-      double eup = +MINUIT->fErp[0]*
-        (reduced_chi2 > 1? sqrt(reduced_chi2): 1);
-      double edn = -MINUIT->fErn[0]*
-        (reduced_chi2 > 1? sqrt(reduced_chi2): 1);
-
-      eup = sqrt(pow(eup,2) + pow(systup * val/systval, 2));
-      edn = sqrt(pow(edn,2) + pow(systdn * val/systval, 2));
+      const double eup = sqrt(pow(+MINUIT->fErp[0],2) +
+                              pow(systup * val/systval, 2));
+      const double edn = sqrt(pow(-MINUIT->fErn[0],2) +
+                              pow(systdn * val/systval, 2));
 
       printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
              val, eup, edn);

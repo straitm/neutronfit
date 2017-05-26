@@ -38,14 +38,12 @@ $(foreach region, $(REGIONS), \
 
 define summary_rule
 $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
-                fit_stage_two_mindist4_nslc2_3_$(2).out.txt \
-                fit_stage_two_mindist4_nslc4_4_$(2).out.txt \
-                fit_stage_two_mindist4_nslc5_5_$(2).out.txt \
-                fit_stage_two_mindist4_nslc6_6_$(2).out.txt \
-                fit_stage_two_mindist4_nslc7_7_$(2).out.txt \
-                fit_stage_two_mindist4_nslc8_10_$(2).out.txt \
-                fit_stage_two_mindist4_nslc2_10_$(2).out.txt
-	./stage_three.sh $(1)_slc $(2) 'fit_stage_two_mindist4_nslc[1-9]*_$(2).out.txt'
+                fit_stage_two_mindist6_nslc2_3_$(2).out.txt \
+                fit_stage_two_mindist6_nslc4_5_$(2).out.txt \
+                fit_stage_two_mindist6_nslc6_7_$(2).out.txt \
+                fit_stage_two_mindist6_nslc8_10_$(2).out.txt \
+                fit_stage_two_mindist6_nslc2_20_$(2).out.txt
+	./stage_three.sh $(1)_slc $(2) 'fit_stage_two_mindist6_nslc{2_3,4_5,6_7,8_10,2_20}_$(2).out.txt'
 $(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_10_$(2).out.txt \
