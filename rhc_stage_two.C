@@ -669,8 +669,8 @@ void draw(const int mindist, const int minslc, const int maxslc)
   const double topmargin  = 0.05;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
-  const bool logy = false;
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-6:0, 2);
+  const bool logy = true;
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-4:0, 3.3);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
 
   //////////////////////////////////////////////////////////////////////

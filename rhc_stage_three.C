@@ -108,14 +108,16 @@ void rhc_stage_three(const string name, const string region)
   leg.SetTextSize(tsize);
 
   leg.AddEntry((TH1D*)NULL, nm?"#nu_{#mu} RHC":"Neutral current", "");
-  leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":Form("Searching %.0f cell widths from track end", mindist), "");
+  leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":
+    Form("Searching %.0f cell widths from track end", mindist), "");
   leg.AddEntry((TH1D*)NULL, region == "main"?"Main":"Muon Catcher", "");
   leg.Draw();
 
   if(!mindistscan){
 
     TF1 * f = new TF1("f", "[0] + [1]*(x-2)", 2, 20);
-    f->SetParameters(1, 0);
+    f->SetParameters(1, 0.1);
+    f->SetParLimits(0, 0, 10);
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
 
@@ -147,7 +149,8 @@ void rhc_stage_three(const string name, const string region)
   }
 
   for(int i = 0; i < drawxerr_dn.size(); i++)
-    g.SetPointError(i, drawxerr_dn[i], drawxerr_up[i], g.GetErrorYlow(i), g.GetErrorYhigh(i));
+    g.SetPointError(i, drawxerr_dn[i], drawxerr_up[i],
+                       g.GetErrorYlow(i), g.GetErrorYhigh(i));
   
   c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }

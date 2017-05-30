@@ -8,7 +8,7 @@ fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt fit_stage_two_mindist$(1)_n
   common.C stage_two.sh
 	./stage_two.sh $(1) $(2) $(3) $(4)
 
-fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).C: \
+fit_mindist$(1)_nslc$(2)_$(3)_$(4).pdf fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).C: \
   rhc_stage_one_C.so savedhists_mindist$(1)_nslc$(2)_$(3)_$(4).C common.C stage_one.sh
 	./stage_one.sh $(1) $(2) $(3) $(4)
 
@@ -43,7 +43,7 @@ $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc6_7_$(2).out.txt \
                 fit_stage_two_mindist6_nslc8_10_$(2).out.txt \
                 fit_stage_two_mindist6_nslc2_20_$(2).out.txt
-	./stage_three.sh $(1)_slc $(2) 'fit_stage_two_mindist6_nslc{2_3,4_5,6_7,8_10,2_20}_$(2).out.txt'
+	./stage_three.sh $(1)_slc $(2) fit_stage_two_mindist6_nslc{2_3,4_5,6_7,8_10,2_20}_$(2).out.txt
 $(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_10_$(2).out.txt \
@@ -52,7 +52,7 @@ $(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
 		fit_stage_two_mindist2_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist1_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist0_nslc0_10_$(2).out.txt
-	./stage_three.sh $(1) $(2) 'fit_stage_two_mindist?_nslc0_10_$(2).out.txt'
+	./stage_three.sh $(1) $(2) fit_stage_two_mindist?_nslc0_10_$(2).out.txt
 endef
 
 REACTIONS := nm nc

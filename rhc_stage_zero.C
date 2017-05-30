@@ -60,7 +60,7 @@ void setbranchaddresses(data * dat, TTree * t)
   t->SetBranchStatus("*", 0);
   setbranchaddress("i", &dat->i, t);
   setbranchaddress("run", &dat->run, t);
-  setbranchaddress("subrun", &dat->subrun, t);
+  //setbranchaddress("subrun", &dat->subrun, t);
   setbranchaddress("event", &dat->event, t);
   setbranchaddress("trk", &dat->trk, t);
   setbranchaddress("primary", &dat->primary, t);
@@ -69,7 +69,7 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("nslc", &dat->nslc, t);
   setbranchaddress("nhitx", &dat->nhitx, t);
   setbranchaddress("nhity", &dat->nhity, t);
-  setbranchaddress("nhit", &dat->nhit, t);
+  //setbranchaddress("nhit", &dat->nhit, t);
   setbranchaddress("timeleft", &dat->timeleft, t);
   setbranchaddress("timeback", &dat->timeback, t);
   setbranchaddress("remid", &dat->remid, t);
@@ -79,13 +79,13 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("trkz", &dat->trkz, t);
   setbranchaddress("trkstartz", &dat->trkstartz, t);
   setbranchaddress("mindist", &dat->mindist, t);
-  setbranchaddress("maxdist", &dat->maxdist, t);
+  //setbranchaddress("maxdist", &dat->maxdist, t);
   setbranchaddress("pe", &dat->pe, t);
   setbranchaddress("e", &dat->e, t);
   setbranchaddress("t", &dat->t, t);
   setbranchaddress("slce", &dat->slce, t);
-  setbranchaddress("cosx", &dat->cosx, t);
-  setbranchaddress("cosy", &dat->cosy, t);
+  //setbranchaddress("cosx", &dat->cosx, t);
+  //setbranchaddress("cosy", &dat->cosy, t);
 }
 
 // true if it passes the cut
@@ -182,28 +182,13 @@ bool track_followers_cut(const vector<data> & dats)
   return true;
 }
 
-// Other possibilities:
-//
-// Attempt to agressively reduce neutrons while still getting B-12
-/*
-  "nhitx >= 1 && nhity >= 1" // maximum range is about 5.7cm
-  "&& nhitx <= 2 && nhity <= 2"
-  "&& nhit <= 3"
-  "&& mindist < 2.8" // allow up to 1 plane and 2 cells off
-  "&& pe > 35 && e > 8*0.62 && e < 25*0.62";
-*/
-
-// a pretty strict, reasonable cut
-/*
-   "nhitx >= 1 && nhity >= 1 && mindist <= 6"
-   "&& pe > 70 && e < 20";
-*/
 bool clustercut(data * dat, const int mindist)
 {
   return !(dat->t >= -1 && dat->t < 2) &&
     dat->t > -nnegbins && dat->t < maxrealtime &&
-    dat->nhitx >= 1 && dat->nhity >= 1 && dat->mindist <= mindist
-    && dat->pe > 35;
+    (TWO_D_CUT?true:dat->nhitx >= 1 && dat->nhity >= 1) &&
+    dat->mindist <= mindist &&
+    dat->pe > 35;
 }
 
 void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,

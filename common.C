@@ -1,3 +1,7 @@
+// True if we are finding neutrons from 2D information alone, i.e not
+// requiring hits in both x and y
+const bool TWO_D_CUT = true;
+
 // We aren't going to use anything between -1 and 2 microseconds because
 // the detector conditions are just too awful.  And then don't use
 // anything before holex_hi microseconds because I'm now using that region

@@ -802,12 +802,13 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     and that usually only in 2D. Assuming 2D, I get more like 80us. And
     of course the functional form isn't quite right for 2D...
     
-    Anyway, here's a stupid parameterization that skewers the 2D case.
-    Note the addition of 5/8 of a cellwidth because that's how much you
-    get for mindist == 0 on average. In fcn() this is given a factor of
-    2 error. Mostly we just measure it.
+    Anyway, here's a stupid parameterization that skewers the 2D and 3D
+    cases. Note the addition of 5/8 of a cellwidth because that's how
+    much you get for mindist == 0 on average. In fcn() this is given a
+    factor of 2 error. Mostly we just measure it.
   */
-  n_diffusion_nominal = 14.94 * pow(mindist + 0.625, 1.74);
+  n_diffusion_nominal = TWO_D_CUT?14.94 * pow(mindist + 0.625, 1.74)
+                                 : 1.39 * pow(mindist + 0.625, 3.00);
 
   // From external Monte Carlo
   n_lifetime_priorerr = muoncatcher?10:5.;
