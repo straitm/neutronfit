@@ -1,4 +1,5 @@
-all: nm_summary_main.pdf nc_summary_main.pdf nm_slc_summary_main.pdf nc_slc_summary_main.pdf \
+all: nm_summary_main.pdf nc_summary_main.pdf \
+     nm_slc_summary_main.pdf nc_slc_summary_main.pdf \
      nm_summary_muoncatcher.pdf nc_summary_muoncatcher.pdf \
      nm_slc_summary_muoncatcher.pdf nc_slc_summary_muoncatcher.pdf
 
@@ -8,7 +9,7 @@ fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt fit_stage_two_mindist$(1)_n
   common.C stage_two.sh
 	./stage_two.sh $(1) $(2) $(3) $(4)
 
-fit_mindist$(1)_nslc$(2)_$(3)_$(4).pdf fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).C: \
+fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4).pdf fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).C: \
   rhc_stage_one_C.so savedhists_mindist$(1)_nslc$(2)_$(3)_$(4).C common.C stage_one.sh
 	./stage_one.sh $(1) $(2) $(3) $(4)
 

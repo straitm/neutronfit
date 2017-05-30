@@ -916,7 +916,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
                   rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
   }
 
-  const string filename = Form("fit_mindist%d_nslc%d_%d_%s.pdf", mindist, minslc, maxslc, region.c_str());
+  const string filename = Form("fit_stage_one_mindist%d_nslc%d_%d_%s.pdf", mindist, minslc, maxslc, region.c_str());
 
   c1->Print(Form("%s[", filename.c_str()));
 
