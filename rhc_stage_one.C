@@ -606,17 +606,18 @@ static vector< vector< vector<fitanswers> > > dothefit()
 
   for(int period = 0; period < nperiod; period++){
     for(int bin = 0; bin < nbins_e; bin++){
+      const int off_period = get_off_period(period, bin);
       // May as well set this to near the right value
-      mn->Command(Form("SET PAR %d %f", flat_nf+period*nbins_e + bin,
+      mn->Command(Form("SET PAR %d %f", flat_nf+off_period,
         fithist[period]->ProjectionX("x", bin+1, bin+1)
           ->Integral(0, nnegbins-10)/(nnegbins - 10)));
+
       // Again, something reasonable based on the data.
-      mn->Command(Form("SET PAR %d %f", pileup_nf+period*nbins_e + bin,
+      mn->Command(Form("SET PAR %d %f", pileup_nf+off_period,
         fithist[period]->ProjectionX("x", bin+1, bin+1)
           ->GetBinContent(nnegbins - 2)/8.));
     }
   }
-
 
   for(int beam = 0; beam < nbeam; beam++){
     for(int bin = 0; bin < nbins_e; bin++){
@@ -644,13 +645,13 @@ static vector< vector< vector<fitanswers> > > dothefit()
   mn->Command(Form("FIX %d", tneut_nf));
   mn->Command(Form("FIX %d", aneut_nf));
 
-  const int migrad_tries = 8;
+  const int migrad_tries = 4;
 
+  printf("+++++ SIMPLEX followed by MIGRAD with some things fixed ++++++\n");
   status = mn->Command("SIMPLEX 100000");
   for(int i = 0; i < migrad_tries; i++)
     if(0 == (status = mn->Command("MIGRAD 100000")))
       break;
-  status = mn->Command("HESSE");
 
   // Now that we're (hopefully) converged, let muon lifetime float
   for(int beam = 0; beam < nbeam; beam++)
@@ -691,10 +692,42 @@ static vector< vector< vector<fitanswers> > > dothefit()
     }
   }
 
-  status = mn->Command("SIMPLEX 100000");
+  printf("+++++ MIGRAD with things freed ++++++\n");
+  mn->Command("MIGRAD 100000");
+
+  // Fix any nuisance parameters (Michels, uncorrelated background, pileup)
+  // that are up against zero so that we can get a sensible error matrix out.
+  // This is a little dubious, but so is what happens if we don't do it.
+   for(int beam = 0; beam < nbeam; beam++){
+    for(int bin = 0; bin < nbins_e; bin++){
+      for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
+        const int off_beam = get_off_beam(beam, bin, sigorbg);
+        if(fabs(getpar(nmich_nc + off_beam)) <
+                geterr(nmich_nc + off_beam)){
+          mn->Command(Form("FIX %d", nmich_nf + off_beam));
+          mn->Command(Form("FIX %d", tmich_nf + off_beam));
+        }
+      }
+    }
+  }
+  
+  for(int period = 0; period < nperiod; period++){
+    for(int bin = 0; bin < nbins_e; bin++){
+      const int off_period = get_off_period(period, bin);
+      if(fabs(getpar(flat_nc + off_period) <
+              geterr(flat_nc + off_period)))
+        mn->Command(Form("FIX %d", flat_nf + off_period));
+      if(fabs(getpar(pileup_nc + off_period) <
+              geterr(pileup_nc + off_period)))
+        mn->Command(Form("FIX %d", pileup_nf + off_period));
+    }
+  }
+
+  printf("+++++ MIGRAD and HESSE with zero pars fixed again ++++++\n");
   for(int i = 0; i < migrad_tries; i++)
     if(0 == (status = mn->Command("MIGRAD 100000")))
       break;
+
   status = mn->Command("HESSE");
 
   const bool DOMINOS = false, // slow and only marginally useful
@@ -706,6 +739,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
         for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
           const int off_beam = get_off_beam(beam, bin, sigorbg);
           if(DOMINOS){
+            printf("+++++ MINOS on parameters of interest ++++++\n");
             gMinuit->Command(Form("MINOS 50000 %d", nneut_nf+off_beam));
             if(EVENDOB12MINOS)
               gMinuit->Command(Form("MINOS 50000 %d", nb12_nf+off_beam));
@@ -740,8 +774,8 @@ static vector< vector< vector<fitanswers> > > dothefit()
     anses.push_back(ans2);
   }
 
-  // Just in case MINOS found a new minimum
   if(DOMINOS){
+    printf("+++++ MIGRAD & HESSE in case MINOS found a new minimum ++++++\n");
     status = mn->Command("MIGRAD");
     status = mn->Command("HESSE");
   }

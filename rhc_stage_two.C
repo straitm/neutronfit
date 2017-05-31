@@ -342,21 +342,23 @@ static double compare(const double * const __restrict__ dat,
       // always neglect the covariances...)
       if((rup*rup)*hessian[i][j] > 100 || 
          (i == j && (rup*rup)*hessian[i][j] < 1./100)){
+        static int crazyprint = 0;
         if(i == j){
           chi2 += pow((predi - datai)/(rup/2 +rdn/2), 2);
-           fprintf(stderr, "Hessian for %d is crazy nuts: %g. "
-                  "Using raw error instead.\n", i, hessian[i][i]);
+          if(crazyprint++ < 100)
+            fprintf(stderr, "Hessian for %d is crazy nuts: %g. "
+                    "Using raw error instead.\n", i, hessian[i][i]);
         }
         else{
-           fprintf(stderr, "Hessian for %d %d is crazy nuts: %f.\n"
-                  "Skipping.  Fit results dubious.\n", i, j, hessian[i][j]);
+          if(crazyprint++ < 100) 
+            fprintf(stderr, "Hessian for %d %d is crazy nuts: %f.\n"
+                   "Skipping.  Fit results dubious.\n", i, j, hessian[i][j]);
         }
         continue;
       }
 
       chi2 += offdiagonalmult * (residuals[i][j]
                = correction*hessian[i][j]*(predi - datai)*(predj - dataj));
- 
     }
   }
 
@@ -643,9 +645,10 @@ void make_mn()
 static void styleleg(TLegend * leg)
 {
   leg->SetTextFont(42);
-  leg->SetBorderSize(1);
+  leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->SetTextSize(tsize);
+  leg->SetNColumns(2);
 }
 
 TGraph * wrest_contour(const char * const name)
@@ -676,11 +679,20 @@ void stylehistset(TH1D ** hh, const int color)
   stylehist(hh[pileup], color-9, 2, kDashDotted);
 }
 
+static void draw_with_visible_errors_and_leak_memory(TGraphAsymmErrors * g)
+{
+  g->Draw("pz");
+  static int i = 0;
+  TGraphAsymmErrors * foo = (TGraphAsymmErrors *)g->Clone(Form("foo-%d", i++));
+  foo->SetMarkerSize(0);
+  foo->Draw("pz");
+}
+
 void draw(const int mindist, const int minslc, const int maxslc)
 {
   //////////////////////////////////////////////////////////////////////
   const double leftmargin = 0.15;
-  const double topmargin  = 0.25;
+  const double topmargin  = 0.15;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
   const bool logy = false;
@@ -721,13 +733,13 @@ void draw(const int mindist, const int minslc, const int maxslc)
   const double one_entry_leg_y1  = 0.90;
   const double four_entry_leg_y1 = 1-topmargin;
   const double leg_x1 = leftmargin;
-  const double leg_x2 = leftmargin + 0.35;
+  const double leg_x2 = leftmargin + 0.75;
 
   // true if you want a copy of each plot that doesn't yet have the fit
   // histograms drawn on it.
   const bool print_wo_fit = false;
 
-  g_n_rhc->Draw("pz");
+  draw_with_visible_errors_and_leak_memory(g_n_rhc);
   TLegend * leg = new TLegend(leg_x1,
                               print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
                               leg_x2, 0.99);
@@ -757,7 +769,6 @@ void draw(const int mindist, const int minslc, const int maxslc)
   leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm}, p in flight", "l");
   leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{-}", "l");
   leg->AddEntry(rhc_neut[numu], "RHC #nu_{#mu}", "l");
-  leg->AddEntry(rhc_neut[pileup], "Pileup", "l");
 
   c2r->Print(outpdfname.c_str());
 
@@ -767,7 +778,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   c2f->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
-  g_n_fhc->Draw("pz");
+  draw_with_visible_errors_and_leak_memory(g_n_fhc);
   TLegend * legf = new TLegend(leg_x1,
                                print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
                                leg_x2, 0.99);
@@ -793,13 +804,12 @@ void draw(const int mindist, const int minslc, const int maxslc)
   legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm}, p in flight", "l");
   legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{-}", "l");
   legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
-  legf->AddEntry(fhc_neut[pileup], "Pileup", "l");
 
   c2f->Print(outpdfname.c_str());
 
   //////////////////////////////////////////////////////////////////////
-  stylegraph(g_b12_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
-  stylegraph(g_b12_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
+  stylegraph(g_b12_rhc, kRed +3, kSolid, kOpenSquare, 1, 1.0);
+  stylegraph(g_b12_fhc, kBlue+3, kSolid, kOpenCircle, 1, 1.0);
 
   stylehist(tot_rhc_b12, kRed, 2);
   stylehistset( rhc_b12,  kRed);
@@ -823,7 +833,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   c2rb->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
-  g_b12_rhc->Draw("pz");
+  draw_with_visible_errors_and_leak_memory(g_b12_rhc);
   leg = new TLegend(leg_x1,
                     print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
                     leg_x2, 0.99);
@@ -858,7 +868,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   c2fb->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
-  g_b12_fhc->Draw("pz");
+  draw_with_visible_errors_and_leak_memory(g_b12_fhc);
   legf = new TLegend(leg_x1,
                      print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
                      leg_x2, 0.99);
@@ -1025,8 +1035,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   mn->Command(Form("SET ERR %f", TMath::ChisquareQuantile(0.90, 2))); // put back
 
   leg = new TLegend(leftmargin, 0.72, 1-rightmargin, 0.99);
-  styleleg(leg);
-  leg->SetTextSize(tsize*0.833);
+  leg->SetTextFont(42);
+  leg->SetBorderSize(1);
+  leg->SetTextSize(tsize*0.85);
   leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
   if(cont_full != NULL){
@@ -1126,7 +1137,8 @@ static void do_background_subtraction()
           raw_gs[g][0]->GetY()[i]
         - raw_gs[g][1]->GetY()[i]/bgmult);
 
-      gs[g]->SetPointError(i, 0, 0,
+      gs[g]->SetPointError(i, raw_gs[g][0]->GetErrorXlow (i),
+                              raw_gs[g][0]->GetErrorXhigh(i),
         // Down error is signal down error (+) bg up error
         sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) + 
              pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2)),
