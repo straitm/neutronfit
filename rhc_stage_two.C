@@ -666,11 +666,11 @@ void draw(const int mindist, const int minslc, const int maxslc)
 {
   //////////////////////////////////////////////////////////////////////
   const double leftmargin = 0.15;
-  const double topmargin  = 0.05;
+  const double topmargin  = 0.25;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
   const bool logy = true;
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-4:0, 3.3);
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?5e-4:0, 2.0);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
 
   //////////////////////////////////////////////////////////////////////
@@ -704,10 +704,10 @@ void draw(const int mindist, const int minslc, const int maxslc)
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
-  const double one_entry_leg_y1  = 0.88;
-  const double four_entry_leg_y1 = 0.66;
-  const double leg_x1 = leftmargin + 0.1;
-  const double leg_x2 = leftmargin + 0.45;
+  const double one_entry_leg_y1  = 0.90;
+  const double four_entry_leg_y1 = 1-topmargin;
+  const double leg_x1 = leftmargin;
+  const double leg_x2 = leftmargin + 0.35;
 
   // true if you want a copy of each plot that doesn't yet have the fit
   // histograms drawn on it.
@@ -716,9 +716,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   g_n_rhc->Draw("pz");
   TLegend * leg = new TLegend(leg_x1,
                               print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                              leg_x2, 1-topmargin);
+                              leg_x2, 0.99);
   styleleg(leg);
-  leg->SetMargin(0.4);
+  leg->SetMargin(0.3);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->Draw();
 
@@ -756,9 +756,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   g_n_fhc->Draw("pz");
   TLegend * legf = new TLegend(leg_x1,
                                print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                               leg_x2, 1-topmargin);
+                               leg_x2, 0.99);
   styleleg(legf);
-  legf->SetMargin(0.4);
+  legf->SetMargin(0.3);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
   legf->Draw();
   if(print_wo_fit) c2f->Print(outpdfname.c_str());
@@ -812,9 +812,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   g_b12_rhc->Draw("pz");
   leg = new TLegend(leg_x1,
                     print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                    leg_x2, 1-topmargin);
+                    leg_x2, 0.99);
   styleleg(leg);
-  leg->SetMargin(0.4);
+  leg->SetMargin(0.3);
   leg->AddEntry(g_n_rhc, "RHC data", "lpe");
   leg->Draw();
   if(print_wo_fit) c2rb->Print(outpdfname.c_str());
@@ -847,9 +847,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   g_b12_fhc->Draw("pz");
   legf = new TLegend(leg_x1,
                      print_wo_fit?one_entry_leg_y1:four_entry_leg_y1,
-                     leg_x2, 1-topmargin);
+                     leg_x2, 0.99);
   styleleg(legf);
-  legf->SetMargin(0.4);
+  legf->SetMargin(0.3);
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
   legf->Draw();
   if(print_wo_fit) c2fb->Print(outpdfname.c_str());
@@ -1010,7 +1010,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   mn->Command(Form("SET ERR %f", TMath::ChisquareQuantile(0.90, 2))); // put back
 
-  leg = new TLegend(leftmargin, 0.72, 1-rightmargin, 1-topmargin);
+  leg = new TLegend(leftmargin, 0.72, 1-rightmargin, 0.99);
   styleleg(leg);
   leg->SetTextSize(tsize*0.833);
   leg->SetFillStyle(1001);
@@ -1064,8 +1064,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
     norm1->GetYaxis()->SetRangeUser(0, maxy*1.1);
     
 
-    TLegend * leg4 = new TLegend(0.65, 0.63, 1-rightmargin, 1-topmargin);
-    leg4->AddEntry((TH1D*)NULL, "Unscaled", "");
+    TLegend * leg4 = new TLegend(leg_x1, 1-topmargin, leg_x2, 0.99);
     leg4->AddEntry(fhc_reco[numu], "#mu^{-} in FHC", "l");
     leg4->AddEntry(rhc_reco[numu], "#mu^{-} in RHC", "l");
     leg4->AddEntry(fhc_reco[stoppi], "Stopped #pi^{-} in FHC", "l");

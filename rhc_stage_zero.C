@@ -5,6 +5,7 @@
 #include "TROOT.h"
 #include "TGraphAsymmErrors.h"
 #include <fstream>
+using std::string;
 
 #include "TMinuit.h"
 TMinuit * mn = NULL; // dumb, because of common.C
@@ -95,7 +96,7 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
                    // Will go away with a better run list.
     &&   dat->run != 12187 // noise at t = -27, 90, 92
     && dat->primary
-    && dat->type == 3
+    && dat->type%10 == 3
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
     && dat->remid > remid_cut
     && dat->trklen > trklen_cut
@@ -105,10 +106,11 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
     && fabs(dat->trkx) < trkx_cut
-    && ( (!muoncatcher && fabs(dat->trky) < trky_cut) ||
-         ( muoncatcher && dat->trky < mucatch_trky_cut && dat->trky > -trky_cut))
-    && ( (!muoncatcher && dat->trkz < trkz_cut) ||
-         ( muoncatcher && dat->trkz > mucatch_trkz_cutlo && dat->trkz < mucatch_trkz_cuthi))
+    && ((!muoncatcher && fabs(dat->trky) < trky_cut) ||
+        ( muoncatcher && dat->trky < mucatch_trky_cut && dat->trky > -trky_cut))
+    && ((!muoncatcher && dat->trkz < trkz_cut) ||
+        ( muoncatcher && dat->trkz > mucatch_trkz_cutlo
+       && dat->trkz < mucatch_trkz_cuthi))
 
     // Try to patch up a deficiency in my ntuples: because calibration
     // is/was broken for the muon catcher in my input files, I don't
@@ -147,9 +149,10 @@ bool track_followers_cut(const vector<data> & dats)
        dat->e > 10. && dat->e < 70.) return false;
 
     // In principle you can select pions here by looking for a 100MeV
-    // shower coincident with the track. This does seem to work:
-    // I get consistently higher fractions of neutrons.  Can this be
-    // made interesting?
+    // shower coincident with the track, either from charge exchange (a
+    // few percent) or radiative capture (a few percent). This does seem
+    // to work: I get consistently higher fractions of neutrons. Can
+    // this be made interesting?
     /*   
     if(dat->t < 0.25 && dat->t > -0.25 &&
        dat->mindist > 3 &&
@@ -191,7 +194,7 @@ bool clustercut(data * dat, const int mindist)
     dat->pe > 35;
 }
 
-void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
+void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
                  const int mindist, const int minslc, const int maxslc)
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
@@ -211,12 +214,12 @@ void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
         for(unsigned int j = 0; j < dats.size(); j++){
           if(track_itself_cut(&dats[j], minslc, maxslc) &&
              clustercut(&dats[j], mindist))
-            h->Fill(dats[j].t, dats[j].slce);
+            h[dats[j].type > 10]->Fill(dats[j].t, dats[j].slce);
 
           // In this scheme, only tracks that pass go into the denominator
           if(!ALL_TRACKS_GO_IN_THE_DENOMINATOR)
             if(dats[j].i == 0 && track_itself_cut(&dats[j], minslc, maxslc))
-               trackcounts->Fill(dat->slce);
+               trackcounts[dats[j].type > 10]->Fill(dat->slce);
         }
       }
 
@@ -230,17 +233,18 @@ void fill_2dhist(TH1D * trackcounts, TH2D * h, data * dat, TTree * t,
 }
 
 // In this scheme, all tracks go into the denominator
-void fill_1dhist(TH1D * h, data * dat, TTree * t, const int minslc,
+void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
                  const int maxslc)
 {
   for(int i = 0; i < t->GetEntries(); i++){
     t->GetEntry(i);
     if(track_itself_cut(dat, minslc, maxslc) && dat->i == 0)
-      h->Fill(dat->slce);
+      h[dat->type > 10]->Fill(dat->slce);
   }
 }
 
-void rhc_stage_zero(const int mindist, const int minslc, const int maxslc, const string region)
+void rhc_stage_zero(const int mindist, const int minslc,
+                    const int maxslc, const string region)
 {
   if(mindist < 0) return; // used to compile only
 
@@ -249,7 +253,8 @@ void rhc_stage_zero(const int mindist, const int minslc, const int maxslc, const
   data dat;
 
   std::ofstream o(
-    Form("savedhists_mindist%d_nslc%d_%d_%s.C", mindist, minslc, maxslc, region.c_str()));
+    Form("savedhists_mindist%d_nslc%d_%d_%s.C",
+         mindist, minslc, maxslc, region.c_str()));
   o << "{\n";
   for(int i = 0; i < nperiod; i++){
     TFile * inputTFiles = NULL;
@@ -268,20 +273,29 @@ void rhc_stage_zero(const int mindist, const int minslc, const int maxslc, const
     }
     setbranchaddresses(&dat, trees);
 
-    TH1D * all_tcounts = new
-      TH1D(Form("tcounts_%s", Speriodnames[i]), "", nbins_e, bins_e);
-    TH2D * fithist = new TH2D(Form("%s_s", Speriodnames[i]), "",
-      nnegbins + maxrealtime + additional,
-      -nnegbins, maxrealtime + additional, nbins_e, bins_e);
+    TH1D * all_tcounts[2] = {
+      new TH1D(Form("%s_tcounts", Speriodnames[i]), "", nbins_e, bins_e),
+      new TH1D(Form("%sBG_tcounts",  Speriodnames[i]), "", nbins_e, bins_e)
+    };
+    TH2D * fithist[2] = {
+      new TH2D(Form("%s", Speriodnames[i]), "",
+        nnegbins + maxrealtime + additional,
+        -nnegbins, maxrealtime + additional, nbins_e, bins_e),
+      new TH2D(Form("%sBG",  Speriodnames[i]), "",
+        nnegbins + maxrealtime + additional,
+        -nnegbins, maxrealtime + additional, nbins_e, bins_e)
+    };
 
     fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc);
     if(ALL_TRACKS_GO_IN_THE_DENOMINATOR) // see comments above
       fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc);
 
-    printf("Got %s_s\n", Speriodnames[i]);
+    printf("Got %s\n", Speriodnames[i]);
     fflush(stdout);
-    fithist->SavePrimitive(o);
-    all_tcounts->SavePrimitive(o);
+    for(int super = 0; super < 2; super++){
+      fithist[super]->SavePrimitive(o);
+      all_tcounts[super]->SavePrimitive(o);
+    }
     inputTFiles->Close();
   }
   o << "}\n";

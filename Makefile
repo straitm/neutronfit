@@ -5,7 +5,7 @@ all: nm_summary_main.pdf nc_summary_main.pdf \
 
 define mindist_rule
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).pdf: \
-  rhc_stage_two_C.so for_stage_two.C for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4).C \
+  rhc_stage_two_C.so for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4).C \
   common.C stage_two.sh
 	./stage_two.sh $(1) $(2) $(3) $(4)
 

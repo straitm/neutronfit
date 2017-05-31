@@ -1,6 +1,13 @@
 // True if we are finding neutrons from 2D information alone, i.e not
 // requiring hits in both x and y
-const bool TWO_D_CUT = true;
+const bool TWO_D_CUT = false;
+
+// Number of background samples per signal sample.  Set by my ntuple maker.
+const int bgmult = 4;
+
+// Everything is doubled because there is the signal and there is the
+// off-space pileup background sample
+const int SIG_AND_BG = 2;
 
 // We aren't going to use anything between -1 and 2 microseconds because
 // the detector conditions are just too awful.  And then don't use
@@ -23,7 +30,7 @@ const double trklen_cut = 200;
 const double remid_cut = 0.75;
 
 const int nperiodrhc = 2; // 4, 6
-const int nperiodfhc = 4; // 1, 2, 3, 5
+const int nperiodfhc = 2; //XXX 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
@@ -32,15 +39,13 @@ const char * const inputfiles[nperiod] = {
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+  //"prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
+  //"prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
 };
 
-const char * const Speriodnames[nperiod] =
-    { "P6", "P4", "P1", "P2", "P3", "P5" };
-
-static TH2D ** fithist     = (TH2D**)malloc(nperiod*sizeof(TH2D*));
-static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*sizeof(TH1D*));
+const char * const Speriodnames[SIG_AND_BG*nperiod] =
+    { "P6",   "P4",   "P1",   "P2",   /* XXX "P3",   "P5", */
+      "P6BG", "P4BG", "P1BG", "P2BG", /* XXX "P3BG", "P5BG" */};
 
 static const double markersize = 0.3;
 
