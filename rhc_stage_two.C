@@ -15,6 +15,9 @@
 #include <vector>
 #include <string>
 
+using std::string;
+using std::vector;
+
 const int npar = 9;
 static TMinuit * mn = NULL;
 
@@ -132,6 +135,17 @@ TH1D ** fhc_b12  = makehistset("fhc_b12");
 // Total number of tracks in each beam's MC
 TH1D * fhc_tracks = makehist("fhc_tracks");
 TH1D * rhc_tracks = makehist("rhc_tracks");
+
+
+TGraphAsymmErrors * raw_g_n_rhc[SIG_AND_BG] =
+  { new TGraphAsymmErrors, new TGraphAsymmErrors };
+TGraphAsymmErrors * raw_g_n_fhc[SIG_AND_BG] =
+  { new TGraphAsymmErrors, new TGraphAsymmErrors };
+
+TGraphAsymmErrors * raw_g_b12_rhc[SIG_AND_BG] =
+  { new TGraphAsymmErrors, new TGraphAsymmErrors };
+TGraphAsymmErrors * raw_g_b12_fhc[SIG_AND_BG] =
+  { new TGraphAsymmErrors, new TGraphAsymmErrors };
 
 TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
@@ -669,13 +683,13 @@ void draw(const int mindist, const int minslc, const int maxslc)
   const double topmargin  = 0.25;
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
-  const bool logy = true;
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?5e-4:0, 2.0);
+  const bool logy = false;
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-4:0, 2.0);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
 
   //////////////////////////////////////////////////////////////////////
-  stylegraph(g_n_rhc, kRed+3, kSolid, kOpenSquare, 1, 0.0);
-  stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 1, 0.0);
+  stylegraph(g_n_rhc, kRed +3, kSolid, kOpenSquare, 1, 1.0);
+  stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 1, 1.0);
 
   stylehist(tot_rhc_neut, kRed, 1);
   stylehistset( rhc_neut, kRed);
@@ -684,7 +698,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   stylehistset( fhc_neut, kBlue);
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
-  if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
+  dum2->GetYaxis()->SetRangeUser(0, 
     1.01*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
              max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum())
              ));
@@ -794,7 +808,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   stylehistset( fhc_b12,  kBlue);
  
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
-  if(!logy) dum2->GetYaxis()->SetRangeUser(0, 
+  dum2->GetYaxis()->SetRangeUser(0, 
     min(1.01*max(max(gdrawmax(g_b12_fhc), tot_fhc_b12->GetMaximum()),
                  max(gdrawmax(g_b12_rhc), tot_rhc_b12->GetMaximum())),
         0.4));
@@ -1018,10 +1032,11 @@ void draw(const int mindist, const int minslc, const int maxslc)
   if(cont_full != NULL){
     leg->AddEntry((TH1D*)NULL, "", "");
     leg->AddEntry(cont_full,
-      Form("90%, effective stopped #pi^{-}/#mu^{-} n yield %.1f#pm%.1f; "
+      Form("90%%, effective stopped #pi^{-}/#mu^{-} n yield %.1f#pm%.1f; "
            "#pi,p in-flight %.2f^{+%.2f}_{-%.2f} #times Geant",
       npimu_stop_nominal, npimu_stop_error,
-      n_flight_nominal, n_flight_nominal*exp(n_flight_error) - 1, 1 - n_flight_nominal/exp(n_flight_error)),
+      n_flight_nominal, n_flight_nominal*exp(n_flight_error) - 1,
+      1 - n_flight_nominal/exp(n_flight_error)),
       "l");
     leg->AddEntry(onederrs, "1D errors", "lp");
   }
@@ -1098,6 +1113,30 @@ void draw(const int mindist, const int minslc, const int maxslc)
   c4->Print((outpdfname + "]").c_str()); // doesn't print anything, just closes
 }
 
+static void do_background_subtraction()
+{
+  TGraphAsymmErrors ** raw_gs[nbeam*2]
+    = { raw_g_n_rhc, raw_g_n_fhc, raw_g_b12_rhc, raw_g_b12_fhc };
+  TGraphAsymmErrors *      gs[nbeam*2]
+    = {     g_n_rhc,     g_n_fhc,     g_b12_rhc,     g_b12_fhc };
+
+  for(int g = 0; g < nbeam*2; g++){
+    for(int i = 0; i < raw_gs[g][0]->GetN(); i++){
+      gs[g]->SetPoint(i, raw_gs[g][0]->GetX()[i],
+          raw_gs[g][0]->GetY()[i]
+        - raw_gs[g][1]->GetY()[i]/bgmult);
+
+      gs[g]->SetPointError(i, 0, 0,
+        // Down error is signal down error (+) bg up error
+        sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) + 
+             pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2)),
+        // Up error is signal up error (+) bg down error
+        sqrt(pow(raw_gs[g][0]->GetErrorYlow(i), 2) + 
+             pow(raw_gs[g][1]->GetErrorYhigh(i)/bgmult, 2)));
+    }
+  }
+}
+
 void rhc_stage_two(const char * const input, const int mindist,
                    const int minslc, const int maxslc, const string region)
 {
@@ -1148,6 +1187,8 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   gROOT->Macro(input);
 
+  do_background_subtraction();
+
   make_mn();
 
   mn->Command("SET LIM 1 0 50"); // NC scale
@@ -1166,8 +1207,8 @@ void rhc_stage_two(const char * const input, const int mindist,
   mn->Command("SET LIM 7 0 20");
 
   // pile-up
-  mn->Command(Form("SET PAR 8 %f", 0));
-  mn->Command(Form("SET PAR 9 %f", 0));
+  mn->Command(Form("SET PAR 8 %f", 0.));
+  mn->Command(Form("SET PAR 9 %f", 0.));
   mn->Command(Form("FIX 8"));
   mn->Command(Form("FIX 9")); // Let's try later
 

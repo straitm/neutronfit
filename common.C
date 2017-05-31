@@ -30,7 +30,7 @@ const double trklen_cut = 200;
 const double remid_cut = 0.75;
 
 const int nperiodrhc = 2; // 4, 6
-const int nperiodfhc = 2; //XXX 1, 2, 3, 5
+const int nperiodfhc = 4; // 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
@@ -39,23 +39,38 @@ const char * const inputfiles[nperiod] = {
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
-  //"prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
-  //"prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
+  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
 };
 
 const char * const Speriodnames[SIG_AND_BG*nperiod] =
-    { "P6",   "P4",   "P1",   "P2",   /* XXX "P3",   "P5", */
-      "P6BG", "P4BG", "P1BG", "P2BG", /* XXX "P3BG", "P5BG" */};
+    { "P6",   "P4",   "P1",   "P2",   "P3",   "P5",
+    "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG" };
+
+const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
+     "Period 6 (RHC)",
+     "Period 4 (RHC)",
+     "Period 1 (FHC)",
+     "Period 2 (FHC)",
+     "Period 3 (FHC)",
+     "Period 5 (FHC)",
+     "Period 6 (RHC) Pileup",
+     "Period 4 (RHC) Pileup",
+     "Period 1 (FHC) Pileup",
+     "Period 2 (FHC) Pileup",
+     "Period 3 (FHC) Pileup",
+     "Period 5 (FHC) Pileup",
+};
 
 static const double markersize = 0.3;
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 3;
-//const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 };
-//const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 }; // 6
+const int nbins_e = 6;
+//const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 }; // 8
+  const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };//6
 //const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 }; // 5
-const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 }; // 3
+//const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 }; // 3
 
 double getpar(int i) // 0-indexed!
 {

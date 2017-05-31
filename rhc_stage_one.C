@@ -97,21 +97,6 @@ static PAR makepar(const char * const name_, const double start_)
   return p;
 }
 
-const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
-     "Period 6 (RHC)",
-     "Period 4 (RHC)",
-     "Period 1 (FHC)",
-     "Period 2 (FHC)",
-     /* XXX "Period 3 (FHC)",
-     "Period 5 (FHC)", */
-     "Period 6 (RHC) Background",
-     "Period 4 (RHC) Background",
-     "Period 1 (FHC) Background",
-     "Period 2 (FHC) Background",
-     /* XXX "Period 3 (FHC) Background",
-     "Period 5 (FHC) Background", */
-};
-
 const int ncommonpar = 2;
 const int nper_e_beam_sg = 4; // number per energy bin, beam, and sig/bg
 const int nper_e_period = 2; // number per energy bin and period
@@ -469,14 +454,17 @@ static void set_ee_to_mn(const int periodsg, const int energybin) // 0-indexed
 }
 
 // Set the drawing functions for the sum of all periods in a beam type
-// XXX modify to take sig/bg as a third parameter?
-static void set_ee_to_mn_beam(const int beam, const int bin)
+static void set_ee_to_mn_beam(const int beam, const int bin,
+                              const bool isbg)
 {
   // Oh so hacky!
   double pars[npar_ee];
   for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++){
-    const int idx = i + (beam == 1)*nperiodrhc;
-    set_ee_to_mn(idx, bin);
+
+    // Get drawing parameters for each period in this beam and sig/bg type.
+    // Add them together as appropriate.
+    const int periodsg = i + (beam == 1)*nperiodrhc + isbg*nperiod;
+    set_ee_to_mn(periodsg, bin);
     if(i == 0)
       for(int p = 0; p < npar_ee; p++)
         pars[p] = fabs(ee_pos->GetParameter(p));
@@ -506,12 +494,14 @@ static void sanitize_after_rebinning(TH1D * x)
   }
 }
 
+// Get the drawing scale for this beam and energy bin.  Keep the
+// scale the same for signal and background histograms.
 static double beam_scale(const int beam, const int bin)
 {
   double ans = 0;
   for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
     const int idx = i + (beam == 1)*nperiodrhc;
-    ans += scales[i][bin];
+    ans += scales[idx][bin];
   }
   return ans;
 }
@@ -555,21 +545,21 @@ static void stylehist(TH1 * h)
 }
 
 // Draw the sum of the fit histograms for a beam type and energy bin.
-// 0-indexed
-static void draw_ee_beam(const int beam, const int bin,
-                         const int sigorbg, const char * const outname)
+static void draw_ee_beam(const int beam, const int energybin,
+                         const bool isbg, const char * const outname)
 {
   c1->cd();
 
-  set_ee_to_mn_beam(beam, bin);
+  set_ee_to_mn_beam(beam, energybin, isbg);
 
   // Get the form of the histogram and zero it
-  TH1D * x = fithist[0]->ProjectionX("x", bin+1, bin+1 /* 0->1 */);
+  TH1D * x = fithist[0]->ProjectionX("x", energybin+1, energybin+1 /* 0->1 */);
   x->Reset();
 
   for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
     const int idx = i + (beam == 1)*nperiodrhc;
-    TH1D * tmp = fithist[idx+nperiod*sigorbg]->ProjectionX("tmp", bin+1, bin+1);
+    TH1D * tmp = fithist[idx+nperiod*isbg]->ProjectionX(
+      "tmp", energybin+1, energybin+1);
     x->Add(tmp);
   }
 
@@ -577,10 +567,10 @@ static void draw_ee_beam(const int beam, const int bin,
 
   x->GetXaxis()->SetTitle(
     Form("%s: All %s E_{#nu} %.1f-%.1f GeV: Time since muon stop (#mus)",
-    sigorbg == 0?"Signal":"Pileup",
-    beam == 0?"RHC":"FHC", bins_e[bin], bins_e[bin+1]));
-  x->GetYaxis()->SetRangeUser(beam_scale(beam, bin)*1e-6*rebin,
-                              beam_scale(beam, bin)* 0.1*rebin);
+    isbg == 0?"Signal":"Pileup",
+    beam == 0?"RHC":"FHC", bins_e[energybin], bins_e[energybin+1]));
+  x->GetYaxis()->SetRangeUser(beam_scale(beam, energybin)*1e-6*rebin,
+                              beam_scale(beam, energybin)* 0.1*rebin);
 
   draw_ee_common(x, rebin, outname);
 }
@@ -605,7 +595,7 @@ static void draw_ee(const int periodsg, const int energybin,
   draw_ee_common(x, rebin, outname);
 }
 
-static std::vector< std::vector<fitanswers> > dothefit()
+static vector< vector< vector<fitanswers> > > dothefit()
 {
   maxfitt = maxrealtime; // modified later for sensitivity study
 
@@ -724,25 +714,30 @@ static std::vector< std::vector<fitanswers> > dothefit()
 
   gMinuit->Command("show min");
 
-  std::vector< std::vector<fitanswers> > anses;
+  vector< vector< vector<fitanswers> > > anses;
 
   for(int beam = 0; beam < nbeam; beam++){
-    std::vector<fitanswers> anss;
+    vector< vector<fitanswers> > ans2;
     for(int bin = 0; bin < nbins_e; bin++){
-      fitanswers ans;
-      ans.n_good =   onegoodminos(nneut_nc+beam*nbins_e+bin, false);
-      ans.n_mag =          getpar(nneut_nc+beam*nbins_e+bin);
-      ans.n_mage_up = getbesterrup(nneut_nc+beam*nbins_e+bin);
-      ans.n_mage_dn = getbesterrdn(nneut_nc+beam*nbins_e+bin);
+      vector<fitanswers> ans1;
+      for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
+        const int off_beam = get_off_beam(beam, bin, sigorbg);
+        fitanswers ans;
+        ans.n_good    = onegoodminos(nneut_nc+off_beam, false);
+        ans.n_mag     =       getpar(nneut_nc+off_beam);
+        ans.n_mage_up = getbesterrup(nneut_nc+off_beam);
+        ans.n_mage_dn = getbesterrdn(nneut_nc+off_beam);
 
-      ans.b12_good =   onegoodminos(nb12_nc+beam*nbins_e+bin, true);
-      ans.b12mag =           getpar(nb12_nc+beam*nbins_e+bin);
-      ans.b12mage_up = getbesterrup(nb12_nc+beam*nbins_e+bin);
-      ans.b12mage_dn = getbesterrdn(nb12_nc+beam*nbins_e+bin);
+        ans.b12_good   = onegoodminos(nb12_nc+off_beam, true);
+        ans.b12mag     =       getpar(nb12_nc+off_beam);
+        ans.b12mage_up = getbesterrup(nb12_nc+off_beam);
+        ans.b12mage_dn = getbesterrdn(nb12_nc+off_beam);
 
-      anss.push_back(ans);
+        ans1.push_back(ans);
+      }
+      ans2.push_back(ans1);
     }
-    anses.push_back(anss);
+    anses.push_back(ans2);
   }
 
   // Just in case MINOS found a new minimum
@@ -805,12 +800,10 @@ static void init_ee()
   }
 }
 
-static void save_for_stage_two(TGraphAsymmErrors * n_result,
-                               TGraphAsymmErrors * b12_result,
-                               TGraphAsymmErrors * g_n_rhc,
-                               TGraphAsymmErrors * g_n_fhc,
-                               TGraphAsymmErrors * g_b12_rhc,
-                               TGraphAsymmErrors * g_b12_fhc,
+static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
+                               TGraphAsymmErrors ** g_n_fhc,
+                               TGraphAsymmErrors ** g_b12_rhc,
+                               TGraphAsymmErrors ** g_b12_fhc,
                                const int mindist,
                                const int minslc, const int maxslc)
 {
@@ -818,16 +811,21 @@ static void save_for_stage_two(TGraphAsymmErrors * n_result,
                               mindist, minslc, maxslc,
                               muoncatcher?"muoncatcher":"main"));
   for_stage_two << "{\n";
-  g_n_rhc->SetName("g_n_rhc");
-  g_n_fhc->SetName("g_n_fhc");
-  g_n_rhc->SavePrimitive(for_stage_two);
-  g_n_fhc->SavePrimitive(for_stage_two);
-  g_b12_rhc->SetName("g_b12_rhc");
-  g_b12_fhc->SetName("g_b12_fhc");
-  g_b12_rhc->SavePrimitive(for_stage_two);
-  g_b12_fhc->SavePrimitive(for_stage_two);
+  for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
+    g_n_rhc  [sigorbg]->SetName(Form("raw_g_n_rhc[%d]", sigorbg));
+    g_n_fhc  [sigorbg]->SetName(Form("raw_g_n_fhc[%d]", sigorbg));
+    g_n_rhc  [sigorbg]->SavePrimitive(for_stage_two);
+    g_n_fhc  [sigorbg]->SavePrimitive(for_stage_two);
+    g_b12_rhc[sigorbg]->SetName(Form("raw_g_b12_rhc[%d]", sigorbg));
+    g_b12_fhc[sigorbg]->SetName(Form("raw_g_b12_fhc[%d]", sigorbg));
+    g_b12_rhc[sigorbg]->SavePrimitive(for_stage_two);
+    g_b12_fhc[sigorbg]->SavePrimitive(for_stage_two);
+  }
 
   // Following the example in TMinuitMinimizer::GetHessianMatrix()
+  // XXX can we just invert the block of interest?  Does that make sense
+  // mathematically? Because parameters with values consistent with zero ruin
+  // everything.
   TMatrixDSym hessian(npar);
   mn->mnemat(hessian.GetMatrixArray(), npar);
   hessian.Invert();
@@ -900,14 +898,11 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   init_ee();
 
-  // Square means RHC, solid means neutron, black means good fit
   TGraphAsymmErrors
-    * g_n_rhc       = newgraph(kBlack, kSolid, kOpenSquare, 1),
-    * g_n_fhc       = newgraph(kBlack, kSolid, kOpenCircle, 1),
-    * g_b12_rhc     = newgraph(kBlack, kDashed,kOpenSquare, 1),
-    * g_b12_fhc     = newgraph(kBlack, kDashed,kOpenCircle, 1),
-    * n_result      = newgraph(kBlack, kSolid, kFullCircle, 1),
-    * b12_result    = newgraph(kGray+1,kDashed,kOpenCircle, 1);
+    * g_n_rhc[SIG_AND_BG]  ={ new TGraphAsymmErrors, new TGraphAsymmErrors },
+    * g_n_fhc[SIG_AND_BG]  ={ new TGraphAsymmErrors, new TGraphAsymmErrors },
+    * g_b12_rhc[SIG_AND_BG]={ new TGraphAsymmErrors, new TGraphAsymmErrors },
+    * g_b12_fhc[SIG_AND_BG]={ new TGraphAsymmErrors, new TGraphAsymmErrors };
 
   gErrorIgnoreLevel = kError; // after new TFile and Get above
 
@@ -917,65 +912,41 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     for(int p = 0; p < nperiod*SIG_AND_BG; p++)
       scales[p].push_back(all_tcounts[p]->GetBinContent(s));
 
-  const std::vector< std::vector<fitanswers> > anses = dothefit();
+  const vector< vector< vector<fitanswers> > > anses = dothefit();
 
   for(int s = 0; s < nbins_e; s++){
-    const fitanswers rhc_ans = anses[0][s];
-    const fitanswers fhc_ans = anses[1][s];
+    for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
+      const fitanswers rhc_ans = anses[0][s][sigorbg];
+      const fitanswers fhc_ans = anses[1][s][sigorbg];
 
-    const double loslce = fithist[0]->GetYaxis()->GetBinLowEdge(s+1);
-    const double hislce = fithist[0]->GetYaxis()->GetBinLowEdge(s+2);
+      const double loslce = fithist[0]->GetYaxis()->GetBinLowEdge(s+1);
+      const double hislce = fithist[0]->GetYaxis()->GetBinLowEdge(s+2);
 
-    const double graph_x  = (loslce+hislce)/2;
-    const double graph_xe = (hislce-loslce)/2;
-    const double graph_xoff =
-      min(graph_xe/30, (bins_e[nbins_e]-bins_e[0])*0.007);
+      const double graph_x  = (loslce+hislce)/2;
+      const double graph_xe = (hislce-loslce)/2;
 
-    // Directly fit for: easy
-    addpoint(g_n_rhc, graph_x,
-      rhc_ans.n_mag, graph_xe, rhc_ans.n_mage_dn, rhc_ans.n_mage_up);
+      addpoint(g_n_rhc[sigorbg], graph_x,
+        rhc_ans.n_mag, graph_xe, rhc_ans.n_mage_dn, rhc_ans.n_mage_up);
 
-    addpoint(g_n_fhc, graph_x,
-      fhc_ans.n_mag, graph_xe, fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
+      addpoint(g_n_fhc[sigorbg], graph_x,
+        fhc_ans.n_mag, graph_xe, fhc_ans.n_mage_dn, fhc_ans.n_mage_up);
 
-    addpoint(g_b12_rhc, graph_x,
-      rhc_ans.b12mag, graph_xe, rhc_ans.b12mage_dn, rhc_ans.b12mage_up);
+      addpoint(g_b12_rhc[sigorbg], graph_x,
+        rhc_ans.b12mag, graph_xe, rhc_ans.b12mage_dn, rhc_ans.b12mage_up);
 
-    addpoint(g_b12_fhc, graph_x,
-      fhc_ans.b12mag, graph_xe, fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
+      addpoint(g_b12_fhc[sigorbg], graph_x,
+        fhc_ans.b12mag, graph_xe, fhc_ans.b12mage_dn, fhc_ans.b12mage_up);
 
+      printf("%s RHC neutron (%5.3f-%5.3f)GeV %s: %.5f +%.5f -%.5f\n",
+        rhc_ans.n_good?"MINOS ":"MIGRAD", loslce, hislce,
+        sigorbg?"SIG":"BG ",
+        rhc_ans.n_mag, rhc_ans.n_mage_up, rhc_ans.n_mage_dn);
 
-    printf("%s RHC neutron (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
-      rhc_ans.n_good?"MINOS ":"MIGRAD", loslce, hislce,
-      rhc_ans.n_mag, rhc_ans.n_mage_up, rhc_ans.n_mage_dn);
-
-    printf("%s RHC B-12    (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
-      rhc_ans.b12_good?"MINOS ":"MIGRAD", loslce, hislce,
-      rhc_ans.b12mag, rhc_ans.b12mage_up, rhc_ans.b12mage_dn);
-
-    printf("%s FHC neutron (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
-      fhc_ans.n_good?"MINOS ":"MIGRAD", loslce, hislce,
-      fhc_ans.n_mag, fhc_ans.n_mage_up, fhc_ans.n_mage_dn);
-
-    printf("%s FHC B-12    (%5.3f-%5.3f)GeV: %.3f +%.3f -%.3f\n",
-      fhc_ans.b12_good?"MINOS ":"MIGRAD", loslce, hislce,
-      fhc_ans.b12mag, fhc_ans.b12mage_up, fhc_ans.b12mage_dn);
-
-
-    // Indirect, harder
-    addpoint(n_result, graph_x,
-      rhc_ans.n_mag / fhc_ans.n_mag, graph_xe,
-      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
-                  rhc_ans.n_mage_dn, fhc_ans.n_mage_up),
-      ratio_error(rhc_ans.n_mag, fhc_ans.n_mag,
-                  rhc_ans.n_mage_up, fhc_ans.n_mage_dn));
-
-    addpoint(b12_result, graph_x+graph_xoff,
-      rhc_ans.b12mag / fhc_ans.b12mag, graph_xe,
-      ratio_error(rhc_ans.b12mag, fhc_ans.b12mag,
-                  rhc_ans.b12mage_dn, fhc_ans.b12mage_up),
-      ratio_error(fhc_ans.b12mag, fhc_ans.b12mag,
-                  rhc_ans.b12mage_up, fhc_ans.b12mage_dn));
+      printf("%s FHC neutron (%5.3f-%5.3f)GeV %s: %.5f +%.5f -%.5f\n",
+        fhc_ans.n_good?"MINOS ":"MIGRAD", loslce, hislce,
+        sigorbg?"SIG":"BG ",
+        fhc_ans.n_mag, fhc_ans.n_mage_up, fhc_ans.n_mage_dn);
+    }
   }
 
   const string filename = Form("fit_stage_one_mindist%d_nslc%d_%d_%s.pdf",
@@ -996,6 +967,6 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   c1->Print(Form("%s]", filename.c_str()));
 
-  save_for_stage_two(n_result, b12_result, g_n_rhc, g_n_fhc,
-                     g_b12_rhc, g_b12_fhc, mindist, minslc, maxslc);
+  save_for_stage_two(g_n_rhc, g_n_fhc, g_b12_rhc, g_b12_fhc,
+                     mindist, minslc, maxslc);
 }
