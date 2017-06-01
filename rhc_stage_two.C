@@ -55,7 +55,7 @@ double timing_eff_difference_for_pions = 0;
 // below.
 double npimu_stop_nominal = 0;
 
-// Not const because I want to adjust it to make different contours, and it 
+// Not const because I want to adjust it to make different contours, and it
 // is used by fcn().
 //
 // This is the error from physics added in quadrature with an error
@@ -66,7 +66,7 @@ double npimu_stop_error = 0;
 /*********************************************************************/
 
 // Ratio of the neutron yield from strongly interacting particles *in flight*
-// to what Geant says. 
+// to what Geant says.
 const double n_flight_nominal = 1;
 
 // Somewhat arbitrary error on neutron production by things in
@@ -77,7 +77,7 @@ const double n_flight_nominal = 1;
 // Put a 20% error on the actual yield. I justify this as follows:
 // The real physics error on the *stopping* pion yield is 8%.  Geant
 // is off by 22%, but I can explain 12% as it doing way too much
-// capture on hydrogen, which is not a problem with in-flight 
+// capture on hydrogen, which is not a problem with in-flight
 // interactions.  So without that mistake, Geant is off by about 1 sigma, i.e.
 // we agree on the size of the error.  Let's suppose in-flight interactions
 // are twice as hard.  Twice 8% plus a bit is 20%.
@@ -340,7 +340,7 @@ static double compare(const double * const __restrict__ dat,
       // itself can still be fine, and probably in this case the errors are
       // large and we can neglect the covariances. (Actually, I bet we could
       // always neglect the covariances...)
-      if((rup*rup)*hessian[i][j] > 100 || 
+      if((rup*rup)*hessian[i][j] > 100 ||
          (i == j && (rup*rup)*hessian[i][j] < 1./100)){
         static int crazyprint = 0;
         if(i == j){
@@ -350,7 +350,7 @@ static double compare(const double * const __restrict__ dat,
                     "Using raw error instead.\n", i, hessian[i][i]);
         }
         else{
-          if(crazyprint++ < 100) 
+          if(crazyprint++ < 100)
             fprintf(stderr, "Hessian for %d %d is crazy nuts: %f.\n"
                    "Skipping.  Fit results dubious.\n", i, j, hessian[i][j]);
         }
@@ -389,7 +389,7 @@ static double pi_penalty(const double npimu_stop, const double n_flight)
 
 static void fcn(__attribute__((unused)) int & np,
   __attribute__((unused)) double * gin, double & chi2, double *par,
-  __attribute__((unused)) int flag)  
+  __attribute__((unused)) int flag)
 {
   chi2 = 0;
 
@@ -556,7 +556,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks,
 
     // Can I neglect the case that true mu- don't stop?
     // I think so, since Geant says that 99.90% of our mu- stop
-    // 
+    //
     // If the track is a pi- that decays in flight, it is now a mu- and
     // should be counted here.
     if(true_pdg == MUMINUS || (true_pdg == PIMINUS && true_atom_cap == -1))
@@ -585,7 +585,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks,
     // primary track for contained events (but do appear as tracks). For
     // all these, I'm taking the Geant estimate of the effective neutron
     // yield, which is questionable...
-    else if(true_atom_cap == 0 && 
+    else if(true_atom_cap == 0 &&
             (abs(true_pdg) == PI || abs(true_pdg) == K ||
              abs(true_pdg) == PROTON || abs(true_pdg) > 1000000000))
       h[piflight]->Fill(slce, mcweight * true_neutrons /* note */);
@@ -688,6 +688,16 @@ static void draw_with_visible_errors_and_leak_memory(TGraphAsymmErrors * g)
   foo->Draw("pz");
 }
 
+static double gdrawmin(const TGraphAsymmErrors * const g)
+{
+  double min = 1e300;
+  for(int i = 0; i < g->GetN(); i++){
+    const double y = g->GetY()[i] - g->GetErrorYlow(i);
+    if(y < min) min = y;
+  }
+  return min;
+}
+
 void draw(const int mindist, const int minslc, const int maxslc)
 {
   //////////////////////////////////////////////////////////////////////
@@ -696,7 +706,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   const double rightmargin= 0.03;
   const double bottommargin=0.14;
   const bool logy = false;
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-4:0, 2.0);
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-4:-2.0, 2.0);
   TH2D * dum2 = (TH2D*) dum->Clone("dm2");
 
   //////////////////////////////////////////////////////////////////////
@@ -710,10 +720,12 @@ void draw(const int mindist, const int minslc, const int maxslc)
   stylehistset( fhc_neut, kBlue);
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
-  dum2->GetYaxis()->SetRangeUser(0, 
+  dum2->GetYaxis()->SetRangeUser(
+    min(0, 1.01*min(min(gdrawmin(g_n_rhc), tot_rhc_neut->GetMinimum()),
+             min(gdrawmin(g_n_fhc), tot_fhc_neut->GetMinimum()))),
     1.01*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
-             max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum())
-             ));
+             max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum()))
+             );
   dum2->GetYaxis()->SetTitle("Neutrons/track");
   dum2->GetYaxis()->SetTitleOffset(1.25);
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
@@ -759,11 +771,11 @@ void draw(const int mindist, const int minslc, const int maxslc)
     rhc_neut[numu],
     rhc_neut[pileup],
   };
-    
+
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
     for(int h = 0; h < ndrawhists; h++)
       c2hists[h]->Draw("histsame][");
- 
+
   leg->SetY1NDC(four_entry_leg_y1);
   leg->AddEntry(tot_rhc_neut, "RHC fit", "l");
   leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm}, p in flight", "l");
@@ -787,7 +799,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   legf->AddEntry(g_n_fhc, "FHC data", "lpe");
   legf->Draw();
   if(print_wo_fit) c2f->Print(outpdfname.c_str());
-    
+
   TH1D * c2histsf[ndrawhists] = {
     tot_fhc_neut,
     fhc_neut[piflight],
@@ -816,9 +828,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   stylehist(tot_fhc_b12, kBlue, 2);
   stylehistset( fhc_b12,  kBlue);
- 
+
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
-  dum2->GetYaxis()->SetRangeUser(0, 
+  dum2->GetYaxis()->SetRangeUser(0,
     min(1.01*max(max(gdrawmax(g_b12_fhc), tot_fhc_b12->GetMaximum()),
                  max(gdrawmax(g_b12_rhc), tot_rhc_b12->GetMaximum())),
         0.4));
@@ -849,7 +861,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
     rhc_b12[stoppi],
     rhc_b12[numu],
   };
-    
+
   for(int i = 1; i <= tot_rhc_b12->GetNbinsX(); i++)
     for(int h = 0; h < 4; h++)
       c2histsb[h]->Draw("histsame][");
@@ -965,7 +977,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   if(cont_double_perfect_ratio != NULL){
     cont_double_perfect_ratio->SetLineColor(kOrange+2);
     cont_double_perfect_ratio->SetLineStyle(7);
-    // get rid of the visual gap 
+    // get rid of the visual gap
     cont_double_perfect_ratio->SetPoint(cont_double_perfect_ratio->GetN(),
                                  cont_double_perfect_ratio->GetX()[0],
                                  cont_double_perfect_ratio->GetY()[0]);
@@ -974,7 +986,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   if(cont_perfect_ratio != NULL){
     cont_perfect_ratio->SetLineColor(kViolet);
     cont_perfect_ratio->SetLineStyle(kDashed);
-    // get rid of the visual gap 
+    // get rid of the visual gap
     cont_perfect_ratio->SetPoint(cont_perfect_ratio->GetN(),
                                  cont_perfect_ratio->GetX()[0],
                                  cont_perfect_ratio->GetY()[0]);
@@ -999,9 +1011,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   /*if(cont_nob12 != NULL){
     cont_nob12->SetLineColor(kBlue);
     cont_nob12->SetLineStyle(7);
-    cont_nob12->Draw("l"); 
+    cont_nob12->Draw("l");
   } */
-  
+
   mn->fGraphicsMode = false;
 
   bestfit->Draw();
@@ -1088,7 +1100,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
     maxy = max(maxy, norm5->GetMaximum());
     maxy = max(maxy, norm6->GetMaximum());
     norm1->GetYaxis()->SetRangeUser(0, maxy*1.1);
-    
+
 
     TLegend * leg4 = new TLegend(leg_x1, 1-topmargin, leg_x2, 0.99);
     leg4->AddEntry(fhc_reco[numu], "#mu^{-} in FHC", "l");
@@ -1140,10 +1152,10 @@ static void do_background_subtraction()
       gs[g]->SetPointError(i, raw_gs[g][0]->GetErrorXlow (i),
                               raw_gs[g][0]->GetErrorXhigh(i),
         // Down error is signal down error (+) bg up error
-        sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) + 
+        sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) +
              pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2)),
         // Up error is signal up error (+) bg down error
-        sqrt(pow(raw_gs[g][0]->GetErrorYlow(i), 2) + 
+        sqrt(pow(raw_gs[g][0]->GetErrorYlow(i), 2) +
              pow(raw_gs[g][1]->GetErrorYhigh(i)/bgmult, 2)));
     }
   }
@@ -1175,10 +1187,10 @@ void rhc_stage_two(const char * const input, const int mindist,
   //
   // Multiplied by a pretty ad hoc correction for tracking difficulties, see
   // below.
-  npimu_stop_nominal = (muoncatcher? 3.98 : 14.29) * 
+  npimu_stop_nominal = (muoncatcher? 3.98 : 14.29) *
                        (muoncatcher? 0.9  : 0.75);
 
-  // Not const because I want to adjust it to make different contours, and it 
+  // Not const because I want to adjust it to make different contours, and it
   // is used by fcn().
   //
   // This is the error from physics added in quadrature with an error
@@ -1207,7 +1219,7 @@ void rhc_stage_two(const char * const input, const int mindist,
   mn->Command("SET LIM 2 0 50");  // numubar scale
 
   // stopped pion to muon neutron yield ratio
-  mn->Command(Form("SET LIM 3 %f %f", 
+  mn->Command(Form("SET LIM 3 %f %f",
     max(0, npimu_stop_nominal - 5*npimu_stop_error),
            npimu_stop_nominal + 5*npimu_stop_error));
 

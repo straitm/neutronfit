@@ -38,13 +38,14 @@ $(foreach region, $(REGIONS), \
  )
 
 define summary_rule
+# 99.98% of primary contained tracks are in events with <= 20 slices
 $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
-                fit_stage_two_mindist6_nslc2_3_$(2).out.txt \
-                fit_stage_two_mindist6_nslc4_5_$(2).out.txt \
-                fit_stage_two_mindist6_nslc6_7_$(2).out.txt \
-                fit_stage_two_mindist6_nslc8_10_$(2).out.txt \
+                fit_stage_two_mindist6_nslc2_4_$(2).out.txt \
+                fit_stage_two_mindist6_nslc5_7_$(2).out.txt \
+                fit_stage_two_mindist6_nslc8_20_$(2).out.txt \
                 fit_stage_two_mindist6_nslc2_20_$(2).out.txt
-	./stage_three.sh $(1)_slc $(2) fit_stage_two_mindist6_nslc{2_3,4_5,6_7,8_10,2_20}_$(2).out.txt
+	./stage_three.sh $(1)_slc $(2) \
+          fit_stage_two_mindist6_nslc{2_4,5_7,8_20,2_20}_$(2).out.txt
 $(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_10_$(2).out.txt \
@@ -72,8 +73,13 @@ rhc_stage_one_C.so: rhc_stage_one.C
 rhc_stage_two_C.so: rhc_stage_two.C
 	./stage_two.sh -1 0 0 main
 
+output = fit_stage_*.out.txt \
+         fit_stage_one_mindist*nslc*.pdf \
+         fit_stage_two*pdf \
+         for_stage_two*C \
+         savedhists_*.C \
+         for_stage_two*.C \
+         n?_{,slc_}summary_{main,muoncatcher}.pdf
+
 clean:
-	rm -f fit_stage_two_mindist*nslc*.out.txt \
-              fit_stage_one_mindist*nslc*.pdf \
-              for_stage_two*.C \
-              n?_{,slc_}summary_{main,muoncatcher}.pdf
+	rm -f $(output) *.so

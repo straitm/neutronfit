@@ -1,6 +1,6 @@
 // True if we are finding neutrons from 2D information alone, i.e not
 // requiring hits in both x and y
-const bool TWO_D_CUT = false;
+const bool TWO_D_CUT = true;
 
 // Number of background samples per signal sample.  Set by my ntuple maker.
 const int bgmult = 4;
