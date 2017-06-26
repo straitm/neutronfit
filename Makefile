@@ -1,7 +1,7 @@
-all: nm_summary_main.pdf nc_summary_main.pdf \
-     nm_slc_summary_main.pdf nc_slc_summary_main.pdf \
-     nm_summary_muoncatcher.pdf nc_summary_muoncatcher.pdf \
-     nm_slc_summary_muoncatcher.pdf nc_slc_summary_muoncatcher.pdf
+all: nm_mindist_summary_main.pdf        nc_mindist_summary_main.pdf \
+     nm_mindist_summary_muoncatcher.pdf nc_mindist_summary_muoncatcher.pdf \
+     nm_slc_summary_main.pdf            nc_slc_summary_main.pdf \
+     nm_slc_summary_muoncatcher.pdf     nc_slc_summary_muoncatcher.pdf
 
 define mindist_rule
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).out.txt fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4).pdf: \
@@ -46,7 +46,7 @@ $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc2_20_$(2).out.txt
 	./stage_three.sh $(1)_slc $(2) \
           fit_stage_two_mindist6_nslc{2_4,5_7,8_20,2_20}_$(2).out.txt
-$(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
+$(1)_mindist_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist4_nslc0_10_$(2).out.txt \
@@ -54,7 +54,8 @@ $(1)_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
 		fit_stage_two_mindist2_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist1_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist0_nslc0_10_$(2).out.txt
-	./stage_three.sh $(1) $(2) fit_stage_two_mindist?_nslc0_10_$(2).out.txt
+	./stage_three.sh $(1)_mindist $(2) \
+          fit_stage_two_mindist?_nslc0_10_$(2).out.txt
 endef
 
 REACTIONS := nm nc

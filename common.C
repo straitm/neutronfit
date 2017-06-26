@@ -29,25 +29,33 @@ const double trkx_cut = 170,
 const double trklen_cut = 200;
 const double remid_cut = 0.75;
 
-const int nperiodrhc = 2; // 4, 6
-const int nperiodfhc = 4; // 1, 2, 3, 5
+const int nperiodrhc = 1; // 4, 6
+const int nperiodfhc = 1; // 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
-  "prod_pid_S16-12-07_nd_period6_keepup/1947-type3.root",
+  "periods46_rhc.root",
+  "periods1235_fhc.root"
+/*  "prod_pid_S16-12-07_nd_period6_keepup/1947-type3.root",
   "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
 
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
   "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
+*/
 };
 
 const char * const Speriodnames[SIG_AND_BG*nperiod] =
-    { "P6",   "P4",   "P1",   "P2",   "P3",   "P5",
-    "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG" };
+    { "PR", "PF", "PRBG", "PFBG", /*"P6",   "P4",   "P1",   "P2",   "P3",   "P5",
+    "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG"*/ };
 
 const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
+     "RHC",
+     "FHC",
+     "RHC Pileup",
+     "FHC Pileup",
+/*
      "Period 6 (RHC)",
      "Period 4 (RHC)",
      "Period 1 (FHC)",
@@ -60,15 +68,14 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
      "Period 2 (FHC) Pileup",
      "Period 3 (FHC) Pileup",
      "Period 5 (FHC) Pileup",
+*/
 };
-
-static const double markersize = 0.3;
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 8;
-  const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 }; // 8
-//const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };//6
+const int nbins_e = 6;
+//const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 }; // 8
+  const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };//6
 //const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 }; // 5
 //const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 }; // 3
 
@@ -224,7 +231,7 @@ newgraph(const int color, const int linestyle, const int marker,
          const int linewidth)
 {
   TGraphAsymmErrors * g = new TGraphAsymmErrors;
-  stylegraph(g, color, linestyle, marker, linewidth, markersize);
+  stylegraph(g, color, linestyle, marker, linewidth, 0.3);
   return g;
 }
 
