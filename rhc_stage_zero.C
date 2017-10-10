@@ -102,6 +102,10 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     && dat->trklen > trklen_cut
     && dat->contained
 
+    // This cut can more-or-less restrict us to the worst
+    // resolution bin in the 2017 numu analysis.
+    && (dat->trklen * 4.5/2000)/dat->slce < max_frac_e_mu
+
     // Sufficient to catch all neutrons within 6 cell widths. Maybe not
     // conservative enough, since neutrons that spill out into the air
     // probably don't ever come back? Or do they?
