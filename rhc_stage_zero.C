@@ -108,7 +108,8 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
 
     // Sufficient to catch all neutrons within 6 cell widths. Maybe not
     // conservative enough, since neutrons that spill out into the air
-    // probably don't ever come back? Or do they?
+    // probably don't ever come back? Or do they?  If they do, that might
+    // explain the long time constant which gets fit as "Boron-12".
     && fabs(dat->trkx) < trkx_cut
     && ((!muoncatcher && fabs(dat->trky) < trky_cut) ||
         ( muoncatcher && dat->trky < mucatch_trky_cut && dat->trky > -trky_cut))
