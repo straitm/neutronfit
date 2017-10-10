@@ -108,7 +108,7 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     && fabs(dat->trkx) < trkx_cut
     && ((!muoncatcher && fabs(dat->trky) < trky_cut) ||
         ( muoncatcher && dat->trky < mucatch_trky_cut && dat->trky > -trky_cut))
-    && ((!muoncatcher && dat->trkz < trkz_cut) ||
+    && ((!muoncatcher && dat->trkz < trkz_cuthi && dat->trkz > trkz_cutlo) ||
         ( muoncatcher && dat->trkz > mucatch_trkz_cutlo
        && dat->trkz < mucatch_trkz_cuthi))
 
@@ -123,6 +123,8 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     // no matter how the NC fraction was floated. Let's see if avoiding
     // muon catcher mismodeling/miscalibration of hadronic energy
     // reduces that discrepancy.
+    //
+    // Update: Pretty sure that's pileup.
     && (!muoncatcher || dat->trkstartz < mucatch_trkstartz_cut)
 
     && dat->nslc >= minslc && dat->nslc <= maxslc

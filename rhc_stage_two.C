@@ -519,7 +519,7 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks,
       if(trkstartz > mucatch_trkstartz_cut) continue;
     }
     else{
-      if(trkz > trkz_cut) continue;
+      if(trkz < trkz_cutlo || trkz > trkz_cuthi) continue;
     }
 
     trkxbranch->GetEntry(e);
