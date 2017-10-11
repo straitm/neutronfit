@@ -44,7 +44,7 @@ void rhc_stage_three(const string name, const string region)
   double mindist, y, yeup, yedn, minslc, maxslc;
 
   // Do not want to set the xerrors before fitting because they get used 
-  // in appropriately by TGraph::Fit().  Set them afterwards for display.
+  // inappropriately by TGraph::Fit().  Set them afterwards for display.
   vector<double> drawxerr_dn, drawxerr_up;
 
   double systval = 0, systup = 0, systdn = 0;
