@@ -80,7 +80,8 @@ output = fit_stage_*.out.txt \
          for_stage_two*C \
          savedhists_*.C \
          for_stage_two*.C \
-         n?_{mindist_,slc_}summary_{main,muoncatcher}.pdf
+         n?_{mindist_,slc_}summary_{main,muoncatcher}.pdf \
+         stage_three.*.*.out.txt
 
 clean:
 	rm -f $(output) *.so gmon.out *_C.d
