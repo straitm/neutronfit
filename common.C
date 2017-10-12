@@ -19,10 +19,11 @@ const double nnegbins = 209;
 const double maxrealtime = 269;
 const double additional = 0;
 
-// Restrict as a blunt way to reduce pile-up subtraction problems.
-const double trkx_cut = 100,
-             trky_cut = 100,
-             trkz_cutlo = 600,
+// Restrict x and y to 100 and trkz_cutlo to 600
+// as a blunt way to reduce pile-up subtraction problems.
+const double trkx_cut = 170,
+             trky_cut = 170,
+             trkz_cutlo = 0,
              trkz_cuthi = 1250,
              mucatch_trky_cut = 45,
              mucatch_trkz_cutlo = 1310,
