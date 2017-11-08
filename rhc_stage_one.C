@@ -251,7 +251,7 @@ static TF1 * ees[ntf1s] =
 
 static const char * const ees_description[ntf1s] =
   { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons",
-    "^{12}B", "pileup" };
+    "^{12}B/air neutrons", "pileup" };
 
 static std::vector< std::vector<double> > scales;
 
