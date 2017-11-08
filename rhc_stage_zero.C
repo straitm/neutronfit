@@ -38,6 +38,7 @@ struct data{
   int nhity;
   int nhit;
   int i;
+  float pot;
   float timeleft;
   float timeback;
   float remid;
@@ -67,10 +68,11 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("primary", &dat->primary, t);
   setbranchaddress("type", &dat->type, t);
   setbranchaddress("contained", &dat->contained, t);
-  setbranchaddress("nslc", &dat->nslc, t);
+  //setbranchaddress("nslc", &dat->nslc, t);
   setbranchaddress("nhitx", &dat->nhitx, t);
   setbranchaddress("nhity", &dat->nhity, t);
   //setbranchaddress("nhit", &dat->nhit, t);
+  setbranchaddress("pot", &dat->pot, t);
   setbranchaddress("timeleft", &dat->timeleft, t);
   setbranchaddress("timeback", &dat->timeback, t);
   setbranchaddress("remid", &dat->remid, t);
@@ -89,8 +91,26 @@ void setbranchaddresses(data * dat, TTree * t)
   //setbranchaddress("cosy", &dat->cosy, t);
 }
 
+// Continue calling the cuts minslc and maxslc, but actually translate
+// them into an intensity in 10**12 POTs ("twp") so that we are taking
+// into account neutrons from invisible rock events too.
+static bool pass_intensity(data * dat, const int minslc,
+                           const int maxslc, const bool rhc)
+{
+  // This may not agree with other conversions, but since what I actually
+  // want is neutrons produced per POT --- something no one knows ---
+  // it is necessarily approximate.
+  const float slc_per_twp = rhc? 0.075: 0.172;
+
+  const float minpot = minslc / slc_per_twp,
+              maxpot = maxslc / slc_per_twp;
+
+  return dat->pot >= minpot && dat->pot < maxpot;
+}
+
 // true if it passes the cut
-bool track_itself_cut(data * dat, const int minslc, const int maxslc)
+static bool track_itself_cut(data * dat, const int minslc,
+                             const int maxslc, const bool rhc)
 {
   return dat->run != 11601 // noise at t = 106 in this run.
                    // Will go away with a better run list.
@@ -132,7 +152,7 @@ bool track_itself_cut(data * dat, const int minslc, const int maxslc)
     // Update: Pretty sure that's pileup.
     && (!muoncatcher || dat->trkstartz < mucatch_trkstartz_cut)
 
-    && dat->nslc >= minslc && dat->nslc <= maxslc
+    && pass_intensity(dat, minslc, maxslc, rhc)
     ;
 }
 
@@ -202,7 +222,8 @@ bool clustercut(data * dat, const int mindist)
 }
 
 void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
-                 const int mindist, const int minslc, const int maxslc)
+                 const int mindist, const int minslc, const int maxslc,
+                 const bool rhc)
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
   vector<data> dats;
@@ -219,13 +240,13 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
     else{
       if(track_followers_cut(dats)){
         for(unsigned int j = 0; j < dats.size(); j++){
-          if(track_itself_cut(&dats[j], minslc, maxslc) &&
+          if(track_itself_cut(&dats[j], minslc, maxslc, rhc) &&
              clustercut(&dats[j], mindist))
             h[dats[j].type > 10]->Fill(dats[j].t, dats[j].slce);
 
           // In this scheme, only tracks that pass go into the denominator
           if(!ALL_TRACKS_GO_IN_THE_DENOMINATOR)
-            if(dats[j].i == 0 && track_itself_cut(&dats[j], minslc, maxslc))
+            if(dats[j].i == 0 && track_itself_cut(&dats[j], minslc, maxslc, rhc))
                trackcounts[dats[j].type > 10]->Fill(dat->slce);
         }
       }
@@ -241,11 +262,11 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 
 // In this scheme, all tracks go into the denominator
 void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
-                 const int maxslc)
+                 const int maxslc, const bool rhc)
 {
   for(int i = 0; i < t->GetEntries(); i++){
     t->GetEntry(i);
-    if(track_itself_cut(dat, minslc, maxslc) && dat->i == 0)
+    if(track_itself_cut(dat, minslc, maxslc, rhc) && dat->i == 0)
       h[dat->type > 10]->Fill(dat->slce);
   }
 }
@@ -293,9 +314,11 @@ void rhc_stage_zero(const int mindist, const int minslc,
         -nnegbins, maxrealtime + additional, nbins_e, bins_e)
     };
 
-    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc);
+    const bool rhc = i < nperiodrhc;
+
+    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc, rhc);
     if(ALL_TRACKS_GO_IN_THE_DENOMINATOR) // see comments above
-      fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc);
+      fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc, rhc);
 
     printf("Got %s\n", Speriodnames[i]);
     fflush(stdout);
