@@ -289,7 +289,7 @@ void rhc_stage_zero(const int mindist, const int minslc,
     TTree * trees = NULL;
 
     inputTFiles = new TFile(
-      Form("/nova/ana/users/mstrait/ndcosmic/%s", inputfiles[i]), "read");
+      Form("%s", inputfiles[i]), "read");
     if(!inputTFiles || inputTFiles->IsZombie()){
       fprintf(stderr, "Couldn't read a file.  See above.\n");
       return;
