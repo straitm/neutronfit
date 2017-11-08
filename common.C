@@ -37,7 +37,7 @@ const double remid_cut = 0.75;
 // bin, set to 1.0 (or to be safe, a bit more, since I use a really crude
 // approximation for muon energy).  To only allow roughly the worst bin, 
 // use ~0.55.
-const double max_frac_e_mu = 0.55;
+const double max_frac_e_mu = 1.5;
 
 const int nperiodrhc = 1; // 4, 6
 const int nperiodfhc = 1; // 1, 2, 3, 5

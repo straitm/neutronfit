@@ -104,6 +104,9 @@ const double corr_pi_stop_flight = 0.5;
 const double nm_nominal = 1;
 const double nm_error = 0.1;
 
+const double nc_nominal = 1;
+const double nc_error = 0.3;
+
 bool useb12 = false; // can be changed between fits
 
 enum trktypes{ numubar, numu, stoppi, piflight, noneutrons,
@@ -419,6 +422,10 @@ static void fcn(__attribute__((unused)) int & np,
   // on the numu contamination in RHC, but better to leave it out
   // and see that the fit finds a reasonable value
   //chi2 += pow((r_nmscale - nm_nominal)/nm_error, 2);
+
+  // Can use this if we think we have an external handle
+  // on the NC contamination, which we do, from GENIE
+  chi2 += pow((ncscale - nc_nominal)/nm_error, 2);
 
   static double alldat[nbins_e*4],
                 alldatup[nbins_e*4],
