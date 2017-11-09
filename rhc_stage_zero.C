@@ -68,7 +68,7 @@ void setbranchaddresses(data * dat, TTree * t)
   setbranchaddress("primary", &dat->primary, t);
   setbranchaddress("type", &dat->type, t);
   setbranchaddress("contained", &dat->contained, t);
-  //setbranchaddress("nslc", &dat->nslc, t);
+  setbranchaddress("nslc", &dat->nslc, t);
   setbranchaddress("nhitx", &dat->nhitx, t);
   setbranchaddress("nhity", &dat->nhity, t);
   //setbranchaddress("nhit", &dat->nhit, t);
@@ -105,7 +105,13 @@ static bool pass_intensity(data * dat, const int minslc,
   const float minpot = minslc / slc_per_twp,
               maxpot = maxslc / slc_per_twp;
 
-  return dat->pot >= minpot && dat->pot < maxpot;
+  // evenly weight interactions we can see and those we can't
+  // XXX really something better motivated would be good here
+  // XXX let's as least ask Geant how many neutrons stop in the
+  // detector per rock event vs. per detector event.
+  const float eff_slc = (dat->pot * slc_per_twp + dat->nslc)/2;
+
+  return eff_slc >= minpot && dat->pot < maxpot;
 }
 
 // true if it passes the cut
