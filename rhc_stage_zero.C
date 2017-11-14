@@ -333,4 +333,5 @@ int rhc_stage_zero(const int mindist, const int minslc,
   }
   o << "}\n";
   o.close();
+  return 0;
 }
