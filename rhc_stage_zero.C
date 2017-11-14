@@ -102,16 +102,13 @@ static bool pass_intensity(data * dat, const int minslc,
   // it is necessarily approximate.
   const float slc_per_twp = rhc? 0.075: 0.172;
 
-  const float minpot = minslc / slc_per_twp,
-              maxpot = maxslc / slc_per_twp;
-
   // evenly weight interactions we can see and those we can't
   // XXX really something better motivated would be good here
   // XXX let's as least ask Geant how many neutrons stop in the
   // detector per rock event vs. per detector event.
   const float eff_slc = (dat->pot * slc_per_twp + dat->nslc)/2;
 
-  return eff_slc >= minpot && dat->pot < maxpot;
+  return eff_slc >= minslc && dat->pot < maxslc;
 }
 
 // true if it passes the cut
