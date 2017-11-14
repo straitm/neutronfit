@@ -108,7 +108,7 @@ static bool pass_intensity(data * dat, const int minslc,
   // detector per rock event vs. per detector event.
   const float eff_slc = (dat->pot * slc_per_twp + dat->nslc)/2;
 
-  return eff_slc >= minslc && dat->pot < maxslc;
+  return eff_slc >= minslc && eff_slc < maxslc;
 }
 
 // true if it passes the cut
