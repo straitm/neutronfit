@@ -277,10 +277,10 @@ void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
   }
 }
 
-void rhc_stage_zero(const int mindist, const int minslc,
-                    const int maxslc, const string region)
+int rhc_stage_zero(const int mindist, const int minslc,
+                   const int maxslc, const string region)
 {
-  if(mindist < 0) return; // used to compile only
+  if(mindist < 0) return 0; // used to compile only
 
   muoncatcher = region == "muoncatcher";
 
@@ -298,12 +298,12 @@ void rhc_stage_zero(const int mindist, const int minslc,
       Form("%s", inputfiles[i]), "read");
     if(!inputTFiles || inputTFiles->IsZombie()){
       fprintf(stderr, "Couldn't read a file.  See above.\n");
-      return;
+      return 1;
     }
     trees = dynamic_cast<TTree *>(inputTFiles->Get("t"));
     if(!trees){
       fprintf(stderr, "Couldn't read a tree.  See above.\n");
-      return;
+      return 1;
     }
     setbranchaddresses(&dat, trees);
 
