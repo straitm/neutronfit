@@ -346,12 +346,12 @@ static void fcn(__attribute__((unused)) int & np,
         if(x >= holex_hi){
           const double norm_n   =
             beam == 0 /* RHC */?
-            par[nneut_nc+eb*2+isbg] /* R */:
-            par[nneut_nc + (nbins_e+eb)*2 + isbg]; /*F*/
+            par[nneut_nc+eb*SIG_AND_BG+isbg] /* R */:
+            par[nneut_nc + (nbins_e+eb)*SIG_AND_BG + isbg]; /*F*/
           const double norm_b12 =
             beam == 0?
-            par[nb12_nc+eb*2+isbg]:
-            par[nb12_nc + (nbins_e+eb)*2+isbg];
+            par[nb12_nc+eb*SIG_AND_BG+isbg]:
+            par[nb12_nc + (nbins_e+eb)*SIG_AND_BG+isbg];
 
           // Michel lifetime - ~average of mu+ and mu-, messed up by
           // detector effects
@@ -368,8 +368,10 @@ static void fcn(__attribute__((unused)) int & np,
 
         const double data = alldata[periodsg][tb][eb];
 
-        like += model - data;
-        if(model > 0 && data > 0) like += data * log(data/model);
+        if(model > 0){
+          like += model - data;
+          if(data > 0) like += data * log(data/model);
+        }
       }
     }
   }
