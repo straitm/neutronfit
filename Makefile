@@ -65,13 +65,13 @@ $(foreach region, $(REGIONS), \
    ) \
  )
 
-rhc_stage_zero_C.so: rhc_stage_zero.C
+rhc_stage_zero_C.so: rhc_stage_zero.C common.C
 	./stage_zero.sh -1 0 0 main
 
-rhc_stage_one_C.so: rhc_stage_one.C
+rhc_stage_one_C.so: rhc_stage_one.C common.C
 	./stage_one.sh -1 0 0 main
 
-rhc_stage_two_C.so: rhc_stage_two.C
+rhc_stage_two_C.so: rhc_stage_two.C common.C
 	./stage_two.sh -1 0 0 main
 
 output = fit_stage_*.out.txt \
