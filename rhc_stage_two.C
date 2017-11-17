@@ -1149,7 +1149,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
 }
 
 // Subtract pileup background histograms from sig+bg histograms.  If not using
-// pilup background histograms (bgmult == 0), no subtraction occurs.
+// pileup background histograms (bgmult == 0), no subtraction occurs.
 static void do_background_subtraction()
 {
   const int N_AND_B12 = 2;

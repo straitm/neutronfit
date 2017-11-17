@@ -19,6 +19,8 @@ TMinuit * mn = NULL;
 
 #include "common.C"
 
+enum beam_type { RHC_BEAM, FHC_BEAM };
+
 // Control output plots
 const float textsize = 0.045;
 const int rebin = 5;
@@ -101,7 +103,9 @@ const int ncommonpar = 2;
 const int nper_e_beam_sg = 4; // number per energy bin, beam, and sig/bg
 const int nper_e_period = 2; // number per energy bin and period
 
-const int npar_ee = ncommonpar + nper_e_beam_sg + nper_e_period + 1;
+enum PARnames { ee_Tneut_par, ee_Aneut_par, ee_Nneut_par, ee_NB12_par,
+                ee_Tmich_par, ee_NMich_par, ee_flat_par,  ee_pileup_par,
+                ee_scale_par, npar_ee };
 
 // Woe betide you if you rearrange these, since the positions are
 // hardcoded in various places.
@@ -120,8 +124,6 @@ const char * const ee_parnames[npar_ee] = {
 
 "scale"
 };
-
-const int ee_scale_par = npar_ee-1;
 
 const double nmich_start = 0.8;
 const double nneut_start = 0.05;
@@ -245,13 +247,13 @@ static TF1 * ee_neg = new TF1("ee_neg",
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
   -nnegbins, holex_lo);
 
-const int ntf1s = 7;
+const int ntf1s = 7; // Number of TF1s that we are going to draw
 static TF1 * ees[ntf1s] =
   { ee_neg, ee_pos, ee_flat, ee_mich, ee_neut, ee_b12, ee_pileup };
 
 static const char * const ees_description[ntf1s] =
   { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons",
-    "^{12}B/air neutrons", "pileup" };
+    "^{12}B/air neutrons", "Prompt pileup" };
 
 static std::vector< std::vector<double> > scales;
 
@@ -345,11 +347,11 @@ static void fcn(__attribute__((unused)) int & np,
 
         if(x >= holex_hi){
           const double norm_n   =
-            beam == 0 /* RHC */?
+            beam == RHC_BEAM?
             par[nneut_nc+eb*SIG_AND_BG+isbg] /* R */:
             par[nneut_nc + (nbins_e+eb)*SIG_AND_BG + isbg]; /*F*/
           const double norm_b12 =
-            beam == 0?
+            beam == RHC_BEAM?
             par[nb12_nc+eb*SIG_AND_BG+isbg]:
             par[nb12_nc + (nbins_e+eb)*SIG_AND_BG+isbg];
 
@@ -429,7 +431,8 @@ static void set_ee_to_mn(const int periodsg, const int energybin) // 0-indexed
   for(int i = ncommonpar; i < ncommonpar+nper_e_beam_sg; i++){
     ee_neg->SetParameter(i,
 
-      (i==2||i==3||i==5? scales[periodsg][energybin]:1)* // per track -> total
+      (i==ee_Nneut_par || i==ee_NB12_par || i==ee_NMich_par?
+       scales[periodsg][energybin]: 1)* // per track -> total
 
       getpar(ncommonpar +
              (nbeam*nbins_e*(i-ncommonpar) +
@@ -461,11 +464,11 @@ static void set_ee_to_mn_beam(const int beam, const int bin,
 {
   // Oh so hacky!
   double pars[npar_ee];
-  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++){
+  for(int i = 0; i < (beam == RHC_BEAM?nperiodrhc:nperiodfhc); i++){
 
     // Get drawing parameters for each period in this beam and sig/bg type.
     // Add them together as appropriate.
-    const int periodsg = i + (beam == 1)*nperiodrhc + isbg*nperiod;
+    const int periodsg = i + (beam == FHC_BEAM)*nperiodrhc + isbg*nperiod;
     set_ee_to_mn(periodsg, bin);
     if(i == 0)
       for(int p = 0; p < npar_ee; p++)
@@ -473,7 +476,9 @@ static void set_ee_to_mn_beam(const int beam, const int bin,
     else
       for(int p = 0; p < npar_ee; p++)
         // Only the additive parameters
-        if(p == 2 || p == 3 || p == 5 || p == 6 || p == 7 || p == 8)
+        if(p == ee_Nneut_par || p == ee_NB12_par   || p == ee_NMich_par ||
+           p == ee_flat_par  || p == ee_pileup_par ||
+           p == ee_scale_par /* the scale?  really? */)
           pars[p] += fabs(ee_pos->GetParameter(p));
   }
 
@@ -500,8 +505,8 @@ static void sanitize_after_rebinning(TH1D * x)
 static double beam_scale(const int beam, const int bin)
 {
   double ans = 0;
-  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
-    const int idx = i + (beam == 1)*nperiodrhc;
+  for(int i = 0; i < (beam == RHC_BEAM?nperiodrhc:nperiodfhc); i++ ){
+    const int idx = i + (beam == FHC_BEAM)*nperiodrhc;
     ans += scales[idx][bin];
   }
   return ans;
@@ -517,7 +522,7 @@ static void draw_ee_common(TH1D * x, const int rebin,
                           Form("Delayed clusters/%d#mus", rebin));
   x->Draw("e");
 
-  TLegend * leg = new TLegend(0.63, 0.7, 0.93, 0.98);
+  TLegend * leg = new TLegend(0.67, 0.7, 0.95, 0.98);
   for(int i = 0; i < ntf1s; i++){
     ees[i]->SetParameter(ee_scale_par, rebin);
     ees[i]->Draw("same");
@@ -557,8 +562,8 @@ static void draw_ee_beam(const int beam, const int energybin,
   TH1D * x = fithist[0]->ProjectionX("x", energybin+1, energybin+1 /* 0->1 */);
   x->Reset();
 
-  for(int i = 0; i < (beam == 0?nperiodrhc:nperiodfhc); i++ ){
-    const int idx = i + (beam == 1)*nperiodrhc;
+  for(int i = 0; i < (beam == RHC_BEAM?nperiodrhc:nperiodfhc); i++ ){
+    const int idx = i + (beam == FHC_BEAM)*nperiodrhc;
     TH1D * tmp = fithist[idx+nperiod*isbg]->ProjectionX(
       "tmp", energybin+1, energybin+1);
     x->Add(tmp);
@@ -569,7 +574,7 @@ static void draw_ee_beam(const int beam, const int energybin,
   x->GetXaxis()->SetTitle(
     Form("%s: All %s E_{#nu} %.1f-%.1f GeV: Time since muon stop (#mus)",
     isbg == 0?"Signal":"Pileup",
-    beam == 0?"RHC":"FHC", bins_e[energybin], bins_e[energybin+1]));
+    beam == RHC_BEAM?"RHC":"FHC", bins_e[energybin], bins_e[energybin+1]));
   x->GetYaxis()->SetRangeUser(beam_scale(beam, energybin)*1e-6*rebin,
                               beam_scale(beam, energybin)* 0.1*rebin);
 
@@ -626,8 +631,8 @@ static vector< vector< vector<fitanswers> > > dothefit()
         const int off_beam = get_off_beam(beam, bin, sigorbg);
         // Reasonable starting points
         mn->Command(Form("SET PAR %d %f", nmich_nf+off_beam, 0.8));
-        mn->Command(Form("SET PAR %d %f",nneut_nf+off_beam,beam == 0?0.2:0.1));
-        mn->Command(Form("SET PAR %d %f",nb12_nf+off_beam, beam == 0?0.2:0.01));
+        mn->Command(Form("SET PAR %d %f",nneut_nf+off_beam,beam == RHC_BEAM?0.2:0.1));
+        mn->Command(Form("SET PAR %d %f",nb12_nf+off_beam, beam == RHC_BEAM?0.2:0.01));
 
         // Start with the muon lifetime fixed so that it doesn't try to
         // swap with the neutron lifetime.
