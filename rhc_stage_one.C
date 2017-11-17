@@ -692,7 +692,9 @@ static vector< vector< vector<fitanswers> > > dothefit()
         mn->Command(Form("SET PAR %d %f", nneut_nf+off_beam,
               fabs(getpar(nneut_nc+off_beam))));
 
-        mn->Command(Form("SET LIM %d 0 10",  nb12_nf+off_beam));
+        // Let "B-12" go quite high because really it is probably mostly air
+        // neutrons, especially for the pileup background samples.
+        mn->Command(Form("SET LIM %d 0 100",  nb12_nf+off_beam));
         mn->Command(Form("SET LIM %d 0 10", nneut_nf+off_beam));
       }
     }
