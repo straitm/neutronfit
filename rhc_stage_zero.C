@@ -228,7 +228,10 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
   vector<data> dats;
+  const int progint = t->GetEntries()/70;
+  int progtarg = progint;
   for(int i = 0; i < t->GetEntries(); i++){
+    if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
     t->GetEntry(i);
 
     // read in all of the clusters for this track
@@ -265,7 +268,10 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
                  const int maxslc, const bool rhc)
 {
+  const int progint = t->GetEntries()/70;
+  int progtarg = progint;
   for(int i = 0; i < t->GetEntries(); i++){
+    if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
     t->GetEntry(i);
     if(track_itself_cut(dat, minslc, maxslc, rhc) && dat->i == 0)
       h[dat->type > 10]->Fill(dat->slce);
@@ -318,10 +324,11 @@ int rhc_stage_zero(const int mindist, const int minslc,
     const bool rhc = i < nperiodrhc;
 
     fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc, rhc);
+    printf("\nGot %s 2D\n", Speriodnames[i]);
     if(ALL_TRACKS_GO_IN_THE_DENOMINATOR) // see comments above
       fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc, rhc);
 
-    printf("Got %s\n", Speriodnames[i]);
+    printf("Got %s 1D\n", Speriodnames[i]);
     fflush(stdout);
     for(int super = 0; super < 2; super++){
       fithist[super]->SavePrimitive(o);
