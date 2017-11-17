@@ -3,12 +3,11 @@
 const bool TWO_D_CUT = true;
 
 // Number of background samples per signal sample.  Set by my ntuple maker.
-const int bgmult = 0;
+const int bgmult = 1;
 
 // Everything is doubled because there is the signal and there is the
 // off-space pileup background sample
-// XXX disabled by setting to 1, enable by setting to 2
-const int SIG_AND_BG = 1;
+const int SIG_AND_BG = 2;
 
 // We aren't going to use anything between -1 and 2 microseconds because
 // the detector conditions are just too awful.  And then don't use
@@ -80,14 +79,14 @@ const char * const inputfiles[nperiod] = {
 };
 
 const char * const Speriodnames[SIG_AND_BG*nperiod] =
-    { "PR", "PF", /*"PRBG", "PFBG",*/ /*"P6",   "P4",   "P1",   "P2",   "P3",   "P5",
+    { "PR", "PF", "PRBG", "PFBG", /*"P6",   "P4",   "P1",   "P2",   "P3",   "P5",
     "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG"*/ };
 
 const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
      "RHC",
      "FHC",
-     //"RHC Pileup",
-     //"FHC Pileup",
+     "RHC Pileup",
+     "FHC Pileup",
 /*
      "Period 6 (RHC)",
      "Period 4 (RHC)",

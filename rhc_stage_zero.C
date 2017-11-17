@@ -118,7 +118,6 @@ static bool track_itself_cut(data * dat, const int minslc,
     &&   dat->run != 12187 // noise at t = -27, 90, 92
     && dat->primary
     && dat->type%10 == 3
-    && dat->type == 3 // XXX disable pileup background sample
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
     && dat->remid > remid_cut
     && dat->trklen > trklen_cut
