@@ -735,9 +735,9 @@ void draw(const int mindist, const int minslc, const int maxslc)
   dum2->GetYaxis()->SetRangeUser(
     min(0, 1.01*min(min(gdrawmin(g_n_rhc), tot_rhc_neut->GetMinimum()),
              min(gdrawmin(g_n_fhc), tot_fhc_neut->GetMinimum()))),
-    1.01*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
-             max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum()))
-             );
+    1.1*max(max(g_n_rhc->GetMaximum(), tot_rhc_neut->GetMaximum()),
+            max(g_n_fhc->GetMaximum(), tot_fhc_neut->GetMaximum()))
+            );
   dum2->GetYaxis()->SetTitle("Neutrons/track");
   dum2->GetYaxis()->SetTitleOffset(1.25);
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
