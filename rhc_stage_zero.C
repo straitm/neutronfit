@@ -273,8 +273,12 @@ void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
   for(int i = 0; i < t->GetEntries(); i++){
     if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
     t->GetEntry(i);
-    if(track_itself_cut(dat, minslc, maxslc, rhc) && dat->i == 0)
-      h[dat->type > 10]->Fill(dat->slce);
+    // Don't test for dat->i == 0 and type > 10.  See tag
+    // stagehotelcurlknotgoat in ntuple generation.
+    if(track_itself_cut(dat, minslc, maxslc, rhc) && dat->i == 0){
+      h[0]->Fill(dat->slce); // The tracks are the same for signal
+      h[1]->Fill(dat->slce); // and off-space background
+    }
   }
 }
 
