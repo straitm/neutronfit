@@ -100,13 +100,11 @@ static bool pass_intensity(data * dat, const int minslc,
   // This may not agree with other conversions, but since what I actually
   // want is neutrons produced per POT --- something no one knows ---
   // it is necessarily approximate.
-  const float slc_per_twp = rhc? 0.075: 0.172;
+  const float slc_per_twp = rhc? slc_per_twp_rhc: slc_per_twp_fhc;
 
-  // evenly weight interactions we can see and those we can't
-  // XXX really something better motivated would be good here
-  // XXX let's as least ask Geant how many neutrons stop in the
-  // detector per rock event vs. per detector event.
-  const float eff_slc = (dat->pot * slc_per_twp + dat->nslc)/2;
+  const int physics_nslc = dat->nslc - 1;
+  const float eff_slc = dat->pot * slc_per_twp * (1-npileup_sliceweight)
+                          + physics_nslc       *    npileup_sliceweight;
 
   return eff_slc >= minslc && eff_slc < maxslc;
 }

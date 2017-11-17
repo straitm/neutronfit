@@ -33,10 +33,30 @@ const double trkx_cut = 170,
 const double trklen_cut = 200;
 const double remid_cut = 0.75;
 
+
+// *** Parameters controlling how we deal with pileup neutrons from other ***
+// *** neutrino interactions                                              ***
+
+// How much weight to give the visible slices, as opposed to the intensity.
+// i.e. What fraction of the pileup neutrons do we think come from these
+// rather than from interactions in the rock.
+//
+// For now, evenly weight interactions we can see and those we can't.
+// XXX really something better motivated would be good here let's at least ask
+// Geant how many neutrons stop in the detector per rock event vs. per detector
+// event.
+const double npileup_sliceweight = 0.5;
+// Number of slices per 10**12 POT in RHC and FHC.  The ratio between these
+// sets the relative number of neutrons we think are coming out of the rock.
+// The absolute values are unimportant since we can tune either them or
+// npileup_sliceweight.
+const double slc_per_twp_rhc = 0.075;
+const double slc_per_twp_fhc = 0.172;
+
 // Maximum fraction of energy in the event that can be from the muon.
 // This is a crude way to get at resolution bins.  To allow any resolution
 // bin, set to 1.0 (or to be safe, a bit more, since I use a really crude
-// approximation for muon energy).  To only allow roughly the worst bin, 
+// approximation for muon energy).  To only allow roughly the worst bin,
 // use ~0.55.
 const double max_frac_e_mu = 1.5;
 

@@ -4,17 +4,28 @@ double mean_slice(const bool nm, const int minslc, const int maxslc)
 {
   if(minslc == maxslc) return minslc;
 
-  TChain c("t");
+  TChain rhc("t"), fhc("t");
+
+  // Do not include RHC for the NC study
   if(!nm)
     for(int i = nperiodrhc; i < nperiod; i++)
-      c.Add(inputfiles[i]);
+      rhc.Add(inputfiles[i]);
   for(int i = 0; i < nperiodrhc; i++)
-    c.Add(inputfiles[i]);
+    fhc.Add(inputfiles[i]);
 
-  TH1D tmp("tmp", "", 100, 1, 101);
-  c.Draw("nslc >> tmp",
-    Form("i == 0 && contained && primary && nslc >= %d && nslc <= %d",
-         minslc, maxslc));
+  TH1D tmp("tmp", "", 5000, 0, 50);
+
+  // *Within* the allowed range (minslc to maxslc), find the mean
+  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp", npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
+    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %d "
+                                        "&& (nslc-1)*%f + %f * pot * %f <= %d",
+              npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, minslc
+              npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, maxslc));
+  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp", npileup_sliceweight, slc_per_twp_fhc, 1-sliceweighh),
+    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %d "
+                                        "&& (nslc-1)*%f + %f * pot * %f <= %d",
+              npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, minslc
+              npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, maxslc));
 
   return tmp.GetMean();
 }
@@ -35,7 +46,7 @@ void rhc_stage_three(const string name, const string region)
   const double bottommargin=0.14;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double minx = mindistscan?-0.5:0.5, maxx = mindistscan?7:15;
+  const double minx = mindistscan?-0.5:0, maxx = mindistscan?7:15;
 
   TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 1000, 0, 6);
 
@@ -55,7 +66,7 @@ void rhc_stage_three(const string name, const string region)
 
     // Very conservatively take the error on the combined sample
     // with "any" number of slices to be the systematic error
-    if(minslc == 2 && maxslc >= 10){
+    if(minslc == 1 && maxslc >= 10){
       systval = y;
       systup = yeup;
       systdn = yedn;
@@ -63,16 +74,16 @@ void rhc_stage_three(const string name, const string region)
     }
 
     g.SetPoint(g.GetN(), mindistscan?mindist:(maxslc+minslc)/2, y);
-    g.SetPointError(g.GetN()-1, mindistscan?0:(maxslc-minslc)/2+0.25,
-                    mindistscan?0:(maxslc-minslc)/2+0.25, yedn, yeup);
-
-    // Put the center point in the R(F)HC-weighted mean number of slices for
-    // numu (NC)
-    if(!mindistscan) {
+    if(mindistscan){
+      g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
+    }
+    else{
+      // Put the center point in the R(F)HC-weighted mean number of slices for
+      // numu (NC)
       const double mid = mean_slice(nm, minslc, maxslc);
       g.SetPoint(g.GetN()-1, mid, y);
-      drawxerr_dn.push_back(mid-minslc+0.25);
-      drawxerr_up.push_back(maxslc+0.25-mid);
+      drawxerr_dn.push_back(mid-minslc);
+      drawxerr_up.push_back(maxslc-mid);
       g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
     }
   }
@@ -84,7 +95,7 @@ void rhc_stage_three(const string name, const string region)
   dum->GetYaxis()->SetTitle("Scale relative to MC");
   dum->GetXaxis()->SetTitle(mindistscan?
     "Number of cells widths around track end searched":
-    "Slices per spill");
+    "Effective physics slices per spill");
   dum->GetYaxis()->CenterTitle();
   dum->GetXaxis()->CenterTitle();
   dum->GetYaxis()->SetTitleSize(tsize);
@@ -95,7 +106,8 @@ void rhc_stage_three(const string name, const string region)
   dum->Draw();
 
   TLine l(minx + (maxx-minx)/500., 1, maxx - (maxx-minx)/500., 1);
-  l.SetLineColor(kGray);
+  l.SetLineColor(kBlack);
+  l.SetLineStyle(kDashed);
   l.Draw();
 
   g.Draw("pz");
@@ -110,25 +122,31 @@ void rhc_stage_three(const string name, const string region)
   leg.AddEntry((TH1D*)NULL, nm?"#nu_{#mu} RHC":"Neutral current", "");
   leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":
     Form("Searching %.0f cell widths from track end", mindist), "");
-  leg.AddEntry((TH1D*)NULL, region == "main"?"Main":"Muon Catcher", "");
-  leg.Draw();
+  leg.AddEntry((TH1D*)NULL, region == "main"?"Main ND":"Muon Catcher", "");
 
   if(!mindistscan){
 
-    TF1 * f = new TF1("f", "[0] + [1]*(x-2)", 2, 20);
+    const int ans_color = kRed-5;
+
+    // number of effective slices giving no pileup.
+    const double minpileup = npileup_sliceweight;
+
+    TF1 * f = new TF1("f", "[0] + [1]*(x-2)", minpileup, 20);
     f->SetParameters(1, 0.1);
     f->SetParLimits(0, 0, 10);
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
 
-    g.Fit("f", "em", "", 2, 13);
+    g.Fit("f", "em", "", minpileup, maxx);
     if(g.GetFunction("f") == NULL){
       fprintf(stderr, "Fit failed\n");
     }
     else{
-      g.GetFunction("f")->SetLineColor(kGray);
+      g.GetFunction("f")->SetLineColor(ans_color);
+      g.GetFunction("f")->SetNpx(500);
+      g.GetFunction("f")->SetLineWidth(2);
 
-      const double val = g.GetFunction("f")->Eval(2);
+      const double val = g.GetFunction("f")->Eval(minpileup);
 
       const double eup = sqrt(pow(+MINUIT->fErp[0],2) +
                               pow(systup * val/systval, 2));
@@ -138,19 +156,21 @@ void rhc_stage_three(const string name, const string region)
       printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
              val, eup, edn);
 
-      ideal->SetPoint(0, 2, val);
+      ideal->SetPoint(0, minpileup, val);
       ideal->SetPointError(0, 0, 0, edn, eup);
 
       ideal->SetMarkerStyle(kFullCircle);
-      ideal->SetMarkerColor(kGray);
-      ideal->SetLineColor(kGray);
-      ideal->Draw("pz");
+      ideal->SetMarkerColor(ans_color);
+      ideal->SetLineColor(ans_color);
+      ideal->Draw("p");
     }
   }
 
   for(int i = 0; i < drawxerr_dn.size(); i++)
     g.SetPointError(i, drawxerr_dn[i], drawxerr_up[i],
                        g.GetErrorYlow(i), g.GetErrorYhigh(i));
+
+  leg.Draw();
   
   c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }

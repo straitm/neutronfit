@@ -40,12 +40,12 @@ $(foreach region, $(REGIONS), \
 define summary_rule
 # 99.98% of primary contained tracks are in events with <= 20 slices
 $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
-                fit_stage_two_mindist6_nslc2_4_$(2).out.txt \
-                fit_stage_two_mindist6_nslc4_5_$(2).out.txt \
-                fit_stage_two_mindist6_nslc5_8_$(2).out.txt \
-                fit_stage_two_mindist6_nslc2_20_$(2).out.txt
+                fit_stage_two_mindist6_nslc0_3_$(2).out.txt \
+                fit_stage_two_mindist6_nslc3_4_$(2).out.txt \
+                fit_stage_two_mindist6_nslc4_7_$(2).out.txt \
+                fit_stage_two_mindist6_nslc1_20_$(2).out.txt
 	./stage_three.sh $(1)_slc $(2) \
-          fit_stage_two_mindist6_nslc{2_4,4_5,5_8,2_20}_$(2).out.txt
+          fit_stage_two_mindist6_nslc{0_3,3_4,4_7,1_20}_$(2).out.txt
 $(1)_mindist_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_10_$(2).out.txt \
