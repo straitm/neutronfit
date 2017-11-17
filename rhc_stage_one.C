@@ -485,12 +485,11 @@ static void set_ee_to_mn_beam(const int beam, const int bin,
 // Get rid of any bins that have partial contents.  Just for drawing.
 static void sanitize_after_rebinning(TH1D * x)
 {
-  // if the bin contains the range [-1,2], zero it
   for(int b = 0; b <= x->GetNbinsX(); b++){
-    if(-1.0 > x->GetBinLowEdge(b) &&
-       -1.0 < x->GetBinLowEdge(b+1)) x->SetBinContent(b, 0);
-    if(2 > x->GetBinLowEdge(b) &&
-       2 < x->GetBinLowEdge(b+1)) x->SetBinContent(b, 0);
+    if(holex_lo > x->GetBinLowEdge(b) &&
+       holex_lo < x->GetBinLowEdge(b+1)) x->SetBinContent(b, 0);
+    if(holex_hi > x->GetBinLowEdge(b) &&
+       holex_hi < x->GetBinLowEdge(b+1)) x->SetBinContent(b, 0);
     // does not consider the case that the bin is entirely
     // inside of the range, because then it will be zero anyway
   }
@@ -934,11 +933,14 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   init_ee();
 
+  //#define NEW_SB_TGAE { new TGraphAsymmErrors, new TGraphAsymmErrors }
+  #define NEW_SB_TGAE { new TGraphAsymmErrors }
+
   TGraphAsymmErrors
-    * g_n_rhc[SIG_AND_BG]  ={ new TGraphAsymmErrors, new TGraphAsymmErrors },
-    * g_n_fhc[SIG_AND_BG]  ={ new TGraphAsymmErrors, new TGraphAsymmErrors },
-    * g_b12_rhc[SIG_AND_BG]={ new TGraphAsymmErrors, new TGraphAsymmErrors },
-    * g_b12_fhc[SIG_AND_BG]={ new TGraphAsymmErrors, new TGraphAsymmErrors };
+    * g_n_rhc[SIG_AND_BG]  = NEW_SB_TGAE,
+    * g_n_fhc[SIG_AND_BG]  = NEW_SB_TGAE,
+    * g_b12_rhc[SIG_AND_BG]= NEW_SB_TGAE,
+    * g_b12_fhc[SIG_AND_BG]= NEW_SB_TGAE;
 
   gErrorIgnoreLevel = kError; // after new TFile and Get above
 
@@ -988,18 +990,20 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
   const string filename = Form("fit_stage_one_mindist%d_nslc%d_%d_%s.pdf",
                                mindist, minslc, maxslc, region.c_str());
 
-  // Intentionally print one dummy page
-  c1->Print(Form("%s(", filename.c_str()));
+  c1->Print(Form("%s[", filename.c_str()));
 
   for(int i = 0; i < nbins_e; i++)
     for(int beam = 0; beam < nbeam; beam++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         draw_ee_beam(beam, i, sigorbg, filename.c_str());
 
-  for(int i = 0; i < nbins_e; i++)
-    for(int period = 0; period < nperiod; period++)
-      for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
-        draw_ee(period + sigorbg*nperiod, i, filename.c_str());
+  // Print out a per-period set of histograms unless we have merged all RHC and
+  // FHC periods together, in which case that would be redundant.
+  if(nbeam < nperiod)
+    for(int i = 0; i < nbins_e; i++)
+      for(int period = 0; period < nperiod; period++)
+        for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
+          draw_ee(period + sigorbg*nperiod, i, filename.c_str());
 
   c1->Print(Form("%s]", filename.c_str()));
 

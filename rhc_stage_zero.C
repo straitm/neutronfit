@@ -120,6 +120,7 @@ static bool track_itself_cut(data * dat, const int minslc,
     &&   dat->run != 12187 // noise at t = -27, 90, 92
     && dat->primary
     && dat->type%10 == 3
+    && dat->type == 3 // XXX disable pileup background sample
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
     && dat->remid > remid_cut
     && dat->trklen > trklen_cut
@@ -217,7 +218,7 @@ bool track_followers_cut(const vector<data> & dats)
 
 bool clustercut(data * dat, const int mindist)
 {
-  return !(dat->t >= -1 && dat->t < 2) &&
+  return !(dat->t >= holex_lo && dat->t < holex_hi) &&
     dat->t > -nnegbins && dat->t < maxrealtime &&
     (TWO_D_CUT?true:dat->nhitx >= 1 && dat->nhity >= 1) &&
     dat->mindist <= mindist &&

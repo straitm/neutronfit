@@ -140,15 +140,14 @@ TH1D * fhc_tracks = makehist("fhc_tracks");
 TH1D * rhc_tracks = makehist("rhc_tracks");
 
 
-TGraphAsymmErrors * raw_g_n_rhc[SIG_AND_BG] =
-  { new TGraphAsymmErrors, new TGraphAsymmErrors };
-TGraphAsymmErrors * raw_g_n_fhc[SIG_AND_BG] =
-  { new TGraphAsymmErrors, new TGraphAsymmErrors };
+//#define NEW_SB_TGAE { new TGraphAsymmErrors, new TGraphAsymmErrors }
+#define NEW_SB_TGAE { new TGraphAsymmErrors }
 
-TGraphAsymmErrors * raw_g_b12_rhc[SIG_AND_BG] =
-  { new TGraphAsymmErrors, new TGraphAsymmErrors };
-TGraphAsymmErrors * raw_g_b12_fhc[SIG_AND_BG] =
-  { new TGraphAsymmErrors, new TGraphAsymmErrors };
+TGraphAsymmErrors * raw_g_n_rhc[SIG_AND_BG] = NEW_SB_TGAE;
+TGraphAsymmErrors * raw_g_n_fhc[SIG_AND_BG] = NEW_SB_TGAE;
+
+TGraphAsymmErrors * raw_g_b12_rhc[SIG_AND_BG] = NEW_SB_TGAE;
+TGraphAsymmErrors * raw_g_b12_fhc[SIG_AND_BG] = NEW_SB_TGAE;
 
 TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
@@ -1154,16 +1153,16 @@ static void do_background_subtraction()
     for(int i = 0; i < raw_gs[g][0]->GetN(); i++){
       gs[g]->SetPoint(i, raw_gs[g][0]->GetX()[i],
           raw_gs[g][0]->GetY()[i]
-        - raw_gs[g][1]->GetY()[i]/bgmult);
+        - (bgmult==0?0:raw_gs[g][1]->GetY()[i]/bgmult));
 
       gs[g]->SetPointError(i, raw_gs[g][0]->GetErrorXlow (i),
                               raw_gs[g][0]->GetErrorXhigh(i),
         // Down error is signal down error (+) bg up error
         sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) +
-             pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2)),
+             (bgmult==0?0:pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2))),
         // Up error is signal up error (+) bg down error
         sqrt(pow(raw_gs[g][0]->GetErrorYlow(i), 2) +
-             pow(raw_gs[g][1]->GetErrorYhigh(i)/bgmult, 2)));
+             (bgmult==0?0:pow(raw_gs[g][1]->GetErrorYhigh(i)/bgmult, 2))));
     }
   }
 }
