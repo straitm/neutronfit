@@ -774,14 +774,13 @@ void draw(const int mindist, const int minslc, const int maxslc)
 
   if(print_wo_fit) c2r->Print(outpdfname.c_str());
 
-  const int ndrawhists = 5;
+  const int ndrawhists = 4;
 
   TH1D * c2hists[ndrawhists] = {
     tot_rhc_neut,
     rhc_neut[piflight],
     rhc_neut[stoppi],
     rhc_neut[numu],
-    rhc_neut[pileup],
   };
 
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
@@ -817,7 +816,6 @@ void draw(const int mindist, const int minslc, const int maxslc)
     fhc_neut[piflight],
     fhc_neut[stoppi],
     fhc_neut[numu],
-    fhc_neut[pileup],
   };
   for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
     for(int h = 0; h < ndrawhists; h++)
