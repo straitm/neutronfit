@@ -933,14 +933,17 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   init_ee();
 
-  //#define NEW_SB_TGAE { new TGraphAsymmErrors, new TGraphAsymmErrors }
-  #define NEW_SB_TGAE { new TGraphAsymmErrors }
+  TGraphAsymmErrors * g_n_rhc[SIG_AND_BG],
+                    * g_n_fhc[SIG_AND_BG],
+                    * g_b12_rhc[SIG_AND_BG],
+                    * g_b12_fhc[SIG_AND_BG];
 
-  TGraphAsymmErrors
-    * g_n_rhc[SIG_AND_BG]  = NEW_SB_TGAE,
-    * g_n_fhc[SIG_AND_BG]  = NEW_SB_TGAE,
-    * g_b12_rhc[SIG_AND_BG]= NEW_SB_TGAE,
-    * g_b12_fhc[SIG_AND_BG]= NEW_SB_TGAE;
+  for(int i = 0; i < SIG_AND_BG; i++){
+    g_n_rhc[i] = new TGraphAsymmErrors;
+    g_n_fhc[i] = new TGraphAsymmErrors;
+    g_b12_rhc[i] = new TGraphAsymmErrors;
+    g_b12_fhc[i] = new TGraphAsymmErrors;
+  }
 
   gErrorIgnoreLevel = kError; // after new TFile and Get above
 

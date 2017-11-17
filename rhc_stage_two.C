@@ -18,33 +18,33 @@
 using std::string;
 using std::vector;
 
-const int npar = 9;
+static const int npar = 9;
 static TMinuit * mn = NULL;
 
 #include "common.C"
 
-double residuals[nbins_e*nbeam*2][nbins_e*nbeam*2];
+static double residuals[nbins_e*nbeam*2][nbins_e*nbeam*2];
 
 // filled by Macro call at start of running
-double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
+static double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
 
 enum conttype { oned68, twod68, twod90 };
 
 static const double tsize = 0.04;
 
 
-const double b12eff_nominal = 0.5;
-const double b12eff_error = 0.2;
+static const double b12eff_nominal = 0.5;
+static const double b12eff_error = 0.2;
 
 /*********************************************************************/
 
-bool muoncatcher = true; // set at entry point
+static bool muoncatcher = true; // set at entry point
 
-double mum_nyield_nominal = 0;
-double mum_nyield_error   = 0;
-double neff_nominal = 0;
-double neff_error   = 0;
-double timing_eff_difference_for_pions = 0;
+static double mum_nyield_nominal = 0;
+static double mum_nyield_error   = 0;
+static double neff_nominal = 0;
+static double neff_error   = 0;
+static double timing_eff_difference_for_pions = 0;
 
 // Ratio of the neutron yield from stopping pions to that of muons, per
 // stop, slightly adjusted by the greater fraction of neutrons from pions
@@ -53,7 +53,7 @@ double timing_eff_difference_for_pions = 0;
 //
 // Multiplied by a pretty ad hoc correction for tracking difficulties, see
 // below.
-double npimu_stop_nominal = 0;
+static double npimu_stop_nominal = 0;
 
 // Not const because I want to adjust it to make different contours, and it
 // is used by fcn().
@@ -61,13 +61,13 @@ double npimu_stop_nominal = 0;
 // This is the error from physics added in quadrature with an error
 // I made up for bad tracking which makes us miss the pions' neutrons
 // more often than the muons'.
-double npimu_stop_error = 0;
+static double npimu_stop_error = 0;
 
 /*********************************************************************/
 
 // Ratio of the neutron yield from strongly interacting particles *in flight*
 // to what Geant says.
-const double n_flight_nominal = 1;
+static const double n_flight_nominal = 1;
 
 // Somewhat arbitrary error on neutron production by things in
 // flight (mostly pions) - factor of two on a log scale, i.e.
@@ -90,36 +90,36 @@ const double n_flight_nominal = 1;
 //
 // Silly extra work to make a error that averages to what I said on a linear scale
 // but is asymmetric on that scale
-const double desired_average_n_flight_error = sqrt(pow(0.2, 2) + pow(0.2,2));
-const double so_this_is_the_error =
+static const double desired_average_n_flight_error = sqrt(pow(0.2, 2) + pow(0.2,2));
+static const double so_this_is_the_error =
   (-2+2*desired_average_n_flight_error +
   sqrt(pow(2-2*desired_average_n_flight_error,2)
   + 8*desired_average_n_flight_error))/2;
-const double n_flight_error = log(1 + so_this_is_the_error);
+static const double n_flight_error = log(1 + so_this_is_the_error);
 
 // NOTE: Arbitrarily invent a small correlation coefficient for the neutron
 // yield for in-flight interactions and stopped pions.
-const double corr_pi_stop_flight = 0.5;
+static const double corr_pi_stop_flight = 0.5;
 
-const double nm_nominal = 1;
-const double nm_error = 0.1;
+static const double nm_nominal = 1;
+static const double nm_error = 0.1;
 
-const double nc_nominal = 1;
-const double nc_error = 0.3;
+static const double nc_nominal = 1;
+static const double nc_error = 0.3;
 
-bool useb12 = false; // can be changed between fits
+static bool useb12 = false; // can be changed between fits
 
 enum trktypes{ numubar, numu, stoppi, piflight, noneutrons,
                pileup /* not really a track type... */, MAXTRKTYPE };
-const char * const trktypenames[MAXTRKTYPE] =
+static const char * const trktypenames[MAXTRKTYPE] =
   { "numubar", "numu", "stoppi", "piflight", "noneutrons", "pileup" };
 
-TH1D * makehist(const char * const name)
+static TH1D * makehist(const char * const name)
 {
   return new TH1D(name, "", nbins_e, bins_e);
 }
 
-TH1D ** makehistset(const char * const basename)
+static TH1D ** makehistset(const char * const basename)
 {
   TH1D ** set = (TH1D **)malloc(MAXTRKTYPE * sizeof(TH1D*));
   for(int i = 0; i < MAXTRKTYPE; i++)
@@ -127,39 +127,44 @@ TH1D ** makehistset(const char * const basename)
   return set;
 }
 
-TH1D ** fhc_reco = makehistset("fhc_reco");
-TH1D ** rhc_reco = makehistset("rhc_reco");
+static TH1D ** fhc_reco = makehistset("fhc_reco");
+static TH1D ** rhc_reco = makehistset("rhc_reco");
 
-TH1D ** rhc_neut = makehistset("rhc_neut");
-TH1D ** rhc_b12  = makehistset("rhc_b12");
-TH1D ** fhc_neut = makehistset("fhc_neut");
-TH1D ** fhc_b12  = makehistset("fhc_b12");
+static TH1D ** rhc_neut = makehistset("rhc_neut");
+static TH1D ** rhc_b12  = makehistset("rhc_b12");
+static TH1D ** fhc_neut = makehistset("fhc_neut");
+static TH1D ** fhc_b12  = makehistset("fhc_b12");
 
 // Total number of tracks in each beam's MC
-TH1D * fhc_tracks = makehist("fhc_tracks");
-TH1D * rhc_tracks = makehist("rhc_tracks");
+static TH1D * fhc_tracks = makehist("fhc_tracks");
+static TH1D * rhc_tracks = makehist("rhc_tracks");
 
+// Makes either one or two TGraphAsymmErrors, depending on SIG_AND_BG
+static TGraphAsymmErrors ** make_tgae_sigandbg_set()
+{
+  TGraphAsymmErrors ** set =
+    (TGraphAsymmErrors **)malloc(SIG_AND_BG * sizeof(TGraphAsymmErrors*));
+  for(int i = 0; i < SIG_AND_BG; i++) set[i] = new TGraphAsymmErrors;
+  return set;
+}
 
-//#define NEW_SB_TGAE { new TGraphAsymmErrors, new TGraphAsymmErrors }
-#define NEW_SB_TGAE { new TGraphAsymmErrors }
+static TGraphAsymmErrors ** raw_g_n_rhc = make_tgae_sigandbg_set();
+static TGraphAsymmErrors ** raw_g_n_fhc = make_tgae_sigandbg_set();
 
-TGraphAsymmErrors * raw_g_n_rhc[SIG_AND_BG] = NEW_SB_TGAE;
-TGraphAsymmErrors * raw_g_n_fhc[SIG_AND_BG] = NEW_SB_TGAE;
+static TGraphAsymmErrors ** raw_g_b12_rhc = make_tgae_sigandbg_set();
+static TGraphAsymmErrors ** raw_g_b12_fhc = make_tgae_sigandbg_set();
 
-TGraphAsymmErrors * raw_g_b12_rhc[SIG_AND_BG] = NEW_SB_TGAE;
-TGraphAsymmErrors * raw_g_b12_fhc[SIG_AND_BG] = NEW_SB_TGAE;
+static TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
+static TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
 
-TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
-TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
-
-TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
-TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
+static TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
+static TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
 
 // Out here so we can draw them
-TH1D * tot_rhc_neut = makehist("tot_rhc_neut");
-TH1D * tot_fhc_neut = makehist("tot_fhc_neut");
-TH1D * tot_rhc_b12  = makehist("tot_rhc_b12");
-TH1D * tot_fhc_b12  = makehist("tot_fhc_b12");
+static TH1D * tot_rhc_neut = makehist("tot_rhc_neut");
+static TH1D * tot_fhc_neut = makehist("tot_fhc_neut");
+static TH1D * tot_rhc_b12  = makehist("tot_rhc_b12");
+static TH1D * tot_fhc_b12  = makehist("tot_fhc_b12");
 
 static std::vector<double> getpars()
 {
@@ -1142,14 +1147,18 @@ void draw(const int mindist, const int minslc, const int maxslc)
   c4->Print((outpdfname + "]").c_str()); // doesn't print anything, just closes
 }
 
+// Subtract pileup background histograms from sig+bg histograms.  If not using
+// pilup background histograms (bgmult == 0), no subtraction occurs.
 static void do_background_subtraction()
 {
-  TGraphAsymmErrors ** raw_gs[nbeam*2]
+  const int N_AND_B12 = 2;
+
+  TGraphAsymmErrors ** raw_gs[nbeam*N_AND_B12]
     = { raw_g_n_rhc, raw_g_n_fhc, raw_g_b12_rhc, raw_g_b12_fhc };
-  TGraphAsymmErrors *      gs[nbeam*2]
+  TGraphAsymmErrors *      gs[nbeam*N_AND_B12]
     = {     g_n_rhc,     g_n_fhc,     g_b12_rhc,     g_b12_fhc };
 
-  for(int g = 0; g < nbeam*2; g++){
+  for(int g = 0; g < nbeam*N_AND_B12; g++){
     for(int i = 0; i < raw_gs[g][0]->GetN(); i++){
       gs[g]->SetPoint(i, raw_gs[g][0]->GetX()[i],
           raw_gs[g][0]->GetY()[i]
