@@ -6,26 +6,33 @@ double mean_slice(const bool nm, const int minslc, const int maxslc)
 
   TChain rhc("t"), fhc("t");
 
-  // Do not include RHC for the NC study
+  for(int i = 0; i < nperiodrhc; i++)
+    rhc.Add(inputfiles[i]);
+  // Do not include FHC for the nu-mu study, since we're answering
+  // a question specifically about RHC.  XXX does this make sense?
   if(!nm)
     for(int i = nperiodrhc; i < nperiod; i++)
-      rhc.Add(inputfiles[i]);
-  for(int i = 0; i < nperiodrhc; i++)
-    fhc.Add(inputfiles[i]);
+      fhc.Add(inputfiles[i]);
 
-  TH1D tmp("tmp", "", 5000, 0, 50);
+  TH1D tmp_r("tmp_r", "", 5000, 0, 50);
+  TH1D tmp_f("tmp_f", "", 5000, 0, 50);
 
   // *Within* the allowed range (minslc to maxslc), find the mean
-  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp", npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
+  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_r", npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
     Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %d "
                                         "&& (nslc-1)*%f + %f * pot * %f <= %d",
-              npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, minslc
+              npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, minslc,
               npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, maxslc));
-  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp", npileup_sliceweight, slc_per_twp_fhc, 1-sliceweighh),
+  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_f", npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight),
     Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %d "
                                         "&& (nslc-1)*%f + %f * pot * %f <= %d",
-              npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, minslc
+              npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, minslc,
               npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, maxslc));
+
+  printf("Getting mean: RHC %d events, FHC %d\n", tmp_r.GetEntries(), tmp_f.GetEntries());
+
+  TH1D & tmp = tmp_r;
+  tmp.Add(&tmp_f);
 
   return tmp.GetMean();
 }
@@ -62,7 +69,7 @@ void rhc_stage_three(const string name, const string region)
 
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
     if(!mindistscan && minslc == 0 && maxslc >= 20) continue;
-    if(minslc < 1) minslc = 1;
+    if(minslc < npileup_sliceweight) minslc = npileup_sliceweight;
 
     // Very conservatively take the error on the combined sample
     // with "any" number of slices to be the systematic error
