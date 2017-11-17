@@ -26,7 +26,8 @@ static TMinuit * mn = NULL;
 static double residuals[nbins_e*nbeam*2][nbins_e*nbeam*2];
 
 // filled by Macro call at start of running
-static double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
+// Apparently the way Macro() is implemented means this can't be static.
+double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
 
 enum conttype { oned68, twod68, twod90 };
 
@@ -148,11 +149,11 @@ static TGraphAsymmErrors ** make_tgae_sigandbg_set()
   return set;
 }
 
-static TGraphAsymmErrors ** raw_g_n_rhc = make_tgae_sigandbg_set();
-static TGraphAsymmErrors ** raw_g_n_fhc = make_tgae_sigandbg_set();
-
-static TGraphAsymmErrors ** raw_g_b12_rhc = make_tgae_sigandbg_set();
-static TGraphAsymmErrors ** raw_g_b12_fhc = make_tgae_sigandbg_set();
+// Set via call to Macro()
+TGraphAsymmErrors ** raw_g_n_rhc   = make_tgae_sigandbg_set();
+TGraphAsymmErrors ** raw_g_n_fhc   = make_tgae_sigandbg_set();
+TGraphAsymmErrors ** raw_g_b12_rhc = make_tgae_sigandbg_set();
+TGraphAsymmErrors ** raw_g_b12_fhc = make_tgae_sigandbg_set();
 
 static TGraphAsymmErrors * g_n_rhc = new TGraphAsymmErrors;
 static TGraphAsymmErrors * g_n_fhc = new TGraphAsymmErrors;
