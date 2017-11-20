@@ -113,10 +113,7 @@ static bool pass_intensity(data * dat, const int minslc,
 static bool track_itself_cut(data * dat, const int minslc,
                              const int maxslc, const bool rhc)
 {
-  return dat->run != 11601 // noise at t = 106 in this run.
-                   // Will go away with a better run list.
-    &&   dat->run != 12187 // noise at t = -27, 90, 92
-    && dat->primary
+  return dat->primary
     && dat->type%10 == 3
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
     && dat->remid > remid_cut
