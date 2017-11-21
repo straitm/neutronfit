@@ -113,8 +113,11 @@ static bool pass_intensity(data * dat, const float minslc,
 static bool track_itself_cut(data * dat, const float minslc,
                              const float maxslc, const bool rhc)
 {
-  return dat->primary
-    && dat->type%10 == 3
+  return dat->primary &&
+    3 == dat->type
+      #ifdef BGSUB
+        %10
+      #endif
     && dat->timeleft > maxrealtime && dat->timeback > -nnegbins
     && dat->remid > remid_cut
     && dat->trklen > trklen_cut
@@ -274,7 +277,9 @@ void fill_1dhist(TH1D ** h, data * dat, TTree * t, const float minslc,
     // stagehotelcurlknotgoat in ntuple generation.
     if(track_itself_cut(dat, minslc, maxslc, rhc) && dat->i == 0){
       h[0]->Fill(dat->slce); // The tracks are the same for signal
-      h[1]->Fill(dat->slce); // and off-space background
+      #ifdef BGSUB
+        h[1]->Fill(dat->slce); // and off-space background
+      #endif
     }
   }
 }
@@ -309,17 +314,21 @@ int rhc_stage_zero(const int mindist, const float minslc,
     }
     setbranchaddresses(&dat, trees);
 
-    TH1D * all_tcounts[2] = {
+    TH1D * all_tcounts[SIG_AND_BG] = {
       new TH1D(Form("%s_tcounts", Speriodnames[i]), "", nbins_e, bins_e),
-      new TH1D(Form("%sBG_tcounts",  Speriodnames[i]), "", nbins_e, bins_e)
+      #ifdef BGSUB
+        new TH1D(Form("%sBG_tcounts",  Speriodnames[i]), "", nbins_e, bins_e)
+      #endif
     };
-    TH2D * fithist[2] = {
+    TH2D * fithist[SIG_AND_BG] = {
       new TH2D(Form("%s", Speriodnames[i]), "",
         nnegbins + maxrealtime + additional,
         -nnegbins, maxrealtime + additional, nbins_e, bins_e),
-      new TH2D(Form("%sBG",  Speriodnames[i]), "",
-        nnegbins + maxrealtime + additional,
-        -nnegbins, maxrealtime + additional, nbins_e, bins_e)
+      #ifdef BGSUB
+        new TH2D(Form("%sBG",  Speriodnames[i]), "",
+          nnegbins + maxrealtime + additional,
+          -nnegbins, maxrealtime + additional, nbins_e, bins_e)
+      #endif
     };
 
     const bool rhc = i < nperiodrhc;
@@ -331,7 +340,8 @@ int rhc_stage_zero(const int mindist, const float minslc,
 
     printf("Got %s 1D\n", Speriodnames[i]);
     fflush(stdout);
-    for(int super = 0; super < 2; super++){
+
+    for(int super = 0; super < SIG_AND_BG; super++){
       fithist[super]->SavePrimitive(o);
       all_tcounts[super]->SavePrimitive(o);
     }

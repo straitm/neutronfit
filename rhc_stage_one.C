@@ -916,7 +916,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
   n_lifetime_priorerr = muoncatcher?10:5.;
   // Hackily provide information from the more data-rich fits to the
   // data-poor fits so they don't spin out of control.
-  if(mindist <= 2) n_lifetime_priorerr = 2.;
+  if(!TWO_D_CUT || mindist <= 2) n_lifetime_priorerr = 2.;
 
   // From a loose cut running of this program
   n_lifetime_nominal = muoncatcher?45:52.7;

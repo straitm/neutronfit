@@ -1,13 +1,21 @@
 // True if we are finding neutrons from 2D information alone, i.e not
 // requiring hits in both x and y
-const bool TWO_D_CUT = true;
+#define TWO_D_CUT true
 
-// Number of background samples per signal sample.  Set by my ntuple maker.
-const int bgmult = 1;
+//#define BGSUB
+
+// Number of neutron pileup background samples per signal sample.  Set by my
+// ntuple maker.  Set to zero to skip background subtraction.
+const int bgmult =
+#ifdef BGSUB
+  1;
+#else
+  0;
+#endif
 
 // Everything is doubled because there is the signal and there is the
 // off-space pileup background sample
-const int SIG_AND_BG = 2;
+const int SIG_AND_BG = bgmult?2:1;
 
 // We aren't going to use anything between -1 and 2 microseconds because
 // the detector conditions are just too awful.  And then don't use
@@ -78,16 +86,27 @@ const char * const inputfiles[nperiod] = {
 */
 };
 
-const char * const Speriodnames[SIG_AND_BG*nperiod] =
-    { "PR", "PF", "PRBG", "PFBG", /*"P6",   "P4",   "P1",   "P2",   "P3",   "P5",
-    "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG"*/ };
+const char * const Speriodnames[SIG_AND_BG*nperiod] = {
+"PR",
+"PF",
+#ifdef BGSUB
+"PRBG",
+"PFBG",
+#endif
+#if 0
+    "P6",   "P4",   "P1",   "P2",   "P3",   "P5",
+    "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG"
+#endif
+};
 
 const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
      "RHC",
      "FHC",
+#ifdef BGSUB
      "RHC Pileup",
      "FHC Pileup",
-/*
+#endif
+#if 0
      "Period 6 (RHC)",
      "Period 4 (RHC)",
      "Period 1 (FHC)",
@@ -100,16 +119,24 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
      "Period 2 (FHC) Pileup",
      "Period 3 (FHC) Pileup",
      "Period 5 (FHC) Pileup",
-*/
+#endif
 };
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e = 6;
 //const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 }; // 8
-  const double bins_e[nbins_e+1] = {0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };//6
-//const double bins_e[nbins_e+1] = {0.5, 1.6, 2.7, 3.8, 4.9, 6.0 }; // 5
-//const double bins_e[nbins_e+1] = {0.5, 1.5, 3.0, 6.0 }; // 3
+
+#if TWO_D_PLOT == true
+  const int nbins_e = 6;
+  const double bins_e[nbins_e+1] = { 0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
+#else
+  const int nbins_e = 3;
+  const double bins_e[nbins_e+1] = { 0.5, 1.5, 3.0, 6.0 };
+#endif
+#if 0
+  const int nbins_e = 5;
+  const double bins_e[nbins_e+1] = { 0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
+#endif
 
 double getpar(int i) // 0-indexed!
 {
