@@ -241,7 +241,7 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
   vector<data> dats;
-  const int progint = t->GetEntries()/70;
+  const int progint = t->GetEntries()/10;
   int progtarg = progint;
   for(int i = 0; i < t->GetEntries(); i++){
     if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
@@ -281,7 +281,7 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 void fill_1dhist(TH1D ** h, data * dat, TTree * t, const float minslc,
                  const float maxslc, const bool rhc)
 {
-  const int progint = t->GetEntries()/70;
+  const int progint = t->GetEntries()/10;
   int progtarg = progint;
   TBranch * ibranch = t->GetBranch("i");
   for(int i = 0; i < t->GetEntries(); i++){
