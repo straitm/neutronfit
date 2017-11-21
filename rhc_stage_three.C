@@ -8,9 +8,16 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
 
   for(int i = 0; i < nperiodrhc; i++)
     rhc.Add(inputfiles[i]);
+#if 0
   // Do not include FHC for the nu-mu study, since we're answering
-  // a question specifically about RHC.  XXX does this make sense?
+  // a question specifically about RHC.  Does this make sense?
+  // No, I don't think it does.  We are using a ratio of FHC to RHC
+  // to answer a question, so both matter.
+  //
+  // TODO: What's the effect of the average being different for
+  // FHC and RHC?
   if(!nm)
+#endif
     for(int i = nperiodrhc; i < nperiod; i++)
       fhc.Add(inputfiles[i]);
 
