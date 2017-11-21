@@ -46,6 +46,26 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
   return tmp.GetMean();
 }
 
+static double fixerr(const double e)
+{
+  if(e < 0 || e == 54321){
+    printf("BAD ERROR\n");
+    return 0;
+  }
+  return e;
+}
+
+static static void styletext(TLatex * t, const double tsize)
+{
+  t->SetTextFont(42);
+  t->SetTextSize(tsize*9/10.95); // footnotesize/normalsize for 11pt
+}
+
+static static void stylearrow(TArrow * a)
+{
+  a->SetLineWidth(2);
+}
+
 void rhc_stage_three(const string name, const string region)
 {
   gErrorIgnoreLevel = kError;
@@ -62,15 +82,30 @@ void rhc_stage_three(const string name, const string region)
   const double bottommargin=0.14;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double minx = mindistscan?-0.5:0, maxx = mindistscan?7:15;
+  // minpileup is the number of effective slices giving no pileup.
+  // (1-npileup_sliceweight) gives the number of effective slices in the
+  // rock. selfpileup subtracts off what you get from one event sending
+  // high energy neutrons from the vertex forward to its own muon's
+  // track end. This should be some negative number, but but not's not
+  // obvious what the value is. It might even be more than 1.
+  //
+  // TODO: Ask the MC for the ratio of neutron captures near the end of
+  // a muon track from other sources in (1) the same event (2) other
+  // events (any event that makes a slice). (1)/(2) is the quality of
+  // interest.
+  const double selfpileup = 0.7;
+  const double minpileup = (1-npileup_sliceweight) - selfpileup;
 
-  TH2D * dum = new TH2D("dum", "", 100, minx, maxx, 1000, 0, 6);
+  const double minx = mindistscan?-0.5:minpileup - 0.5,
+               maxx = mindistscan?7:10;
+
+  TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
 
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
   double mindist, y, yeup, yedn, minslc, maxslc;
 
-  // Do not want to set the xerrors before fitting because they get used 
+  // Do not want to set the xerrors before fitting because they get used
   // inappropriately by TGraph::Fit().  Set them afterwards for display.
   vector<double> drawxerr_dn, drawxerr_up;
 
@@ -104,14 +139,16 @@ void rhc_stage_three(const string name, const string region)
     }
   }
 
+  const double legbottom = 1-topmargin-0.15;
+
   double maxy = dum->GetYaxis()->GetBinLowEdge(dum->GetNbinsY()+1);
-  while(gdrawmax(&g) > 0 && gdrawmax(&g)*1.5 < maxy) maxy *= 0.8;
+  while(gdrawmax(&g) > 0 && gdrawmax(&g) < maxy*legbottom*0.98) maxy *= 0.99;
   dum->GetYaxis()->SetRangeUser(0, maxy);
 
   dum->GetYaxis()->SetTitle("Scale relative to MC");
   dum->GetXaxis()->SetTitle(mindistscan?
     "Number of cells widths around track end searched":
-    "Effective physics slices per spill");
+    "Effective other physics slices per spill");
   dum->GetYaxis()->CenterTitle();
   dum->GetXaxis()->CenterTitle();
   dum->GetYaxis()->SetTitleSize(tsize);
@@ -128,26 +165,26 @@ void rhc_stage_three(const string name, const string region)
 
   g.Draw("pz");
 
-  TLegend leg(leftmargin+0.05, 1-topmargin-0.19, leftmargin+0.2, 1-topmargin-0.01);
+  TLegend leg(leftmargin+0.05, legbottom, leftmargin+0.2, 1-topmargin-0.01);
   leg.SetMargin(0.01);
   leg.SetTextFont(42);
   leg.SetBorderSize(0);
   leg.SetFillStyle(0);
   leg.SetTextSize(tsize);
 
-  leg.AddEntry((TH1D*)NULL, nm?"#nu_{#mu} RHC":"Neutral current", "");
+  leg.AddEntry((TH1D*)NULL, Form("%s: %s",
+    nm?"#nu_{#mu} RHC":"Neutral current",
+    region == "main"?"Main ND":"Muon Catcher"), "");
   leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":
     Form("Searching %.0f cell widths from track end", mindist), "");
-  leg.AddEntry((TH1D*)NULL, region == "main"?"Main ND":"Muon Catcher", "");
+
+  const int ans_color = kRed-5;
+
+  gStyle->SetEndErrorSize(4);
 
   if(!mindistscan){
 
-    const int ans_color = kRed-5;
-
-    // number of effective slices giving no pileup.
-    const double minpileup = npileup_sliceweight;
-
-    TF1 * f = new TF1("f", "[0] + [1]*(x-2)", minpileup, 20);
+    TF1 * f = new TF1("f", Form("[0] + [1]*(x-%f)", minpileup), minpileup, 20);
     f->SetParameters(1, 0.1);
     f->SetParLimits(0, 0, 10);
 
@@ -164,9 +201,9 @@ void rhc_stage_three(const string name, const string region)
 
       const double val = g.GetFunction("f")->Eval(minpileup);
 
-      const double eup = sqrt(pow(+MINUIT->fErp[0],2) +
+      const double eup = sqrt(pow(fixerr(+MINUIT->fErp[0]),2) +
                               pow(systup * val/systval, 2));
-      const double edn = sqrt(pow(-MINUIT->fErn[0],2) +
+      const double edn = sqrt(pow(fixerr(-MINUIT->fErn[0]),2) +
                               pow(systdn * val/systval, 2));
 
       printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
@@ -178,6 +215,7 @@ void rhc_stage_three(const string name, const string region)
       ideal->SetMarkerStyle(kFullCircle);
       ideal->SetMarkerColor(ans_color);
       ideal->SetLineColor(ans_color);
+      ideal->SetLineWidth(2);
       ideal->Draw("p");
     }
   }
@@ -187,6 +225,29 @@ void rhc_stage_three(const string name, const string region)
                        g.GetErrorYlow(i), g.GetErrorYhigh(i));
 
   leg.Draw();
-  
+
+  const float lowlab = maxy/40, highlab = lowlab + maxy/16.;
+
+  TArrow * a = new TArrow(selfpileup, 0, selfpileup, 1e-6, 0.02, "<");
+  stylearrow(a);
+  const int zios_color = kGreen+2;
+  a->SetLineColor(zios_color);
+  a->Draw();
+
+  TLatex * t = new TLatex(selfpileup, lowlab, "Zero intensity, 1 slice");
+  styletext(t, tsize);
+  t->SetTextColor(zios_color);
+  t->Draw();
+
+  a = new TArrow(minpileup, 0, minpileup, highlab, 0.02, "<");
+  stylearrow(a);
+  a->SetLineColor(ans_color);
+  a->Draw();
+
+  TLatex * t = new TLatex(minpileup, highlab, "Without self-pileup");
+  styletext(t, tsize);
+  t->SetTextColor(ans_color);
+  t->Draw();
+
   c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }
