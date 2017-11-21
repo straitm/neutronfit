@@ -430,7 +430,7 @@ static void fcn(__attribute__((unused)) int & np,
 
   // Can use this if we think we have an external handle
   // on the NC contamination, which we do, from GENIE
-  chi2 += pow((ncscale - nc_nominal)/nm_error, 2);
+  chi2 += pow((ncscale - nc_nominal)/nc_error, 2);
 
   static double alldat[nbins_e*4],
                 alldatup[nbins_e*4],
