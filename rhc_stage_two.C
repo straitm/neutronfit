@@ -464,7 +464,7 @@ static void fcn(__attribute__((unused)) int & np,
 
 /* Fill with the number of tracks in the MC for each category of truth */
 void fill_hists(const char * const file, TH1D ** h, TH1D * tracks,
-                const int minslc, const int maxslc)
+                const float minslc, const float maxslc)
 {
   printf("Reading %s\n", file); fflush(stdout);
 
@@ -710,7 +710,7 @@ static double gdrawmin(const TGraphAsymmErrors * const g)
   return min;
 }
 
-void draw(const int mindist, const int minslc, const int maxslc)
+void draw(const int mindist, const float minslc, const float maxslc)
 {
   //////////////////////////////////////////////////////////////////////
   const double leftmargin = 0.15;
@@ -747,7 +747,7 @@ void draw(const int mindist, const int minslc, const int maxslc)
   //
   TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
   const std::string outpdfname =
-    Form("fit_stage_two_mindist%d_nslc%d_%d_%s.pdf", mindist, minslc, maxslc,
+    Form("fit_stage_two_mindist%d_nslc%.1f_%.1f_%s.pdf", mindist, minslc, maxslc,
          muoncatcher?"muoncatcher":"main");
   c2r->Print((outpdfname + "(").c_str()); // intentionally print a blank page
   c2r->SetLogy(logy);
@@ -1042,10 +1042,10 @@ void draw(const int mindist, const int minslc, const int maxslc)
   mn->Command("MINOS 10000 4");
   if(useb12) mn->Command("MINOS 10000 5");
 
-  printf("NC %s mindist %d slcrange %d - %d : %f + %f - %f\n",
+  printf("NC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f\n",
     muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(0), getbesterrup(0), getbesterrdn(0));
-  printf("NM %s mindist %d slcrange %d - %d : %f + %f - %f\n",
+  printf("NM %s mindist %d slcrange %.1f - %.1f : %f + %f - %f\n",
     muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1));
 
@@ -1176,7 +1176,7 @@ static void do_background_subtraction()
 }
 
 void rhc_stage_two(const char * const input, const int mindist,
-                   const int minslc, const int maxslc, const string region)
+                   const float minslc, const float maxslc, const string region)
 {
   if(mindist < 0) return; // to compile only
 

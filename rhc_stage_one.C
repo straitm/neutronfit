@@ -847,9 +847,9 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
                                TGraphAsymmErrors ** g_b12_rhc,
                                TGraphAsymmErrors ** g_b12_fhc,
                                const int mindist,
-                               const int minslc, const int maxslc)
+                               const float minslc, const float maxslc)
 {
-  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%d_%d_%s.C",
+  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%.1f_%.1f_%s.C",
                               mindist, minslc, maxslc,
                               muoncatcher?"muoncatcher":"main"));
   for_stage_two << "{\n";
@@ -891,7 +891,7 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
 }
 
 void rhc_stage_one(const char * const savedhistfile, const int mindist,
-                   const int minslc, const int maxslc, const string region)
+                   const float minslc, const float maxslc, const string region)
 {
   if(mindist < 0) return; // to compile only
 
@@ -997,7 +997,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     }
   }
 
-  const string filename = Form("fit_stage_one_mindist%d_nslc%d_%d_%s.pdf",
+  const string filename = Form("fit_stage_one_mindist%d_nslc%.1f_%.1f_%s.pdf",
                                mindist, minslc, maxslc, region.c_str());
 
   c1->Print(Form("%s[", filename.c_str()));

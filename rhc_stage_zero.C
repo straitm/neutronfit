@@ -94,8 +94,8 @@ void setbranchaddresses(data * dat, TTree * t)
 // Continue calling the cuts minslc and maxslc, but actually translate
 // them into an intensity in 10**12 POTs ("twp") so that we are taking
 // into account neutrons from invisible rock events too.
-static bool pass_intensity(data * dat, const int minslc,
-                           const int maxslc, const bool rhc)
+static bool pass_intensity(data * dat, const float minslc,
+                           const float maxslc, const bool rhc)
 {
   // This may not agree with other conversions, but since what I actually
   // want is neutrons produced per POT --- something no one knows ---
@@ -110,8 +110,8 @@ static bool pass_intensity(data * dat, const int minslc,
 }
 
 // true if it passes the cut
-static bool track_itself_cut(data * dat, const int minslc,
-                             const int maxslc, const bool rhc)
+static bool track_itself_cut(data * dat, const float minslc,
+                             const float maxslc, const bool rhc)
 {
   return dat->primary
     && dat->type%10 == 3
@@ -220,7 +220,7 @@ bool clustercut(data * dat, const int mindist)
 }
 
 void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
-                 const int mindist, const int minslc, const int maxslc,
+                 const int mindist, const float minslc, const float maxslc,
                  const bool rhc)
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
@@ -262,8 +262,8 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 }
 
 // In this scheme, all tracks go into the denominator
-void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
-                 const int maxslc, const bool rhc)
+void fill_1dhist(TH1D ** h, data * dat, TTree * t, const float minslc,
+                 const float maxslc, const bool rhc)
 {
   const int progint = t->GetEntries()/70;
   int progtarg = progint;
@@ -279,8 +279,8 @@ void fill_1dhist(TH1D ** h, data * dat, TTree * t, const int minslc,
   }
 }
 
-int rhc_stage_zero(const int mindist, const int minslc,
-                   const int maxslc, const string region)
+int rhc_stage_zero(const int mindist, const float minslc,
+                   const float maxslc, const string region)
 {
   if(mindist < 0) return 0; // used to compile only
 
@@ -289,7 +289,7 @@ int rhc_stage_zero(const int mindist, const int minslc,
   data dat;
 
   std::ofstream o(
-    Form("savedhists_mindist%d_nslc%d_%d_%s.C",
+    Form("savedhists_mindist%d_nslc%.1f_%.1f_%s.C",
          mindist, minslc, maxslc, region.c_str()));
   o << "{\n";
   for(int i = 0; i < nperiod; i++){

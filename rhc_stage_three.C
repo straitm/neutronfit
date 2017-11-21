@@ -1,6 +1,6 @@
 #include "common.C"
 
-double mean_slice(const bool nm, const int minslc, const int maxslc)
+static double mean_slice(const bool nm, const float minslc, const float maxslc)
 {
   if(minslc == maxslc) return minslc;
 
@@ -18,14 +18,16 @@ double mean_slice(const bool nm, const int minslc, const int maxslc)
   TH1D tmp_f("tmp_f", "", 5000, 0, 50);
 
   // *Within* the allowed range (minslc to maxslc), find the mean
-  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_r", npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
-    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %d "
-                                        "&& (nslc-1)*%f + %f * pot * %f <= %d",
+  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_r",
+      npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
+    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %f "
+                                        "&& (nslc-1)*%f + %f * pot * %f <  %f",
               npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, minslc,
               npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, maxslc));
-  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_f", npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight),
-    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %d "
-                                        "&& (nslc-1)*%f + %f * pot * %f <= %d",
+  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_f",
+      npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight),
+    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %f "
+                                        "&& (nslc-1)*%f + %f * pot * %f <  %f",
               npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, minslc,
               npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, maxslc));
 
@@ -68,12 +70,12 @@ void rhc_stage_three(const string name, const string region)
   double systval = 0, systup = 0, systdn = 0;
 
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
-    if(!mindistscan && minslc == 0 && maxslc >= 20) continue;
     if(minslc < npileup_sliceweight) minslc = npileup_sliceweight;
 
     // Very conservatively take the error on the combined sample
     // with "any" number of slices to be the systematic error
-    if(minslc == 1 && maxslc >= 10){
+    if(minslc < 1 && maxslc >= 10){
+      printf("Got systematic from combined sample\n");
       systval = y;
       systup = yeup;
       systdn = yedn;
