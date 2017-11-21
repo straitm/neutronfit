@@ -27,66 +27,79 @@ bool muoncatcher = true;// set at entry point
 
 struct data{
   int run;
-  int subrun;
-  int event;
-  int trk;
-  int primary;
+  float slce;
   int type;
-  int contained;
-  int nslc;
-  int nhitx;
-  int nhity;
-  int nhit;
+
   int i;
-  float pot;
+  int primary;
   float timeleft;
   float timeback;
   float remid;
   float trklen;
+  int contained;
   float trkx;
   float trky;
   float trkz;
   float trkstartz;
-  float mindist;
-  float maxdist;
-  float pe;
-  float e;
+  int nslc;
+  float pot;
+
+  int event;
+  int trk;
   float t;
-  float slce;
+  float mindist;
+  float e;
+  float pe;
+
+  int nhitx;
+  int nhity;
+
+  int subrun;
+  int nhit;
+  float maxdist;
   float cosx;
   float cosy;
 };
 
-void setbranchaddresses(data * dat, TTree * t)
+enum branchstat { FOR2D, FOR1D };
+
+void setbranchaddresses(data * dat, TTree * t, const branchstat how)
 {
   t->SetBranchStatus("*", 0);
-  setbranchaddress("i", &dat->i, t);
   setbranchaddress("run", &dat->run, t);
-  //setbranchaddress("subrun", &dat->subrun, t);
-  setbranchaddress("event", &dat->event, t);
-  setbranchaddress("trk", &dat->trk, t);
-  setbranchaddress("primary", &dat->primary, t);
+  setbranchaddress("slce", &dat->slce, t);
   setbranchaddress("type", &dat->type, t);
-  setbranchaddress("contained", &dat->contained, t);
-  setbranchaddress("nslc", &dat->nslc, t);
-  setbranchaddress("nhitx", &dat->nhitx, t);
-  setbranchaddress("nhity", &dat->nhity, t);
-  //setbranchaddress("nhit", &dat->nhit, t);
-  setbranchaddress("pot", &dat->pot, t);
+
+  setbranchaddress("i", &dat->i, t);
+  setbranchaddress("primary", &dat->primary, t);
   setbranchaddress("timeleft", &dat->timeleft, t);
   setbranchaddress("timeback", &dat->timeback, t);
   setbranchaddress("remid", &dat->remid, t);
   setbranchaddress("trklen", &dat->trklen, t);
+  setbranchaddress("contained", &dat->contained, t);
   setbranchaddress("trkx", &dat->trkx, t);
   setbranchaddress("trky", &dat->trky, t);
   setbranchaddress("trkz", &dat->trkz, t);
   setbranchaddress("trkstartz", &dat->trkstartz, t);
-  setbranchaddress("mindist", &dat->mindist, t);
+  setbranchaddress("nslc", &dat->nslc, t);
+  setbranchaddress("pot", &dat->pot, t);
+
+  if(how == FOR2D || !ALL_TRACKS_GO_IN_THE_DENOMINATOR){
+    setbranchaddress("event", &dat->event, t);
+    setbranchaddress("trk", &dat->trk, t);
+    setbranchaddress("t", &dat->t, t);
+    setbranchaddress("mindist", &dat->mindist, t);
+    setbranchaddress("e", &dat->e, t);
+    setbranchaddress("pe", &dat->pe, t);
+    if(!TWO_D_CUT){
+      setbranchaddress("nhitx", &dat->nhitx, t);
+      setbranchaddress("nhity", &dat->nhity, t);
+    }
+  }
+
+  //setbranchaddress("subrun", &dat->subrun, t);
+  //setbranchaddress("nhit", &dat->nhit, t);
   //setbranchaddress("maxdist", &dat->maxdist, t);
-  setbranchaddress("pe", &dat->pe, t);
-  setbranchaddress("e", &dat->e, t);
-  setbranchaddress("t", &dat->t, t);
-  setbranchaddress("slce", &dat->slce, t);
   //setbranchaddress("cosx", &dat->cosx, t);
   //setbranchaddress("cosy", &dat->cosy, t);
 }
@@ -270,12 +283,16 @@ void fill_1dhist(TH1D ** h, data * dat, TTree * t, const float minslc,
 {
   const int progint = t->GetEntries()/70;
   int progtarg = progint;
+  TBranch * ibranch = t->GetBranch("i");
   for(int i = 0; i < t->GetEntries(); i++){
     if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
+    ibranch->GetEntry(i);
+    if(dat->i != 0) continue;
+
     t->GetEntry(i);
-    // Don't test for dat->i == 0 and type > 10.  See tag
+    // Don't test for dat->i==0 with type>10.  See tag
     // stagehotelcurlknotgoat in ntuple generation.
-    if(track_itself_cut(dat, minslc, maxslc, rhc) && dat->i == 0){
+    if(track_itself_cut(dat, minslc, maxslc, rhc)){
       h[0]->Fill(dat->slce); // The tracks are the same for signal
       #ifdef BGSUB
         h[1]->Fill(dat->slce); // and off-space background
@@ -312,7 +329,6 @@ int rhc_stage_zero(const int mindist, const float minslc,
       fprintf(stderr, "Couldn't read a tree.  See above.\n");
       return 1;
     }
-    setbranchaddresses(&dat, trees);
 
     TH1D * all_tcounts[SIG_AND_BG] = {
       new TH1D(Form("%s_tcounts", Speriodnames[i]), "", nbins_e, bins_e),
@@ -333,11 +349,13 @@ int rhc_stage_zero(const int mindist, const float minslc,
 
     const bool rhc = i < nperiodrhc;
 
+    setbranchaddresses(&dat, trees, FOR2D);
     fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc, rhc);
     printf("\nGot %s 2D\n", Speriodnames[i]);
+
+    setbranchaddresses(&dat, trees, FOR1D);
     if(ALL_TRACKS_GO_IN_THE_DENOMINATOR) // see comments above
       fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc, rhc);
-
     printf("Got %s 1D\n", Speriodnames[i]);
     fflush(stdout);
 
