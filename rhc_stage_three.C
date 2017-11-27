@@ -38,7 +38,8 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
               npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, minslc,
               npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, maxslc));
 
-  printf("Getting mean: RHC %d events, FHC %d\n", tmp_r.GetEntries(), tmp_f.GetEntries());
+  printf("Getting mean for %4.1f-%4.1f slices: RHC %7d events, FHC %7d\n",
+         minslc, maxslc, tmp_r.GetEntries(), tmp_f.GetEntries());
 
   TH1D & tmp = tmp_r;
   tmp.Add(&tmp_f);
@@ -84,10 +85,16 @@ void rhc_stage_three(const string name, const string region)
 
   // minpileup is the number of effective slices giving no pileup.
   // (1-npileup_sliceweight) gives the number of effective slices in the
-  // rock. selfpileup subtracts off what you get from one event sending
+  // rock.
+  //
+  // selfpileup subtracts off what you get from one event sending
   // high energy neutrons from the vertex forward to its own muon's
-  // track end. This should be some negative number, but but not's not
-  // obvious what the value is. It might even be more than 1.
+  // track end. This should be some non-zero number, but but not's not
+  // obvious what the value is. It might even be more than 1. It's also
+  // different for FHC and RHC *tears-hair-out*. Anyway, it can be
+  // found by comparing how often the wrong part of an event gives us a
+  // selected neutron divided by how often a single other event (making
+  // a slice) does so.
   //
   // TODO: Ask the MC for the ratio of neutron captures near the end of
   // a muon track from other sources in (1) the same event (2) other
@@ -103,6 +110,10 @@ void rhc_stage_three(const string name, const string region)
 
   TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
+  TGraphAsymmErrors gall; // for any number of slices
+  gall.SetMarkerStyle(kOpenCircle);
+  gall.SetLineColor(kGray);
+  gall.SetMarkerColor(kGray);
   double mindist, y, yeup, yedn, minslc, maxslc;
 
   // Do not want to set the xerrors before fitting because they get used
@@ -114,28 +125,34 @@ void rhc_stage_three(const string name, const string region)
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
     if(minslc < npileup_sliceweight) minslc = npileup_sliceweight;
 
-    // Very conservatively take the error on the combined sample
-    // with "any" number of slices to be the systematic error
-    if(minslc < 1 && maxslc >= 10){
-      printf("Got systematic from combined sample\n");
-      systval = y;
-      systup = yeup;
-      systdn = yedn;
-      continue;
-    }
+    TGraphAsymmErrors * G = NULL;
 
-    g.SetPoint(g.GetN(), mindistscan?mindist:(maxslc+minslc)/2, y);
     if(mindistscan){
+      g.SetPoint(g.GetN(), mindist, y);
       g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
     }
     else{
       // Put the center point in the R(F)HC-weighted mean number of slices for
       // numu (NC)
       const double mid = mean_slice(nm, minslc, maxslc);
-      g.SetPoint(g.GetN()-1, mid, y);
-      drawxerr_dn.push_back(mid-minslc);
-      drawxerr_up.push_back(maxslc-mid);
-      g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
+
+      // Very conservatively take the error on the combined sample
+      // with "any" number of slices to be the systematic error.
+      // Currently this is small compared to the fit error.
+      if(minslc < 1 && maxslc >= 10){
+        printf("Got systematic from combined sample\n");
+        systval = y;
+        systup = yeup;
+        systdn = yedn;
+        gall.SetPoint(gall.GetN(), mid, y);
+        gall.SetPointError(gall.GetN()-1, mid-minslc, maxslc-mid, yedn, yeup);
+      }
+      else{
+        g.SetPoint(g.GetN(), mid, y);
+        drawxerr_dn.push_back(mid-minslc);
+        drawxerr_up.push_back(maxslc-mid);
+        g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
+      }
     }
   }
 
@@ -164,6 +181,7 @@ void rhc_stage_three(const string name, const string region)
   l.Draw();
 
   g.Draw("pz");
+  gall.Draw("pz");
 
   TLegend leg(leftmargin+0.05, legbottom, leftmargin+0.2, 1-topmargin-0.01);
   leg.SetMargin(0.01);
@@ -244,7 +262,7 @@ void rhc_stage_three(const string name, const string region)
   a->SetLineColor(ans_color);
   a->Draw();
 
-  TLatex * t = new TLatex(minpileup, highlab, "Without self-pileup");
+  TLatex * t = new TLatex(minpileup, highlab, "Self-pileup subtracted");
   styletext(t, tsize);
   t->SetTextColor(ans_color);
   t->Draw();
