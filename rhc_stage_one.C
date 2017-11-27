@@ -21,6 +21,16 @@ TMinuit * mn = NULL;
 
 enum beam_type { RHC_BEAM, FHC_BEAM };
 
+// It turns out, I think, that the main contributor to events with a
+// longer lifetime than simple neutron capture are not B-12 decay but
+// rather neutron capture from neutrons that have spent a long time
+// bouncing around in the rock and/or in the air around the detector.
+// This doesn't have a simple exponential form, but from the Monte
+// Carlo, this lifetime is a rough approximation for the major relevant
+// component. If you want to put in the B-12 lifetime instead, it is
+// 29.14e3 microseconds;
+const double b12life = 0.5e3;
+
 // Control output plots
 const float textsize = 0.045;
 const int rebin = 5;
@@ -221,7 +231,7 @@ static TF1 * ee_neut =
    holex_hi, maxrealtime+additional);
 
 static TF1 * ee_b12 =
-  new TF1("ee_b12", "[8]*(abs([3])/29.14e3 * exp(-x/29.14e3))",
+  new TF1("ee_b12", Form("[8]*(abs([3])/%f * exp(-x/%f))", b12life, b12life),
           holex_hi, maxrealtime+additional);
 
 static TF1 * ee_pileup = new TF1("ee_b12",
@@ -236,10 +246,10 @@ static TF1 * ee_pos = new TF1("ee_pos",
     "abs([5])/[4] * exp(-x/[4]) + "
     "abs([2])/([0]-%f) * (exp(-x/[0]) - exp(-x/%f))"
     "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
-    "+ abs([3])/29.14e3 * exp(-x/29.14e3)"
+    "+ abs([3])/%f * exp(-x/%f)"
   ") + "
   "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
-  n_start_conv_time, n_start_conv_time),
+  n_start_conv_time, n_start_conv_time, b12life, b12life),
   holex_hi, maxrealtime+additional);
 
 static TF1 * ee_neg = new TF1("ee_neg",
@@ -275,8 +285,6 @@ static void fcn(__attribute__((unused)) int & np,
   __attribute__((unused)) int flag)
 {
   like = 0;
-
-  const double b12life = 29.14e3;
 
   // Assumption: all histograms have same dimensions and they don't change
   const int ntbins = fithist[0]->GetNbinsX();
