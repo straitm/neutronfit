@@ -746,7 +746,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
 
   status = mn->Command("HESSE");
 
-  const bool DOMINOS = false, // slow and only marginally useful
+  const bool DOMINOS = true, // slow and only marginally useful
              EVENDOB12MINOS = false;
 
   if(!status)
