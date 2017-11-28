@@ -1,24 +1,17 @@
 #include "common.C"
 
-// minpileup is the number of effective slices giving no pileup.
-// (1-npileup_sliceweight) gives the number of effective slices in the
-// rock.
-//
 // selfpileup subtracts off what you get from one event sending
 // high energy neutrons from the vertex forward to its own muon's
-// track end. This should be some non-zero number, but but not's not
+// track end. This should be some non-zero number, but it's not
 // obvious what the value is. It might even be more than 1. It's also
 // different for FHC and RHC *tears-hair-out*. Anyway, it can be
 // found by comparing how often the wrong part of an event gives us a
-// selected neutron divided by how often a single other event (making
-// a slice) does so.
+// selected neutron divided by how often, per slice, other events do.
 //
 // TODO: Ask the MC for the ratio of neutron captures near the end of
 // a muon track from other sources in (1) the same event (2) other
-// events (any event that makes a slice). (1)/(2) is the quality of
-// interest.
+// events, per slice. (1)/(2) is the quality of interest.
 const double selfpileup = 0.7;
-const double minpileup = (1-npileup_sliceweight) - selfpileup;
 
 TGraphAsymmErrors g;
 
@@ -26,7 +19,7 @@ TMinuit * mn;
 
 static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
 {
-  const double intercept = par[0] - par[1] * minpileup;
+  const double intercept = par[0];
   const double slope     = par[1];
   chi2 = 0;
 
@@ -64,17 +57,17 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
     for(int i = nperiodrhc; i < nperiod; i++)
       fhc.Add(inputfiles[i]);
 
-  TH1D tmp_r("tmp_r", "", 5000, 0, 50);
-  TH1D tmp_f("tmp_f", "", 5000, 0, 50);
+  TH1D slc_r("slc_r", "", 5000, 0, 50);
+  TH1D slc_f("slc_f", "", 5000, 0, 50);
 
   // *Within* the allowed range (minslc to maxslc), find the mean
-  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_r",
+  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> slc_r",
       npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
     Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %f "
                                         "&& (nslc-1)*%f + %f * pot * %f <  %f",
               npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, minslc,
               npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, maxslc));
-  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> tmp_f",
+  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> slc_f",
       npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight),
     Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %f "
                                         "&& (nslc-1)*%f + %f * pot * %f <  %f",
@@ -82,12 +75,9 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
               npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, maxslc));
 
   printf("Getting mean for %4.1f-%4.1f slices: RHC %7d events, FHC %7d\n",
-         minslc, maxslc, tmp_r.GetEntries(), tmp_f.GetEntries());
+         minslc, maxslc, slc_r.GetEntries(), slc_f.GetEntries());
 
-  TH1D & tmp = tmp_r;
-  tmp.Add(&tmp_f);
-
-  return tmp.GetMean();
+  return (slc_r.GetMean() + slc_f.GetMean())/2;
 }
 
 static double fixerr(const double e)
@@ -126,7 +116,7 @@ void rhc_stage_three(const string name, const string region)
   const double bottommargin=0.14;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double minx = mindistscan?-0.5:minpileup - 0.5,
+  const double minx = -0.5,
                maxx = mindistscan?7:10;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
@@ -230,13 +220,13 @@ void rhc_stage_three(const string name, const string region)
     mn->Command("MIGRAD");
     mn->Command("MINOS");
 
-    TF1 f("f", Form("[0] + [1]*(x - %f)", minpileup), minx, maxx);
+    TF1 f("f", "[0] + [1]*x", minx, maxx);
     f.SetParameters(getpar(0), getpar(1));
     f.SetLineColor(ans_color);
     f.SetNpx(500);
     f.SetLineWidth(2);
 
-    const double val = f.Eval(minpileup);
+    const double val = f.Eval(0);
 
     const double eup = sqrt(pow(fixerr(+mn->fErp[0]),2) +
                             pow(systup * val/systval, 2));
@@ -249,7 +239,7 @@ void rhc_stage_three(const string name, const string region)
     printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
            val, eup, edn);
 
-    ideal->SetPoint(0, minpileup, val);
+    ideal->SetPoint(0, 0, val);
     ideal->SetPointError(0, 0, 0, edn, eup);
 
     ideal->SetMarkerStyle(kFullCircle);
@@ -264,23 +254,23 @@ void rhc_stage_three(const string name, const string region)
 
   const float lowlab = maxy/40, highlab = lowlab + maxy/16.;
 
-  TArrow * a = new TArrow(selfpileup, 0, selfpileup, 1e-6, 0.02, "<");
+  TArrow * a = new TArrow(-selfpileup, 0, -selfpileup, 1e-6, 0.02, "<");
   stylearrow(a);
   const int zios_color = kGreen+2;
   a->SetLineColor(zios_color);
   a->Draw();
 
-  TLatex * t = new TLatex(selfpileup, lowlab, "Zero intensity, 1 slice");
+  TLatex * t = new TLatex(-selfpileup, lowlab, "Zero intensity, 1 slice");
   styletext(t, tsize);
   t->SetTextColor(zios_color);
   t->Draw();
 
-  a = new TArrow(minpileup, 0, minpileup, highlab, 0.02, "<");
+  a = new TArrow(0, 0, 0, highlab, 0.02, "<");
   stylearrow(a);
   a->SetLineColor(ans_color);
   a->Draw();
 
-  TLatex * t = new TLatex(minpileup, highlab, "Self-pileup subtracted");
+  TLatex * t = new TLatex(0, highlab, "Self-pileup subtracted");
   styletext(t, tsize);
   t->SetTextColor(ans_color);
   t->Draw();

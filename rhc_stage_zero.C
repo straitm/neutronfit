@@ -115,9 +115,12 @@ static bool pass_intensity(data * dat, const float minslc,
   // it is necessarily approximate.
   const float slc_per_twp = rhc? slc_per_twp_rhc: slc_per_twp_fhc;
 
-  const int physics_nslc = dat->nslc - 1;
+  // Less one for the noise slice and less another for the slice
+  // we're considering
+  const int other_physics_nslc = dat->nslc - 2;
+
   const float eff_slc = dat->pot * slc_per_twp * (1-npileup_sliceweight)
-                          + physics_nslc       *    npileup_sliceweight;
+                          + other_physics_nslc *    npileup_sliceweight;
 
   return eff_slc >= minslc && eff_slc < maxslc;
 }
