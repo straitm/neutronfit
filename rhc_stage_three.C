@@ -116,7 +116,7 @@ void rhc_stage_three(const string name, const string region)
   const double bottommargin=0.14;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double minx = -0.5,
+  const double minx = mindistscan?-0.5:-selfpileup - 0.5,
                maxx = mindistscan?7:10;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
@@ -131,8 +131,6 @@ void rhc_stage_three(const string name, const string region)
   double systval = 0, systup = 0, systdn = 0;
 
   while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
-    if(minslc < npileup_sliceweight) minslc = npileup_sliceweight;
-
     TGraphAsymmErrors * G = NULL;
 
     if(mindistscan){
@@ -226,7 +224,7 @@ void rhc_stage_three(const string name, const string region)
     f.SetNpx(500);
     f.SetLineWidth(2);
 
-    const double val = f.Eval(0);
+    const double val = f.Eval(-selfpileup);
 
     const double eup = sqrt(pow(fixerr(+mn->fErp[0]),2) +
                             pow(systup * val/systval, 2));
@@ -239,7 +237,7 @@ void rhc_stage_three(const string name, const string region)
     printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
            val, eup, edn);
 
-    ideal->SetPoint(0, 0, val);
+    ideal->SetPoint(0, -selfpileup, val);
     ideal->SetPointError(0, 0, 0, edn, eup);
 
     ideal->SetMarkerStyle(kFullCircle);
@@ -254,23 +252,23 @@ void rhc_stage_three(const string name, const string region)
 
   const float lowlab = maxy/40, highlab = lowlab + maxy/16.;
 
-  TArrow * a = new TArrow(-selfpileup, 0, -selfpileup, 1e-6, 0.02, "<");
+  TArrow * a = new TArrow(0, 0, 0, 1e-6, 0.02, "<");
   stylearrow(a);
   const int zios_color = kGreen+2;
   a->SetLineColor(zios_color);
   a->Draw();
 
-  TLatex * t = new TLatex(-selfpileup, lowlab, "Zero intensity, 1 slice");
+  TLatex * t = new TLatex(0, lowlab, "Zero intensity, 1 slice");
   styletext(t, tsize);
   t->SetTextColor(zios_color);
   t->Draw();
 
-  a = new TArrow(0, 0, 0, highlab, 0.02, "<");
+  a = new TArrow(-selfpileup, 0, -selfpileup, highlab*0.7, 0.02, "<");
   stylearrow(a);
   a->SetLineColor(ans_color);
   a->Draw();
 
-  TLatex * t = new TLatex(0, highlab, "Self-pileup subtracted");
+  TLatex * t = new TLatex(-selfpileup, highlab, "Self-pileup subtracted");
   styletext(t, tsize);
   t->SetTextColor(ans_color);
   t->Draw();
