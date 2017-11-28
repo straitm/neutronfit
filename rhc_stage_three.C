@@ -1,5 +1,48 @@
 #include "common.C"
 
+// minpileup is the number of effective slices giving no pileup.
+// (1-npileup_sliceweight) gives the number of effective slices in the
+// rock.
+//
+// selfpileup subtracts off what you get from one event sending
+// high energy neutrons from the vertex forward to its own muon's
+// track end. This should be some non-zero number, but but not's not
+// obvious what the value is. It might even be more than 1. It's also
+// different for FHC and RHC *tears-hair-out*. Anyway, it can be
+// found by comparing how often the wrong part of an event gives us a
+// selected neutron divided by how often a single other event (making
+// a slice) does so.
+//
+// TODO: Ask the MC for the ratio of neutron captures near the end of
+// a muon track from other sources in (1) the same event (2) other
+// events (any event that makes a slice). (1)/(2) is the quality of
+// interest.
+const double selfpileup = 0.7;
+const double minpileup = (1-npileup_sliceweight) - selfpileup;
+
+TGraphAsymmErrors g;
+
+TMinuit * mn;
+
+static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
+{
+  const double intercept = par[0] - par[1] * minpileup;
+  const double slope     = par[1];
+  chi2 = 0;
+
+  for(int i = 0; i < g.GetN(); i++){
+    const double x = g.GetX()[i];
+    const double y = g.GetY()[i];
+    const double theory = intercept + x*slope;
+    const double e = theory > y? g.GetErrorYhigh(i): g.GetErrorYlow(i);
+    chi2 += pow((y-theory)/e, 2);
+  }
+
+  // penalize heavily for negative slope.  Doing this rather than setting
+  // a hard limit allows getting MINOS errors.
+  if(slope < 0) chi2 += pow(slope/0.001, 2);
+}
+
 static double mean_slice(const bool nm, const float minslc, const float maxslc)
 {
   if(minslc == maxslc) return minslc;
@@ -83,42 +126,17 @@ void rhc_stage_three(const string name, const string region)
   const double bottommargin=0.14;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  // minpileup is the number of effective slices giving no pileup.
-  // (1-npileup_sliceweight) gives the number of effective slices in the
-  // rock.
-  //
-  // selfpileup subtracts off what you get from one event sending
-  // high energy neutrons from the vertex forward to its own muon's
-  // track end. This should be some non-zero number, but but not's not
-  // obvious what the value is. It might even be more than 1. It's also
-  // different for FHC and RHC *tears-hair-out*. Anyway, it can be
-  // found by comparing how often the wrong part of an event gives us a
-  // selected neutron divided by how often a single other event (making
-  // a slice) does so.
-  //
-  // TODO: Ask the MC for the ratio of neutron captures near the end of
-  // a muon track from other sources in (1) the same event (2) other
-  // events (any event that makes a slice). (1)/(2) is the quality of
-  // interest.
-  const double selfpileup = 0.7;
-  const double minpileup = (1-npileup_sliceweight) - selfpileup;
-
   const double minx = mindistscan?-0.5:minpileup - 0.5,
                maxx = mindistscan?7:10;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
 
-  TGraphAsymmErrors g;
   g.SetMarkerStyle(kFullCircle);
   TGraphAsymmErrors gall; // for any number of slices
   gall.SetMarkerStyle(kOpenCircle);
   gall.SetLineColor(kGray);
   gall.SetMarkerColor(kGray);
   double mindist, y, yeup, yedn, minslc, maxslc;
-
-  // Do not want to set the xerrors before fitting because they get used
-  // inappropriately by TGraph::Fit().  Set them afterwards for display.
-  vector<double> drawxerr_dn, drawxerr_up;
 
   double systval = 0, systup = 0, systdn = 0;
 
@@ -149,9 +167,7 @@ void rhc_stage_three(const string name, const string region)
       }
       else{
         g.SetPoint(g.GetN(), mid, y);
-        drawxerr_dn.push_back(mid-minslc);
-        drawxerr_up.push_back(maxslc-mid);
-        g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
+        g.SetPointError(g.GetN()-1, mid-minslc, maxslc-mid, yedn, yeup);
       }
     }
   }
@@ -201,46 +217,48 @@ void rhc_stage_three(const string name, const string region)
   gStyle->SetEndErrorSize(4);
 
   if(!mindistscan){
-
-    TF1 * f = new TF1("f", Form("[0] + [1]*(x-%f)", minpileup), minpileup, 20);
-    f->SetParameters(1, 0.1);
-    f->SetParLimits(0, 0, 10);
+    int ierr = 0;
+    mn = new TMinuit(2);
+    mn->mnparm(0, "icept",   1, 0.01, 0, 0, ierr);
+    mn->mnparm(1, "slope", 0.1, 0.01, 0, 0, ierr);
+    mn->Command("SET STRATEGY 2");
+    mn->fGraphicsMode = false;
+    mn->SetFCN(fcn);
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
 
-    g.Fit("f", "em", "", minpileup, maxx);
-    if(g.GetFunction("f") == NULL){
-      fprintf(stderr, "Fit failed\n");
-    }
-    else{
-      g.GetFunction("f")->SetLineColor(ans_color);
-      g.GetFunction("f")->SetNpx(500);
-      g.GetFunction("f")->SetLineWidth(2);
+    mn->Command("MIGRAD");
+    mn->Command("MINOS");
 
-      const double val = g.GetFunction("f")->Eval(minpileup);
+    TF1 f("f", Form("[0] + [1]*(x - %f)", minpileup), minx, maxx);
+    f.SetParameters(getpar(0), getpar(1));
+    f.SetLineColor(ans_color);
+    f.SetNpx(500);
+    f.SetLineWidth(2);
 
-      const double eup = sqrt(pow(fixerr(+MINUIT->fErp[0]),2) +
-                              pow(systup * val/systval, 2));
-      const double edn = sqrt(pow(fixerr(-MINUIT->fErn[0]),2) +
-                              pow(systdn * val/systval, 2));
+    const double val = f.Eval(minpileup);
 
-      printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
-             val, eup, edn);
+    const double eup = sqrt(pow(fixerr(+mn->fErp[0]),2) +
+                            pow(systup * val/systval, 2));
+    const double edn = sqrt(pow(fixerr(-mn->fErn[0]),2) +
+                            pow(systdn * val/systval, 2));
 
-      ideal->SetPoint(0, minpileup, val);
-      ideal->SetPointError(0, 0, 0, edn, eup);
+    mn->Command("MNCONT 1 2");
+    mn->Command("show min");
 
-      ideal->SetMarkerStyle(kFullCircle);
-      ideal->SetMarkerColor(ans_color);
-      ideal->SetLineColor(ans_color);
-      ideal->SetLineWidth(2);
-      ideal->Draw("p");
-    }
+    printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
+           val, eup, edn);
+
+    ideal->SetPoint(0, minpileup, val);
+    ideal->SetPointError(0, 0, 0, edn, eup);
+
+    ideal->SetMarkerStyle(kFullCircle);
+    ideal->SetMarkerColor(ans_color);
+    ideal->SetLineColor(ans_color);
+    ideal->SetLineWidth(2);
+    ideal->Draw("p");
+    f.Draw("same");
   }
-
-  for(int i = 0; i < drawxerr_dn.size(); i++)
-    g.SetPointError(i, drawxerr_dn[i], drawxerr_up[i],
-                       g.GetErrorYlow(i), g.GetErrorYhigh(i));
 
   leg.Draw();
 
