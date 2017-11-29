@@ -10,6 +10,7 @@
 #include "TRandom.h"
 #include "TROOT.h"
 #include "TLegend.h"
+#include "TText.h"
 #include <fstream>
 
 using std::string;
@@ -32,7 +33,7 @@ enum beam_type { RHC_BEAM, FHC_BEAM };
 const double b12life = 0.5e3;
 
 // Control output plots
-const float textsize = 0.045;
+const float textsize = 0.05;
 const int rebin = 5;
 
 static TH2D ** fithist     = (TH2D**)malloc(nperiod*SIG_AND_BG*sizeof(TH2D*));
@@ -90,6 +91,11 @@ struct PAR {
   char * name;
   double start;
 };
+
+static const double topmargin = textsize*1.33,
+                 bottommargin = 0.11 * textsize/0.045,
+                   leftmargin = 0.10 * textsize/0.045,
+                  rightmargin = 0.01;
 
 static PAR makepar(const char * const name_, const double start_)
 {
@@ -263,7 +269,7 @@ static TF1 * ees[ntf1s] =
 
 static const char * const ees_description[ntf1s] =
   { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons",
-    "^{12}B/air neutrons", "Prompt pileup" };
+    "Air neutron pileup", "Prompt pileup" };
 
 static std::vector< std::vector<double> > scales;
 
@@ -521,26 +527,50 @@ static double beam_scale(const int beam, const int bin)
 }
 
 static void draw_ee_common(TH1D * x, const int rebin,
-                           const char * const outname)
+                           const char * const outname,
+                           const double ymin, const double ymax)
 {
   x->Rebin(rebin);
   sanitize_after_rebinning(x);
 
   x->GetYaxis()->SetTitle(rebin== 1?"Delayed clusters/#mus":
-                          Form("Delayed clusters/%d#mus", rebin));
+                          Form("Delayed clusters/%d#kern[-0.5]{ }#mus", rebin));
   x->Draw("e");
 
-  TLegend * leg = new TLegend(0.67, 0.7, 0.95, 0.98);
+  TLegend * leg = new TLegend(1-0.31*textsize/0.045,
+                              1-0.35*textsize/0.045,
+                              1-rightmargin, 1-topmargin-0.02);
   for(int i = 0; i < ntf1s; i++){
     ees[i]->SetParameter(ee_scale_par, rebin);
     ees[i]->Draw("same");
     if(i != 0 /*ee_neg*/) leg->AddEntry(ees[i], ees_description[i], "l");
   }
 
+  leg->SetTextSize(textsize);
+  leg->SetMargin(0.17);
   leg->SetTextFont(42);
-  leg->SetBorderSize(1);
+  leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->Draw();
+
+  TText t(0, 0, "NOvA Preliminary");
+  t.SetTextSize(textsize);
+  t.SetTextFont(42);
+  t.SetNDC();
+  t.SetTextAlign(33);
+  t.SetX(1-rightmargin-0.01);
+  t.SetY(1-0.01);
+  t.Draw();
+
+
+  TGraph box;
+  box.SetPoint(0, holex_lo, ymin);
+  box.SetPoint(1, holex_lo, ymax);
+  box.SetPoint(2, holex_hi, ymax);
+  box.SetPoint(3, holex_hi, ymin);
+  box.SetPoint(4, holex_lo, ymin);
+  box.SetFillColorAlpha(kGray, 0.3);
+  box.Draw("f");
 
   c1->SetTickx(1);
   c1->SetTicky(1);
@@ -550,6 +580,7 @@ static void draw_ee_common(TH1D * x, const int rebin,
 
 static void stylehist(TH1 * h)
 {
+  h->SetLineWidth(2);
   h->GetXaxis()->SetLabelSize(textsize);
   h->GetYaxis()->SetLabelSize(textsize);
   h->GetXaxis()->SetTitleSize(textsize);
@@ -580,13 +611,14 @@ static void draw_ee_beam(const int beam, const int energybin,
   stylehist(x);
 
   x->GetXaxis()->SetTitle(
-    Form("%s: All %s E_{#nu} %.1f-%.1f GeV: Time since muon stop (#mus)",
-    isbg == 0?"Signal":"Pileup",
+    Form("%s%s E_{#nu} %.1f#minus%.1f GeV: Time since muon stop (#mus)",
+    isbg == 0?"":"Pileup: ",
     beam == RHC_BEAM?"RHC":"FHC", bins_e[energybin], bins_e[energybin+1]));
-  x->GetYaxis()->SetRangeUser(beam_scale(beam, energybin)*1e-6*rebin,
-                              beam_scale(beam, energybin)* 0.1*rebin);
+  const double ymin = beam_scale(beam, energybin)*1e-6*rebin,
+               ymax = beam_scale(beam, energybin)* 0.1*rebin;
+  x->GetYaxis()->SetRangeUser(ymin, ymax);
 
-  draw_ee_common(x, rebin, outname);
+  draw_ee_common(x, rebin, outname, ymin, ymax);
 }
 
 // Draw the fit histogram for a period and energy bin. 0-indexed bins
@@ -604,9 +636,10 @@ static void draw_ee(const int periodsg, const int energybin,
   x->GetXaxis()->SetTitle(
     Form("%s E_{#nu} %.1f-%.1f GeV: Time since muon stop (#mus)",
     Lperiodnames[periodsg], bins_e[energybin], bins_e[energybin+1]));
-  x->GetYaxis()->SetRangeUser(scales[periodsg][energybin]*1e-6*rebin,
-                              scales[periodsg][energybin]* 0.1*rebin);
-  draw_ee_common(x, rebin, outname);
+  const double ymin = scales[periodsg][energybin]*1e-6*rebin,
+               ymax = scales[periodsg][energybin]* 0.1*rebin;
+  x->GetYaxis()->SetRangeUser(ymin, ymax);
+  draw_ee_common(x, rebin, outname, ymin, ymax);
 }
 
 static vector< vector< vector<fitanswers> > > dothefit()
@@ -814,36 +847,36 @@ static void init_ee()
     switch(i){
       case 0: case 1:
         e->SetLineColor(kRed);
-        e->SetLineWidth(2);
+        e->SetLineWidth(3);
         e->SetNpx(400);
         break;
       case 2:
         e->SetLineStyle(kDashed);
         e->SetLineColor(kBlack);
-        e->SetLineWidth(1);
+        e->SetLineWidth(2);
         e->SetNpx(400);
         break;
       case 3:
         e->SetLineStyle(kDashed);
         e->SetLineColor(kBlue);
-        e->SetLineWidth(1);
+        e->SetLineWidth(2);
         e->SetNpx(400);
         break;
       case 4:
         e->SetLineStyle(kDashed);
         e->SetLineColor(kViolet);
-        e->SetLineWidth(2);
+        e->SetLineWidth(3);
         break;
       case 5:
         e->SetLineStyle(kDashed);
         e->SetLineColor(kGreen+2);
-        e->SetLineWidth(2);
+        e->SetLineWidth(3);
         break;
       case 6:
         e->SetLineStyle(kDashed);
         e->SetNpx(400);
         e->SetLineColor(kOrange+2);
-        e->SetLineWidth(1);
+        e->SetLineWidth(2);
         break;
     }
     for(int p = 0; p < npar_ee; p++) e->SetParName(p, ee_parnames[p]);
@@ -1007,6 +1040,11 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   const string filename = Form("fit_stage_one_mindist%d_nslc%.1f_%.1f_%s.pdf",
                                mindist, minslc, maxslc, region.c_str());
+
+  c1->SetTopMargin   (topmargin);
+  c1->SetBottomMargin(bottommargin);
+  c1->SetLeftMargin  (leftmargin);
+  c1->SetRightMargin (rightmargin);
 
   c1->Print(Form("%s[", filename.c_str()));
 

@@ -684,11 +684,11 @@ void stylehist(TH1 * h, const int color, const int width,
 void stylehistset(TH1D ** hh, const int color)
 {
   stylehist(hh[piflight], color, 3, kDashed);
-  stylehist(hh[stoppi],   color, 1, kDotted);
-  stylehist(hh[numu],     color, 2, 9);
+  stylehist(hh[stoppi],   color, 2, kDotted);
+  stylehist(hh[numu],     color, 3, 9);
   stylehist(hh[numubar],
     color-9 /*probably bad except for blue and red */, 1, kDashDotted);
-  stylehist(hh[pileup], color-9, 2, kDashDotted);
+  stylehist(hh[pileup], color-9, 3, kDashDotted);
 }
 
 static void draw_with_visible_errors_and_leak_memory(TGraphAsymmErrors * g)
@@ -725,10 +725,10 @@ void draw(const int mindist, const float minslc, const float maxslc)
   stylegraph(g_n_rhc, kRed +3, kSolid, kOpenSquare, 1, 1.0);
   stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 1, 1.0);
 
-  stylehist(tot_rhc_neut, kRed, 1);
+  stylehist(tot_rhc_neut, kRed, 2);
   stylehistset( rhc_neut, kRed);
 
-  stylehist(tot_fhc_neut, kBlue, 1);
+  stylehist(tot_fhc_neut, kBlue, 2);
   stylehistset( fhc_neut, kBlue);
 
   dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
@@ -738,7 +738,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
     1.1*max(max(g_n_rhc->GetMaximum(), tot_rhc_neut->GetMaximum()),
             max(g_n_fhc->GetMaximum(), tot_fhc_neut->GetMaximum()))
             );
-  dum2->GetYaxis()->SetTitle("Neutrons/track");
+  dum2->GetYaxis()->SetTitle("Visible neutrons/track");
   dum2->GetYaxis()->SetTitleOffset(1.25);
   dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
   dum2->GetYaxis()->CenterTitle();
@@ -790,8 +790,9 @@ void draw(const int mindist, const float minslc, const float maxslc)
   leg->SetY1NDC(four_entry_leg_y1);
   leg->AddEntry(tot_rhc_neut, "RHC fit", "l");
   leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm}, p in flight", "l");
-  leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{-}", "l");
+  leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{#minus}", "l");
   leg->AddEntry(rhc_neut[numu], "RHC #nu_{#mu}", "l");
+  leg->AddEntry((TH1D*)NULL, "NOvA Preliminary", "");
 
   c2r->Print(outpdfname.c_str());
 
@@ -824,8 +825,9 @@ void draw(const int mindist, const float minslc, const float maxslc)
   legf->SetY1NDC(four_entry_leg_y1);
   legf->AddEntry(tot_fhc_neut, "FHC fit", "l");
   legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm}, p in flight", "l");
-  legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{-}", "l");
+  legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{#minus}", "l");
   legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
+  legf->AddEntry((TH1D*)NULL, "NOvA Preliminary", "");
 
   c2f->Print(outpdfname.c_str());
 
@@ -879,7 +881,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   leg->SetY1NDC(four_entry_leg_y1);
   leg->AddEntry(tot_rhc_b12, "RHC fit", "l");
   leg->AddEntry(rhc_b12[piflight], "RHC #pi^{#pm}, p in flight", "l");
-  leg->AddEntry(rhc_b12[stoppi], "RHC stopped #pi^{-}", "l");
+  leg->AddEntry(rhc_b12[stoppi], "RHC stopped #pi^{#minus}", "l");
   leg->AddEntry(rhc_b12[numu], "RHC #nu_{#mu}", "l");
 
   c2rb->Print(outpdfname.c_str());
@@ -913,7 +915,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   legf->SetY1NDC(four_entry_leg_y1);
   legf->AddEntry(tot_fhc_b12, "FHC fit", "l");
   legf->AddEntry(fhc_b12[piflight], "FHC #pi^{#pm}, p in flight", "l");
-  legf->AddEntry(fhc_b12[stoppi], "FHC stopped #pi^{-}", "l");
+  legf->AddEntry(fhc_b12[stoppi], "FHC stopped #pi^{#minus}", "l");
   legf->AddEntry(fhc_b12[numu], "FHC #nu_{#mu}", "l");
 
   c2fb->Print(outpdfname.c_str());
@@ -1059,13 +1061,13 @@ void draw(const int mindist, const float minslc, const float maxslc)
   leg = new TLegend(leftmargin, 0.72, 1-rightmargin, 0.99);
   leg->SetTextFont(42);
   leg->SetBorderSize(1);
-  leg->SetTextSize(tsize*0.85);
+  leg->SetTextSize(tsize*9/10.95 /*footnotesize*/);
   leg->SetFillStyle(1001);
   leg->SetMargin(0.1);
   if(cont_full != NULL){
     leg->AddEntry((TH1D*)NULL, "", "");
     leg->AddEntry(cont_full,
-      Form("90%%, effective stopped #pi^{-}/#mu^{-} n yield %.1f#pm%.1f; "
+      Form("90%%, effective stopped #pi^{#minus}/#mu^{#minus} n yield %.1f#pm%.1f; "
            "#pi,p in-flight %.2f^{+%.2f}_{-%.2f} #times Geant",
       npimu_stop_nominal, npimu_stop_error,
       n_flight_nominal, n_flight_nominal*exp(n_flight_error) - 1,
@@ -1113,10 +1115,10 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
 
     TLegend * leg4 = new TLegend(leg_x1, 1-topmargin, leg_x2, 0.99);
-    leg4->AddEntry(fhc_reco[numu], "#mu^{-} in FHC", "l");
-    leg4->AddEntry(rhc_reco[numu], "#mu^{-} in RHC", "l");
-    leg4->AddEntry(fhc_reco[stoppi], "Stopped #pi^{-} in FHC", "l");
-    leg4->AddEntry(rhc_reco[stoppi], "Stopped #pi^{-} in RHC", "l");
+    leg4->AddEntry(fhc_reco[numu], "#mu^{#minus} in FHC", "l");
+    leg4->AddEntry(rhc_reco[numu], "#mu^{#minus} in RHC", "l");
+    leg4->AddEntry(fhc_reco[stoppi], "Stopped #pi^{#minus} in FHC", "l");
+    leg4->AddEntry(rhc_reco[stoppi], "Stopped #pi^{#minus} in RHC", "l");
     leg4->AddEntry(fhc_reco[piflight], "#pi^{#pm}, p in flight in FHC", "l");
     leg4->AddEntry(rhc_reco[piflight], "#pi^{#pm}, p in flight in RHC", "l");
     styleleg(leg4);
