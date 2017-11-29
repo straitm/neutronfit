@@ -1,6 +1,6 @@
 // True if we are finding neutrons from 2D information alone, i.e not
 // requiring hits in both x and y
-#define TWO_D_CUT true
+#define TWO_D_CUT 1
 
 //#define BGSUB
 
@@ -126,7 +126,7 @@ const int nbeam = 2; // not really generalizable as it stands
 
 //const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 }; // 8
 
-#if TWO_D_PLOT == true
+#if TWO_D_CUT == 1
   const int nbins_e = 6;
   const double bins_e[nbins_e+1] = { 0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
 #else
