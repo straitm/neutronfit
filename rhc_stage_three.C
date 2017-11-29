@@ -63,19 +63,21 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
   TH1D slc_r("slc_r", "", 5000, 0, 50);
   TH1D slc_f("slc_f", "", 5000, 0, 50);
 
-  // *Within* the allowed range (minslc to maxslc), find the mean
-  rhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> slc_r",
-      npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight),
-    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %f "
-                                        "&& (nslc-1)*%f + %f * pot * %f <  %f",
-              npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, minslc,
-              npileup_sliceweight, slc_per_twp_rhc, 1-npileup_sliceweight, maxslc));
-  fhc.Draw(Form("(nslc-1)*%f + %f * pot * %f >> slc_f",
-      npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight),
-    Form("i == 0 && contained && primary && (nslc-1)*%f + %f * pot * %f >= %f "
-                                        "&& (nslc-1)*%f + %f * pot * %f <  %f",
-              npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, minslc,
-              npileup_sliceweight, slc_per_twp_fhc, 1-npileup_sliceweight, maxslc));
+  // *Within* the allowed range (minslc to maxslc), find the mean.  Definition
+  // must stay in sync with that in pass_intensity() in rhc_stage_one.C.
+  rhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_r",
+      npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight)),
+    Form("i == 0 && contained && primary && "
+         "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
+         npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight),
+         (minslc+maxslc)/2, (maxslc-minslc)/2));
+
+  fhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_f",
+      npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight)),
+    Form("i == 0 && contained && primary && "
+         "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
+         npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight),
+         (minslc+maxslc)/2, (maxslc-minslc)/2));
 
   printf("Getting mean for %4.1f-%4.1f slices: RHC %7d events, FHC %7d\n",
          minslc, maxslc, slc_r.GetEntries(), slc_f.GetEntries());
@@ -120,7 +122,7 @@ void rhc_stage_three(const string name, const string region)
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   const double minx = mindistscan?-0.5:-selfpileup - 0.5,
-               maxx = mindistscan?7:10;
+               maxx = mindistscan?7:9;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
 
@@ -215,13 +217,54 @@ void rhc_stage_three(const string name, const string region)
     mn->Command("SET STRATEGY 2");
     mn->fGraphicsMode = false;
     mn->SetFCN(fcn);
+    mn->Command("SET ERR 1");
+
+    double upvals[3] = {9, 4, 1};
+    double upcols[3] = {kRed, kViolet, kBlue};
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
+    const int Nband = 100;
+    for(int u = 0; u < 3; u++){
+      mn->Command(Form("SET ERR %f", upvals[u]));
+      TGraph * band = new TGraph(Nband*2);
+      band->SetFillColorAlpha(upcols[u], 0.2);
+
+      for(int b = 0; b < Nband; b++){
+        selfpileup = nominalselfpileup - 0.15*(b-10);
+
+        mn->Command("MIGRAD");
+        mn->Command("MINOS");
+
+        const double val = getpar(0);
+        const double stat_eup = fixerr(+mn->fErp[0]);
+        const double stat_edn = fixerr(-mn->fErn[0]);
+
+        const double eup = sqrt(pow(stat_eup            , 2) +
+                                pow(systup * val/systval, 2));
+        const double edn = sqrt(pow(stat_edn            , 2) +
+                                pow(systdn * val/systval, 2));
+
+        if(stat_eup != 0)
+          band->SetPoint(b, -selfpileup, val+eup);
+        else // MINOS failure - use previous
+          band->SetPoint(b, -selfpileup, band->GetY()[b-1]);
+
+        if(stat_edn != 0)
+          band->SetPoint(Nband*2-b-1, -selfpileup, val-edn);
+        else
+          band->SetPoint(Nband*2-b-1, -selfpileup, band->GetY()[Nband*2-(b-1)-1]);
+      }
+
+      band->Draw("f");
+    }
+
+    mn->Command("SET ERR 1");
+    selfpileup = nominalselfpileup;
 
     mn->Command("MIGRAD");
     mn->Command("MINOS");
 
-    TF1 f("f", "[0] + [1]*x", minx, maxx);
+    TF1 f("f", Form("[0] + [1]*(x - %f)", -selfpileup), minx, maxx);
     f.SetParameters(getpar(0), getpar(1));
     f.SetLineColor(ans_color);
     f.SetNpx(500);
@@ -232,8 +275,7 @@ void rhc_stage_three(const string name, const string region)
     const double eup = sqrt(pow(fixerr(+mn->fErp[0]),2) +
                             pow(systup * val/systval, 2));
     const double edn = sqrt(pow(fixerr(-mn->fErn[0]),2) +
-                            pow(systdn * val/systval, 2));
-
+                              pow(systdn * val/systval, 2));
     mn->Command("MNCONT 1 2");
     mn->Command("show min");
 
