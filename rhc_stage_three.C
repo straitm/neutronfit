@@ -10,8 +10,11 @@
 //
 // TODO: Ask the MC for the ratio of neutron captures near the end of
 // a muon track from other sources in (1) the same event (2) other
-// events, per slice. (1)/(2) is the quality of interest.
-const double selfpileup = 0.7;
+// events, per slice. (1)/(2) is the quality of interest. Ok, I've
+// done this with low statistics.  Fortunately it is very small, so
+// the difference between FHC and RHC isn't important.
+const double nominalselfpileup = 0.05;
+double selfpileup = nominalselfpileup;
 
 TGraphAsymmErrors g;
 
@@ -19,7 +22,7 @@ TMinuit * mn;
 
 static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
 {
-  const double intercept = par[0];
+  const double intercept = par[0] + selfpileup * par[1];
   const double slope     = par[1];
   chi2 = 0;
 
