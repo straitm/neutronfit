@@ -1,19 +1,15 @@
 #include "common.C"
 
-// selfpileup subtracts off what you get from one event sending
-// high energy neutrons from the vertex forward to its own muon's
-// track end. This should be some non-zero number, but it's not
-// obvious what the value is. It might even be more than 1. It's also
-// different for FHC and RHC *tears-hair-out*. Anyway, it can be
-// found by comparing how often the wrong part of an event gives us a
-// selected neutron divided by how often, per slice, other events do.
-//
-// TODO: Ask the MC for the ratio of neutron captures near the end of
-// a muon track from other sources in (1) the same event (2) other
-// events, per slice. (1)/(2) is the quality of interest. Ok, I've
-// done this with low statistics.  Fortunately it is very small, so
-// the difference between FHC and RHC isn't important.
-const double nominalselfpileup = 0.05;
+// selfpileup subtracts off what you get from one event sending high
+// energy neutrons from the vertex forward to its own muon's track
+// end. This should be some non-zero number, but it's not obvious what
+// the value is. It's also different for FHC and RHC *tears-hair-out*.
+// Anyway, it can be found by comparing how often the wrong part of an
+// event gives us a selected neutron divided by how often, per slice,
+// other events do. I've done a low-statistics MC study and found that
+// this number is mercifully very small, so we can safely ignore the
+// RHC/FHC differences.
+const double nominalselfpileup = 1/24. * npileup_sliceweight;
 double selfpileup = nominalselfpileup;
 
 TGraphAsymmErrors g;
