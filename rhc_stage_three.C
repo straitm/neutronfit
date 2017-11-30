@@ -35,52 +35,6 @@ static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
   if(slope < 0) chi2 += pow(slope/0.001, 2);
 }
 
-static double mean_slice(const bool nm, const float minslc, const float maxslc)
-{
-  if(minslc == maxslc) return minslc;
-
-  TChain rhc("t"), fhc("t");
-
-  for(int i = 0; i < nperiodrhc; i++)
-    rhc.Add(inputfiles[i]);
-#if 0
-  // Do not include FHC for the nu-mu study, since we're answering
-  // a question specifically about RHC.  Does this make sense?
-  // No, I don't think it does.  We are using a ratio of FHC to RHC
-  // to answer a question, so both matter.
-  //
-  // TODO: What's the effect of the average being different for
-  // FHC and RHC?
-  if(!nm)
-#endif
-    for(int i = nperiodrhc; i < nperiod; i++)
-      fhc.Add(inputfiles[i]);
-
-  TH1D slc_r("slc_r", "", 5000, 0, 50);
-  TH1D slc_f("slc_f", "", 5000, 0, 50);
-
-  // *Within* the allowed range (minslc to maxslc), find the mean.  Definition
-  // must stay in sync with that in pass_intensity() in rhc_stage_one.C.
-  rhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_r",
-      npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight)),
-    Form("i == 0 && contained && primary && "
-         "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
-         npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight),
-         (minslc+maxslc)/2, (maxslc-minslc)/2));
-
-  fhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_f",
-      npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight)),
-    Form("i == 0 && contained && primary && "
-         "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
-         npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight),
-         (minslc+maxslc)/2, (maxslc-minslc)/2));
-
-  printf("Getting mean for %4.1f-%4.1f slices: RHC %7d events, FHC %7d\n",
-         minslc, maxslc, slc_r.GetEntries(), slc_f.GetEntries());
-
-  return (slc_r.GetMean() + slc_f.GetMean())/2;
-}
-
 static double fixerr(const double e)
 {
   if(e < 0 || e == 54321){
@@ -131,11 +85,11 @@ void rhc_stage_three(const string name, const string region)
   gall.SetMarkerStyle(kOpenCircle);
   gall.SetLineColor(kGray);
   gall.SetMarkerColor(kGray);
-  double mindist, y, yeup, yedn, minslc, maxslc;
+  double mindist, y, yeup, yedn, minslc, maxslc, meanslc;
 
   double systval = 0, systup = 0, systdn = 0;
 
-  while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn){
+  while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn >> meanslc){
     TGraphAsymmErrors * G = NULL;
 
     if(mindistscan){
@@ -143,10 +97,6 @@ void rhc_stage_three(const string name, const string region)
       g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
     }
     else{
-      // Put the center point in the R(F)HC-weighted mean number of slices for
-      // numu (NC)
-      const double mid = mean_slice(nm, minslc, maxslc);
-
       // Very conservatively take the error on the combined sample
       // with "any" number of slices to be the systematic error.
       // Currently this is small compared to the fit error.
@@ -155,12 +105,12 @@ void rhc_stage_three(const string name, const string region)
         systval = y;
         systup = yeup;
         systdn = yedn;
-        gall.SetPoint(gall.GetN(), mid, y);
-        gall.SetPointError(gall.GetN()-1, mid-minslc, maxslc-mid, yedn, yeup);
+        gall.SetPoint(gall.GetN(), meanslc, y);
+        gall.SetPointError(gall.GetN()-1, meanslc-minslc, maxslc-meanslc, yedn, yeup);
       }
       else{
-        g.SetPoint(g.GetN(), mid, y);
-        g.SetPointError(g.GetN()-1, mid-minslc, maxslc-mid, yedn, yeup);
+        g.SetPoint(g.GetN(), meanslc, y);
+        g.SetPointError(g.GetN()-1, meanslc-minslc, maxslc-meanslc, yedn, yeup);
       }
     }
   }

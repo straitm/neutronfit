@@ -724,6 +724,52 @@ static double gdrawmin(const TGraphAsymmErrors * const g)
   return min;
 }
 
+static double mean_slice(const bool nm, const float minslc, const float maxslc)
+{
+  if(minslc == maxslc) return minslc;
+
+  TChain rhc("t"), fhc("t");
+
+  for(int i = 0; i < nperiodrhc; i++)
+    rhc.Add(inputfiles[i]);
+#if 0
+  // Do not include FHC for the nu-mu study, since we're answering
+  // a question specifically about RHC.  Does this make sense?
+  // No, I don't think it does.  We are using a ratio of FHC to RHC
+  // to answer a question, so both matter.
+  //
+  // TODO: What's the effect of the average being different for
+  // FHC and RHC?
+  if(!nm)
+#endif
+    for(int i = nperiodrhc; i < nperiod; i++)
+      fhc.Add(inputfiles[i]);
+
+  TH1D slc_r("slc_r", "", 5000, 0, 50);
+  TH1D slc_f("slc_f", "", 5000, 0, 50);
+
+  // *Within* the allowed range (minslc to maxslc), find the mean.  Definition
+  // must stay in sync with that in pass_intensity() in rhc_stage_one.C.
+  rhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_r",
+      npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight)),
+    Form("i == 0 && contained && primary && "
+         "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
+         npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight),
+         (minslc+maxslc)/2, (maxslc-minslc)/2));
+
+  fhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_f",
+      npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight)),
+    Form("i == 0 && contained && primary && "
+         "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
+         npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight),
+         (minslc+maxslc)/2, (maxslc-minslc)/2));
+
+  printf("Getting mean for %4.1f-%4.1f slices: RHC %7d events, FHC %7d\n",
+         minslc, maxslc, slc_r.GetEntries(), slc_f.GetEntries());
+
+  return (slc_r.GetMean() + slc_f.GetMean())/2;
+}
+
 void draw(const int mindist, const float minslc, const float maxslc)
 {
   gStyle->SetOptStat(0);
@@ -1012,12 +1058,14 @@ void draw(const int mindist, const float minslc, const float maxslc)
   mn->Command("MINOS 10000 4");
   if(useb12) mn->Command("MINOS 10000 5");
 
-  printf("NC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f\n",
+  printf("NC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f\n",
     muoncatcher?"muoncatcher":"main",
-    mindist, minslc, maxslc, getpar(0), getbesterrup(0), getbesterrdn(0));
-  printf("NM %s mindist %d slcrange %.1f - %.1f : %f + %f - %f\n",
+    mindist, minslc, maxslc, getpar(0), getbesterrup(0), getbesterrdn(0),
+    mean_slice(false, minslc, maxslc));
+  printf("NM %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f\n",
     muoncatcher?"muoncatcher":"main",
-    mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1));
+    mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1),
+    mean_slice(true , minslc, maxslc));
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
