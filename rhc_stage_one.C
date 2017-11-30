@@ -6,6 +6,7 @@
 #include "TTree.h"
 #include "TF1.h"
 #include "TCanvas.h"
+#include "TStyle.h"
 #include "TError.h"
 #include "TRandom.h"
 #include "TROOT.h"
@@ -268,7 +269,8 @@ static TF1 * ees[ntf1s] =
   { ee_neg, ee_pos, ee_flat, ee_mich, ee_neut, ee_b12, ee_pileup };
 
 static const char * const ees_description[ntf1s] =
-  { "Full fit", "Full fit", "Uncorrelated", "Michels", "Neutrons",
+  { "Full fit", "Full fit", "Uncorrelated bkg",
+    "Michel decays", "Neutron captures",
     "Air neutron pileup", "Prompt pileup" };
 
 static std::vector< std::vector<double> > scales;
@@ -533,6 +535,8 @@ static void draw_ee_common(TH1D * x, const int rebin,
   x->Rebin(rebin);
   sanitize_after_rebinning(x);
 
+  x->SetLineColor(kBlack);
+  x->SetMarkerColor(kBlack);
   x->GetYaxis()->SetTitle(rebin== 1?"Delayed clusters/#mus":
                           Form("Delayed clusters/%d#kern[-0.5]{ }#mus", rebin));
   x->Draw("e");
@@ -574,6 +578,8 @@ static void draw_ee_common(TH1D * x, const int rebin,
 
   c1->SetTickx(1);
   c1->SetTicky(1);
+  x->GetYaxis()->SetTickSize(0.015);
+  x->GetXaxis()->SetTickSize(0.02);
   c1->SetLogy();
   c1->Print(outname);
 }
@@ -846,7 +852,7 @@ static void init_ee()
     TF1 * e = ees[i];
     switch(i){
       case 0: case 1:
-        e->SetLineColor(kRed);
+        e->SetLineColorAlpha(kRed, 0.8);
         e->SetLineWidth(3);
         e->SetNpx(400);
         break;
@@ -935,6 +941,9 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
                    const float minslc, const float maxslc, const string region)
 {
   if(mindist < 0) return; // to compile only
+
+  gStyle->SetOptStat(0);
+  gStyle->SetFrameLineWidth(2);
 
   muoncatcher = region == "muoncatcher";
 

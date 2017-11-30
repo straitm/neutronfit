@@ -108,6 +108,8 @@ static static void stylearrow(TArrow * a)
 void rhc_stage_three(const string name, const string region)
 {
   gErrorIgnoreLevel = kError;
+  gStyle->SetOptStat(0);
+  gStyle->SetFrameLineWidth(2);
 
   const bool mindistscan = name.size() == 2;
   const bool nm = name.substr(0,2) == "nm";
@@ -115,16 +117,18 @@ void rhc_stage_three(const string name, const string region)
   const double tsize = 0.06;
 
   TCanvas * c1 = new TCanvas("c1", "c1");
-  const double leftmargin = 0.12;
-  const double topmargin  = 0.05;
+  const double leftmargin = 0.125;
+  const double topmargin  = tsize*1.33;
   const double rightmargin= 0.03;
-  const double bottommargin=0.14;
+  const double bottommargin=0.13;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   const double minx = mindistscan?-0.5:-selfpileup - 0.5,
                maxx = mindistscan?7:9;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
+  dum->GetYaxis()->SetTickSize(0.015);
+  dum->GetXaxis()->SetTickSize(0.02);
 
   g.SetMarkerStyle(kFullCircle);
   TGraphAsymmErrors gall; // for any number of slices
@@ -169,9 +173,11 @@ void rhc_stage_three(const string name, const string region)
 
   double maxy = dum->GetYaxis()->GetBinLowEdge(dum->GetNbinsY()+1);
   while(gdrawmax(&g) > 0 && gdrawmax(&g) < maxy*legbottom*0.98) maxy *= 0.99;
+  maxy = int(maxy*10.)/10.;
   dum->GetYaxis()->SetRangeUser(0, maxy);
 
-  dum->GetYaxis()->SetTitle("Scale relative to MC");
+  dum->GetYaxis()->SetTitle(Form("%s scale relative to MC",
+                                 nm?"RHC #nu_{#mu}":"NC"));
   dum->GetXaxis()->SetTitle(mindistscan?
     "Number of cells widths around track end searched":
     "Effective other physics slices per spill");
@@ -297,7 +303,8 @@ void rhc_stage_three(const string name, const string region)
 
   const float lowlab = maxy/40, highlab = lowlab + maxy/16.;
 
-  TArrow * a = new TArrow(0, 0, 0, 1e-6, 0.02, "<");
+#if 0 // too close to the other arrow
+  TArrow * a = new TArrow(0, 0, 0, lowlab*0.7, 0.01, "<");
   stylearrow(a);
   const int zios_color = kGreen+2;
   a->SetLineColor(zios_color);
@@ -307,8 +314,9 @@ void rhc_stage_three(const string name, const string region)
   styletext(t, tsize);
   t->SetTextColor(zios_color);
   t->Draw();
+#endif
 
-  a = new TArrow(-selfpileup, 0, -selfpileup, highlab*0.7, 0.02, "<");
+  a = new TArrow(-selfpileup, maxy*0.006, -selfpileup, highlab*0.85, 0.02, "<");
   stylearrow(a);
   a->SetLineColor(ans_color);
   a->Draw();
@@ -317,6 +325,15 @@ void rhc_stage_three(const string name, const string region)
   styletext(t, tsize);
   t->SetTextColor(ans_color);
   t->Draw();
+
+  t = new TLatex(0, 0, "NOvA Preliminary");
+  t.SetTextSize(tsize);
+  t.SetTextFont(42);
+  t.SetNDC();
+  t.SetTextAlign(33);
+  t.SetX(1-rightmargin-0.005);
+  t.SetY(1-0.02);
+  t.Draw();
 
   c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }
