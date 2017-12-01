@@ -12,6 +12,7 @@
 #include "TROOT.h"
 #include "TLegend.h"
 #include "TText.h"
+#include "TGaxis.h"
 #include <fstream>
 
 using std::string;
@@ -88,6 +89,11 @@ double n_diffusion_nominal = 0; // set below using mindist
 // difference.
 static const double n_start_conv_time = (1.60 + 0.9)/2;
 
+// The meaning of the visual y axis in terms of number of selected
+// cluster per track per bin.
+static const double yminpertrack = 1e-6,
+                    ymaxpertrack = 0.1;
+
 struct PAR {
   char * name;
   double start;
@@ -95,8 +101,8 @@ struct PAR {
 
 static const double topmargin = textsize*1.33,
                  bottommargin = 0.11 * textsize/0.045,
-                   leftmargin = 0.10 * textsize/0.045,
-                  rightmargin = 0.01;
+                   leftmargin = 0.09 * textsize/0.045,
+                  rightmargin = 0.10 * textsize/0.045;
 
 static PAR makepar(const char * const name_, const double start_)
 {
@@ -541,7 +547,7 @@ static void draw_ee_common(TH1D * x, const int rebin,
                           Form("Delayed clusters/%d#kern[-0.5]{ }#mus", rebin));
   x->Draw("e");
 
-  TLegend * leg = new TLegend(1-0.31*textsize/0.045,
+  TLegend * leg = new TLegend(1-0.39*textsize/0.045,
                               1-0.35*textsize/0.045,
                               1-rightmargin, 1-topmargin-0.02);
   for(int i = 0; i < ntf1s; i++){
@@ -556,6 +562,21 @@ static void draw_ee_common(TH1D * x, const int rebin,
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->Draw();
+
+  TGaxis ya(x->GetXaxis()->GetBinLowEdge(x->GetNbinsX()+1), ymin,
+            x->GetXaxis()->GetBinLowEdge(x->GetNbinsX()+1), ymax,
+            yminpertrack, ymaxpertrack, 510, "G+S");
+  ya.CenterTitle();
+  ya.SetLabelSize(textsize);
+  ya.SetTitleSize(textsize);
+  ya.SetLabelFont(42);
+  ya.SetTitleFont(42);
+  ya.SetLabelOffset(0.05);
+  ya.SetTitleOffset(1.05);
+  ya.SetTickSize(0.015); // requires "S" option in constructor
+  ya.SetTitle("Delayed clusters/5#kern[-0.5]{ }#mus/track");
+  ya.Draw();
+
 
   TText t(0, 0, "NOvA Preliminary");
   t.SetTextColor(kBlue);
@@ -578,7 +599,7 @@ static void draw_ee_common(TH1D * x, const int rebin,
   box.Draw("f");
 
   c1->SetTickx(1);
-  c1->SetTicky(1);
+  c1->SetTicky(0);
   x->GetYaxis()->SetTickSize(0.015);
   x->GetXaxis()->SetTickSize(0.02);
   c1->SetLogy();
@@ -590,6 +611,7 @@ static void stylehist(TH1 * h)
   h->SetLineWidth(2);
   h->GetXaxis()->SetLabelSize(textsize);
   h->GetYaxis()->SetLabelSize(textsize);
+  h->GetYaxis()->SetTitleOffset(0.95 * 0.05/textsize);
   h->GetXaxis()->SetTitleSize(textsize);
   h->GetYaxis()->SetTitleSize(textsize);
   h->GetYaxis()->CenterTitle();
@@ -621,8 +643,8 @@ static void draw_ee_beam(const int beam, const int energybin,
     Form("%s%s E_{#nu} %.1f#minus%.1f GeV: Time since muon stop (#mus)",
     isbg == 0?"":"Pileup: ",
     beam == RHC_BEAM?"RHC":"FHC", bins_e[energybin], bins_e[energybin+1]));
-  const double ymin = beam_scale(beam, energybin)*1e-6*rebin,
-               ymax = beam_scale(beam, energybin)* 0.1*rebin;
+  const double ymin = beam_scale(beam, energybin)*yminpertrack*rebin,
+               ymax = beam_scale(beam, energybin)*ymaxpertrack*rebin;
   x->GetYaxis()->SetRangeUser(ymin, ymax);
 
   draw_ee_common(x, rebin, outname, ymin, ymax);
@@ -643,8 +665,8 @@ static void draw_ee(const int periodsg, const int energybin,
   x->GetXaxis()->SetTitle(
     Form("%s E_{#nu} %.1f-%.1f GeV: Time since muon stop (#mus)",
     Lperiodnames[periodsg], bins_e[energybin], bins_e[energybin+1]));
-  const double ymin = scales[periodsg][energybin]*1e-6*rebin,
-               ymax = scales[periodsg][energybin]* 0.1*rebin;
+  const double ymin = scales[periodsg][energybin]*yminpertrack*rebin,
+               ymax = scales[periodsg][energybin]*ymaxpertrack*rebin;
   x->GetYaxis()->SetRangeUser(ymin, ymax);
   draw_ee_common(x, rebin, outname, ymin, ymax);
 }
