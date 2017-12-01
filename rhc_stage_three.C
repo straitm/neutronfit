@@ -273,13 +273,14 @@ void rhc_stage_three(const string name, const string region)
   t->Draw();
 
   t = new TLatex(0, 0, "NOvA Preliminary");
-  t.SetTextSize(tsize);
-  t.SetTextFont(42);
-  t.SetNDC();
-  t.SetTextAlign(33);
-  t.SetX(1-rightmargin-0.005);
-  t.SetY(1-0.02);
-  t.Draw();
+  t->SetTextColor(kBlue);
+  t->SetTextSize(tsize);
+  t->SetTextFont(42);
+  t->SetNDC();
+  t->SetTextAlign(33);
+  t->SetX(1-rightmargin-0.005);
+  t->SetY(1-0.02);
+  t->Draw();
 
   c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
 }

@@ -558,6 +558,7 @@ static void draw_ee_common(TH1D * x, const int rebin,
   leg->Draw();
 
   TText t(0, 0, "NOvA Preliminary");
+  t.SetTextColor(kBlue);
   t.SetTextSize(textsize);
   t.SetTextFont(42);
   t.SetNDC();

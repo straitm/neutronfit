@@ -779,6 +779,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   gStyle->SetFrameLineWidth(2);
 
   TLatex t(0, 0, "NOvA Preliminary");
+  t.SetTextColor(kBlue);
   t.SetTextSize(tsize);
   t.SetTextFont(42);
   t.SetNDC();
