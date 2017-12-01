@@ -748,6 +748,9 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
   TH1D slc_r("slc_r", "", 5000, 0, 50);
   TH1D slc_f("slc_f", "", 5000, 0, 50);
 
+  // cd away so these Draws don't get printed to the PDF output
+  TCanvas driveyarnspoon;
+
   // *Within* the allowed range (minslc to maxslc), find the mean.  Definition
   // must stay in sync with that in pass_intensity() in rhc_stage_one.C.
   rhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_r",
@@ -1066,6 +1069,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
     muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1),
     mean_slice(true , minslc, maxslc));
+  c3->cd(); // mean_slice cd()s away
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
   onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
