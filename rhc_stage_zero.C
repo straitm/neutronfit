@@ -119,8 +119,11 @@ static bool pass_intensity(data * dat, const float minslc,
   // we're considering
   const int other_physics_nslc = dat->nslc - 2;
 
-  const float eff_slc = dat->pot * slc_per_twp * (1-npileup_sliceweight)
-                          + other_physics_nslc *    npileup_sliceweight;
+  const double slicew = muoncatcher? npileup_sliceweight_mucatch:
+                                     npileup_sliceweight;
+
+  const float eff_slc = dat->pot * slc_per_twp * (1-slicew)
+                          + other_physics_nslc *    slicew;
 
   return eff_slc >= minslc && eff_slc < maxslc;
 }

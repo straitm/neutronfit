@@ -45,14 +45,25 @@ const double remid_cut = 0.75;
 // *** neutrino interactions                                              ***
 
 // How much weight to give the visible slices, as opposed to the intensity.
-// i.e. What fraction of the pileup neutrons do we think come from these
+// i.e. What fraction of the pileup neutrons we think come from these
 // rather than from interactions in the rock.
 //
-// For now, evenly weight interactions we can see and those we can't.
-// XXX really something better motivated would be good here let's at least ask
-// Geant how many neutrons stop in the detector per rock event vs. per detector
-// event.
-const double npileup_sliceweight = 0.5;
+// From a Geant study using RHC MC.
+
+const double npileup_sliceweight =
+#if TWO_D_CUT == 1
+  0.63;
+#else
+  0.79;
+#endif
+
+const double npileup_sliceweight_mucatch =
+#if TWO_D_CUT == 1
+  0.74;
+#else
+  0.80;
+#endif
+
 // Number of slices per 10**12 POT in RHC and FHC.  The ratio between these
 // sets the relative number of neutrons we think are coming out of the rock.
 // The absolute values are unimportant since we can tune either them or
