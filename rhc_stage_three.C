@@ -153,18 +153,21 @@ void rhc_stage_three(const string name, const string region)
   const double bottommargin=0.13;
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
-  const double minx = mindistscan?-0.5:-selfpileup - 0.5,
-               maxx = mindistscan?7:9;
+  const double minx = -0.5,
+               maxx = mindistscan?7:9,
+               miny = -1;
 
-  TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, 0, 6);
+  TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, miny, 6);
   dum->GetYaxis()->SetTickSize(0.015);
   dum->GetXaxis()->SetTickSize(0.02);
 
   g.SetMarkerStyle(kFullCircle);
+  g.SetLineWidth(2);
   TGraphAsymmErrors gall; // for any number of slices
+  gall.SetLineWidth(3);
   gall.SetMarkerStyle(kOpenCircle);
-  gall.SetLineColor(kGray);
-  gall.SetMarkerColor(kGray);
+  gall.SetLineColor(kGray+1);
+  gall.SetMarkerColor(kGray+1);
   double mindist, y, yeup, yedn, minslc, maxslc, meanslc;
 
   double systval = 0, systup = 0, systdn = 0;
@@ -186,7 +189,13 @@ void rhc_stage_three(const string name, const string region)
         systup = yeup;
         systdn = yedn;
         gall.SetPoint(gall.GetN(), meanslc, y);
-        gall.SetPointError(gall.GetN()-1, meanslc-minslc, maxslc-meanslc, yedn, yeup);
+        gall.SetPointError(gall.GetN()-1,
+#if 0
+                           meanslc-minslc, maxslc-meanslc,
+#else
+                           0, 0,
+#endif
+                           yedn, yeup);
       }
       else{
         g.SetPoint(g.GetN(), meanslc, y);
@@ -200,7 +209,7 @@ void rhc_stage_three(const string name, const string region)
   double maxy = dum->GetYaxis()->GetBinLowEdge(dum->GetNbinsY()+1);
   while(gdrawmax(&g) > 0 && gdrawmax(&g) < maxy*legbottom*0.98) maxy *= 0.99;
   maxy = int(maxy*10.)/10.;
-  dum->GetYaxis()->SetRangeUser(0, maxy);
+  dum->GetYaxis()->SetRangeUser(miny, maxy);
 
   dum->GetYaxis()->SetTitle(Form("%s scale relative to MC",
                                  nm?"RHC #nu_{#mu}":"NC"));
@@ -317,24 +326,24 @@ void rhc_stage_three(const string name, const string region)
   // too close to the other arrow
   const float lowlab = maxy/40, highlab = lowlab + maxy/16.;
   TArrow * a = new TArrow(0, 0, 0, lowlab*0.7, 0.01, "<");
-  style3arrow(a);
+  stylearrow(a);
   const int zios_color = kGreen+2;
   a->SetLineColor(zios_color);
   a->Draw();
 
   TLatex * t = new TLatex(0, lowlab, "Zero intensity, 1 slice");
-  style3text(t, tsize);
+  styletext(t, tsize);
   t->SetTextColor(zios_color);
   t->Draw();
 
   // Visually noisy - explain in text
   a = new TArrow(-selfpileup, maxy*0.006, -selfpileup, highlab*0.85, 0.02, "<");
-  style3arrow(a);
+  stylearrow(a);
   a->SetLineColor(ans_color);
   a->Draw();
 
   TLatex * t = new TLatex(-selfpileup, highlab, "Self-pileup subtracted");
-  style3text(t, tsize);
+  styletext(t, tsize);
   t->SetTextColor(ans_color);
   t->Draw();
 #endif
