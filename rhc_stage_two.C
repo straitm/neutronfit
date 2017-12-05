@@ -1087,17 +1087,17 @@ void draw(const int mindist, const float minslc, const float maxslc)
   leg->SetMargin(0.1);
   if(cont_full != NULL){
     leg->AddEntry((TH1D*)NULL, "", "");
-#if 0
     leg->AddEntry(cont_full,
+#if 0
       Form("90%%, effective stopped #pi^{#minus}/#mu^{#minus} n yield %.1f#pm%.1f; "
            "#pi,p in-flight %.2f^{+%.2f}_{-%.2f} #times Geant",
       npimu_stop_nominal, npimu_stop_error,
       n_flight_nominal, n_flight_nominal*exp(n_flight_error) - 1,
-      1 - n_flight_nominal/exp(n_flight_error)),
+      1 - n_flight_nominal/exp(n_flight_error))
 #else
-    leg->AddEntry(cont_full, "90% CL",
+    "90% CL"
 #endif
-      "l");
+     , "l");
     leg->AddEntry(onederrs, "1D errors", "lp");
   }
   if(cont_perfect_nuclear != NULL)
