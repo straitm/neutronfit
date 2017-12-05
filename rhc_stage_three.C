@@ -45,7 +45,9 @@ static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
     const double x = g.GetX()[i];
     const double y = g.GetY()[i];
     const double theory = intercept + x*slope;
-    const double e = theory > y? g.GetErrorYhigh(i): g.GetErrorYlow(i);
+    const double e = theory > y? g.GetErrorYhigh(i): fabs(g.GetErrorYlow(i)) < y?
+                     g.GetErrorYlow(i): y;
+
     chi2 += pow((y-theory)/e, 2);
   }
 
