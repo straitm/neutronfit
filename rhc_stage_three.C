@@ -1,3 +1,24 @@
+#include <algorithm>
+#include <string>
+
+#include "TBranch.h"
+#include "TTree.h"
+#include "TMinuit.h"
+#include "TCanvas.h"
+#include "TF1.h"
+#include "TLegend.h"
+#include "TArrow.h"
+#include "TH1.h"
+#include "TH2.h"
+#include "TLatex.h"
+#include "TStyle.h"
+#include "TError.h"
+#include "TFile.h"
+#include "TMarker.h"
+#include "TGraphAsymmErrors.h"
+
+TMinuit * mn;
+
 #include "common.C"
 
 // selfpileup subtracts off what you get from one event sending high
@@ -13,8 +34,6 @@ const double nominalselfpileup = 1/24. * npileup_sliceweight;
 double selfpileup = nominalselfpileup;
 
 TGraphAsymmErrors g;
-
-TMinuit * mn;
 
 static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
 {
@@ -32,7 +51,66 @@ static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
 
   // penalize heavily for negative slope.  Doing this rather than setting
   // a hard limit allows getting MINOS errors.
-  if(slope < 0) chi2 += pow(slope/0.001, 2);
+  if(slope < 0) chi2 += pow(slope/0.005, 2);
+}
+
+struct err_t{
+  double up, dn;
+};
+
+static err_t bays(const double besticept, const double CL)
+{
+  const int N = 2000;
+  const double inc = 5./N;
+  vector<double> pbyp;
+  mn->Command("MIGRAD");
+  const double gmin = mn->fAmin;
+  mn->Command("SET PRINT -1");
+  for(int i = 0; i < N; i++){
+    mn->Command("REL 1");
+    mn->Command(Form("SET PAR 1 %f", inc*i));
+    mn->Command("FIX 1");
+    mn->Command("MIGRAD");
+    pbyp.push_back(exp(0.5*(gmin - mn->fAmin)));
+  }
+  mn->Command("REL 1");
+
+  const vector<double> pbyi = pbyp;
+  std::sort   (pbyp.begin(), pbyp.end());
+  std::reverse(pbyp.begin(), pbyp.end());
+
+  double totp = 0;
+  for(unsigned int i = 0; i < pbyp.size(); i++) totp += pbyp[i];
+
+  double acc = 0;
+  double cutoff = -1;
+  for(unsigned int i = 0; i < pbyp.size(); i++){
+    acc += pbyp[i];
+    if(acc/totp >= CL){
+      cutoff = (pbyp[i] + pbyp[(i>0?i:1)-1])/2;
+      break;
+    }
+  }
+
+  if(cutoff == -1) printf("Failed to find cutoff\n");
+
+  err_t ans;
+
+  for(unsigned int i = 0; i < pbyi.size(); i++){
+    if(pbyi[i] > cutoff){
+      ans.dn = besticept - inc*(i-0.5);
+      break;
+    }
+  }
+
+  for(unsigned int i = int(besticept/inc); i < pbyi.size(); i++){
+    if(pbyi[i] < cutoff){
+      ans.up = inc*(i-0.5) - besticept;
+      break;
+    }
+  }
+
+  return ans;
 }
 
 static double fixerr(const double e)
@@ -172,39 +250,33 @@ void rhc_stage_three(const string name, const string region)
     mn->Command("SET ERR 1");
 
     double upvals[3] = {9, 4, 1};
+    double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
     double upcols[3] = {kRed, kViolet, kBlue};
 
     TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
-    const int Nband = 100;
+    const int Nband = 200;
     for(int u = 0; u < 3; u++){
       mn->Command(Form("SET ERR %f", upvals[u]));
       TGraph * band = new TGraph(Nband*2);
       band->SetFillColorAlpha(upcols[u], 0.2);
 
       for(int b = 0; b < Nband; b++){
-        selfpileup = nominalselfpileup - 0.15*(b-10);
+        selfpileup = nominalselfpileup - 15./Nband*(b-10);
 
         mn->Command("MIGRAD");
         mn->Command("MINOS");
 
-        const double val = getpar(0);
-        const double stat_eup = fixerr(+mn->fErp[0]);
-        const double stat_edn = fixerr(-mn->fErn[0]);
+        const double val = std::max(0., getpar(0));
 
-        const double eup = sqrt(pow(stat_eup            , 2) +
+        const err_t stat_berr = bays(val, CLs[u]);
+
+        const double eup = sqrt(pow(stat_berr.up        , 2) +
                                 pow(systup * val/systval, 2));
-        const double edn = sqrt(pow(stat_edn            , 2) +
+        const double edn = sqrt(pow(stat_berr.dn        , 2) +
                                 pow(systdn * val/systval, 2));
 
-        if(stat_eup != 0)
-          band->SetPoint(b, -selfpileup, val+eup);
-        else // MINOS failure - use previous
-          band->SetPoint(b, -selfpileup, band->GetY()[b-1]);
-
-        if(stat_edn != 0)
-          band->SetPoint(Nband*2-b-1, -selfpileup, val-edn);
-        else
-          band->SetPoint(Nband*2-b-1, -selfpileup, band->GetY()[Nband*2-(b-1)-1]);
+        band->SetPoint(b, -selfpileup, val+eup);
+        band->SetPoint(Nband*2-b-1, -selfpileup, val-edn);
       }
 
       band->Draw("f");
@@ -214,22 +286,15 @@ void rhc_stage_three(const string name, const string region)
     selfpileup = nominalselfpileup;
 
     mn->Command("MIGRAD");
-    mn->Command("MINOS");
 
-    TF1 f("f", Form("[0] + [1]*(x - %f)", -selfpileup), minx, maxx);
-    f.SetParameters(getpar(0), getpar(1));
-    f.SetLineColor(ans_color);
-    f.SetNpx(500);
-    f.SetLineWidth(2);
+    const double val = std::max(0., getpar(0));
 
-    const double val = f.Eval(-selfpileup);
+    const err_t stat_berr = bays(val, CLs[2]);
 
-    const double eup = sqrt(pow(fixerr(+mn->fErp[0]),2) +
+    const double eup = sqrt(pow(stat_berr.up, 2) +
                             pow(systup * val/systval, 2));
-    const double edn = sqrt(pow(fixerr(-mn->fErn[0]),2) +
-                              pow(systdn * val/systval, 2));
-    mn->Command("MNCONT 1 2");
-    mn->Command("show min");
+    const double edn = sqrt(pow(stat_berr.dn, 2) +
+                            pow(systdn * val/systval, 2));
 
     printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
            val, eup, edn);
@@ -242,37 +307,37 @@ void rhc_stage_three(const string name, const string region)
     ideal->SetLineColor(ans_color);
     ideal->SetLineWidth(2);
     ideal->Draw("p");
-    f.Draw("same");
   }
 
   leg.Draw();
 
+#if 0
+  // too close to the other arrow
   const float lowlab = maxy/40, highlab = lowlab + maxy/16.;
-
-#if 0 // too close to the other arrow
   TArrow * a = new TArrow(0, 0, 0, lowlab*0.7, 0.01, "<");
-  stylearrow(a);
+  style3arrow(a);
   const int zios_color = kGreen+2;
   a->SetLineColor(zios_color);
   a->Draw();
 
   TLatex * t = new TLatex(0, lowlab, "Zero intensity, 1 slice");
-  styletext(t, tsize);
+  style3text(t, tsize);
   t->SetTextColor(zios_color);
   t->Draw();
-#endif
 
+  // Visually noisy - explain in text
   a = new TArrow(-selfpileup, maxy*0.006, -selfpileup, highlab*0.85, 0.02, "<");
-  stylearrow(a);
+  style3arrow(a);
   a->SetLineColor(ans_color);
   a->Draw();
 
   TLatex * t = new TLatex(-selfpileup, highlab, "Self-pileup subtracted");
-  styletext(t, tsize);
+  style3text(t, tsize);
   t->SetTextColor(ans_color);
   t->Draw();
+#endif
 
-  t = new TLatex(0, 0, "NOvA Preliminary");
+  TLatex * t = new TLatex(0, 0, "NOvA Preliminary");
   t->SetTextColor(kBlue);
   t->SetTextSize(tsize);
   t->SetTextFont(42);
