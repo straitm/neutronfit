@@ -124,13 +124,13 @@ static double fixerr(const double e)
   return e;
 }
 
-static static void styletext(TLatex * t, const double tsize)
+static void styletext(TLatex * t, const double tsize)
 {
   t->SetTextFont(42);
   t->SetTextSize(tsize*9/10.95); // footnotesize/normalsize for 11pt
 }
 
-static static void stylearrow(TArrow * a)
+static void stylearrow(TArrow * a)
 {
   a->SetLineWidth(2);
 }
