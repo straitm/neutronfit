@@ -63,7 +63,7 @@ struct err_t{
 static err_t bays(const double besticept, const double CL)
 {
   const int N = 2000;
-  const double inc = 5./N;
+  const double inc = 10./N;
   vector<double> pbyp;
   mn->Command("MIGRAD");
   const double gmin = mn->fAmin;
@@ -155,7 +155,7 @@ void rhc_stage_three(const string name, const string region)
 
   const double minx = -0.5,
                maxx = mindistscan?7:9,
-               miny = -1;
+               miny = 0;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, miny, 6);
   dum->GetYaxis()->SetTickSize(0.015);
