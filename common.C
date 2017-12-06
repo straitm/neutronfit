@@ -48,20 +48,45 @@ const double remid_cut = 0.75;
 // i.e. What fraction of the pileup neutrons we think come from these
 // rather than from interactions in the rock.
 //
-// From a Geant study using RHC MC.
-
+// From a Geant study using both FHC and RHC MC.  Fortunately, even though of
+// course some difference is expected, it is very small.  For the main
+// detector, FHC is 0.02 higher and for the muon catcher it is 0.03 higher.
+// This is somewhat bigger than the statistical error (I only looked at one
+// file each), but I think this can safely be considered within systematics
+// given just how many poorly handled neutron processes there are that we are
+// summing over.  Therefore, I've put the averages in.
+//
+// I used:
+// neardet_genie_nonswap_genierw_fhc_v08_1162_r00012036_s20_c001_R17-03-01-
+//   prod3reco.d_v1_20170322_204739_sim
+// neardet_genie_nonswap_genierw_rhc_v08_1197_r00011654_s00_c001_R16-12-20-
+//   prod3recopreview.b_v3_20161220_134502_sim
+//
+// The only reconstruction used in the study was slicing.  Otherwise, only
+// truth information was used.
+//
+// The rock is a better neutron moderator than we give it credit for, since it
+// certainly contains some hydrogen, but the model has none.  Therefore higher
+// values of these numbers would probably be more accurate.  But since I don't
+// know what order of magnitude this effect is, I am not attempting to adjust
+// for it.
+//
+// (Note that the figure for 2D cut and the main detector is much lower than
+// the others.  This is because the main detector is an excellent neutron
+// moderator, so many captures are around its edges.  With only a 2D cut, many
+// of these pileup neutrons from the rock are selected.)
 const double npileup_sliceweight =
 #if TWO_D_CUT == 1
-  0.63;
+  0.64;
 #else
-  0.79;
+  0.80;
 #endif
 
 const double npileup_sliceweight_mucatch =
 #if TWO_D_CUT == 1
-  0.74;
+  0.76;
 #else
-  0.80;
+  0.81;
 #endif
 
 // Number of slices per 10**12 POT in RHC and FHC.  The ratio between these
