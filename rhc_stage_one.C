@@ -838,12 +838,12 @@ static vector< vector< vector<fitanswers> > > dothefit()
         ans.n_good    = onegoodminos(nneut_nc+off_beam, false);
         ans.n_mag     =       getpar(nneut_nc+off_beam);
         ans.n_mage_up = getbesterrup(nneut_nc+off_beam);
-        ans.n_mage_dn = getbesterrdn(nneut_nc+off_beam);
+        ans.n_mage_dn = std::min(ans.n_mag, getbesterrdn(nneut_nc+off_beam));
 
         ans.b12_good   = onegoodminos(nb12_nc+off_beam, true);
         ans.b12mag     =       getpar(nb12_nc+off_beam);
         ans.b12mage_up = getbesterrup(nb12_nc+off_beam);
-        ans.b12mage_dn = getbesterrdn(nb12_nc+off_beam);
+        ans.b12mage_dn = std::min(ans.b12mag, getbesterrdn(nb12_nc+off_beam));
 
         ans1.push_back(ans);
       }

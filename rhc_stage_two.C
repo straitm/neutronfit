@@ -1196,11 +1196,11 @@ static void do_background_subtraction()
       gs[g]->SetPointError(i, raw_gs[g][0]->GetErrorXlow (i),
                               raw_gs[g][0]->GetErrorXhigh(i),
         // Down error is signal down error (+) bg up error
-        sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) +
-             (bgmult==0?0:pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2))),
+        sqrt(pow(raw_gs[g][0]->GetErrorYlow (i), 2) +
+             (bgmult==0?0:pow(raw_gs[g][1]->GetErrorYhigh(i)/bgmult, 2))),
         // Up error is signal up error (+) bg down error
-        sqrt(pow(raw_gs[g][0]->GetErrorYlow(i), 2) +
-             (bgmult==0?0:pow(raw_gs[g][1]->GetErrorYhigh(i)/bgmult, 2))));
+        sqrt(pow(raw_gs[g][0]->GetErrorYhigh(i), 2) +
+             (bgmult==0?0:pow(raw_gs[g][1]->GetErrorYlow (i)/bgmult, 2))));
     }
   }
 }
