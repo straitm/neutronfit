@@ -1,7 +1,8 @@
 *_C.d
 *_C.so
 fit_stage_???_mindist*_nslc*_*_*.pdf
-fit_stage_???_mindist*_nslc*_*_*.out.txt
+*.out.txt
+*.root
 for_stage_two_mindist*_nslc*_*_*.C
 for_stage_two_ready_mindist*_nslc*_*_*.C
 savedhists_mindist*_nslc*_*_*.C
