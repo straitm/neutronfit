@@ -103,58 +103,63 @@ const double slc_per_twp_fhc = 0.172;
 // use ~0.55.
 const double max_frac_e_mu = 1.5;
 
-const int nperiodrhc = 1; // 4, 6
-const int nperiodfhc = 1; // 1, 2, 3, 5
+const int nperiodrhc = 2; // 4, 6
+const int nperiodfhc = 4; // 1, 2, 3, 5
 const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
-  "201711-period46_rhc.root",
-  "201711-period1235_fhc.root"
-  //"periods46_rhc.root",
-  //"periods1235_fhc.root"
-/*  "prod_pid_S16-12-07_nd_period6_keepup/1947-type3.root",
-  "prod_pid_R16-12-20-prod3recopreview.b_nd_numi_rhc_epoch4a_v1_goodruns/all-type3.root",
+  //"201712-period46goodbad_rhc.root",
+  //"201712-period1235goodbad_fhc.root"
+  "201712-period4goodbad.root",
+  "201712-period6goodbad.root",
 
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period1_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period2_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period3_v1_goodruns/all-type3.root",
-  "prod_pid_R17-03-01-prod3reco.b_nd_numi_fhc_period5_v1_goodruns/all-type3.root"
-*/
+  "201712-period1goodbad.root",
+  "201712-period2goodbad.root",
+  "201712-period3goodbad.root",
+  "201712-period5goodbad.root"
 };
 
+#define SEPARATED_PERIODS
+
 const char * const Speriodnames[SIG_AND_BG*nperiod] = {
-"PR",
-"PF",
-#ifdef BGSUB
-"PRBG",
-"PFBG",
-#endif
-#if 0
-    "P6",   "P4",   "P1",   "P2",   "P3",   "P5",
-    "P6BG", "P4BG", "P1BG", "P2BG", "P3BG", "P5BG"
+#ifdef SEPARATED_PERIODS
+      "P4",   "P6",   "P1",   "P2",   "P3",   "P5",
+  #ifdef BGSUB
+      "P4BG", "P6BG", "P1BG", "P2BG", "P3BG", "P5BG"
+  #endif
+#else
+  "PR",
+  "PF",
+  #ifdef BGSUB
+  "PRBG",
+  "PFBG",
+  #endif
 #endif
 };
 
 const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
-     "RHC",
-     "FHC",
-#ifdef BGSUB
-     "RHC Pileup",
-     "FHC Pileup",
-#endif
-#if 0
-     "Period 6 (RHC)",
+#ifdef SEPARATED_PERIODS
      "Period 4 (RHC)",
+     "Period 6 (RHC)",
      "Period 1 (FHC)",
      "Period 2 (FHC)",
      "Period 3 (FHC)",
      "Period 5 (FHC)",
-     "Period 6 (RHC) Pileup",
+  #ifdef BGSUB
      "Period 4 (RHC) Pileup",
+     "Period 6 (RHC) Pileup",
      "Period 1 (FHC) Pileup",
      "Period 2 (FHC) Pileup",
      "Period 3 (FHC) Pileup",
      "Period 5 (FHC) Pileup",
+  #endif
+#else
+     "RHC",
+     "FHC",
+  #ifdef BGSUB
+     "RHC Pileup",
+     "FHC Pileup",
+  #endif
 #endif
 };
 
