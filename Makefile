@@ -1,6 +1,4 @@
-all: nm_mindist_summary_main.pdf        nc_mindist_summary_main.pdf \
-     nm_mindist_summary_muoncatcher.pdf nc_mindist_summary_muoncatcher.pdf \
-     nm_slc_summary_main.pdf            nc_slc_summary_main.pdf \
+all: nm_slc_summary_main.pdf            nc_slc_summary_main.pdf \
      nm_slc_summary_muoncatcher.pdf     nc_slc_summary_muoncatcher.pdf
 
 define mindist_rule
@@ -41,14 +39,14 @@ define summary_rule
 # 99.98% of primary contained tracks are in events with <= 20 slices
 $(1)_slc_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist3_nslc0.0_20.0_$(2).out.txt \
-                fit_stage_two_mindist3_nslc0.0_2.5_$(2).out.txt \
-                fit_stage_two_mindist3_nslc2.5_3.0_$(2).out.txt \
-                fit_stage_two_mindist3_nslc3.0_3.5_$(2).out.txt \
+                fit_stage_two_mindist3_nslc0.0_2.1_$(2).out.txt \
+                fit_stage_two_mindist3_nslc2.1_2.8_$(2).out.txt \
+                fit_stage_two_mindist3_nslc2.8_3.5_$(2).out.txt \
                 fit_stage_two_mindist3_nslc3.5_4.5_$(2).out.txt \
                 fit_stage_two_mindist3_nslc4.5_5.3_$(2).out.txt \
                 fit_stage_two_mindist3_nslc5.3_7.0_$(2).out.txt
 	./stage_three.sh $(1)_slc $(2) \
-          fit_stage_two_mindist3_nslc{0.0_20.0,0.0_2.5,2.5_3.0,3.0_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2).out.txt
+          fit_stage_two_mindist3_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2).out.txt
 $(1)_mindist_summary_$(2).pdf: common.C rhc_stage_three.C stage_three.sh \
                 fit_stage_two_mindist6_nslc0_10_$(2).out.txt \
 		fit_stage_two_mindist5_nslc0_10_$(2).out.txt \
