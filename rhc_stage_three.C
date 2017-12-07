@@ -45,15 +45,17 @@ static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
     const double x = g.GetX()[i];
     const double y = g.GetY()[i];
     const double theory = intercept + x*slope;
-    const double e = theory > y? g.GetErrorYhigh(i): fabs(g.GetErrorYlow(i)) < y?
-                     g.GetErrorYlow(i): y;
+    const double e = theory > y? g.GetErrorYhigh(i):
+                     g.GetErrorYlow(i) == 0? g.GetErrorYhigh(i):
+                     fabs(g.GetErrorYlow(i)) > y? y:
+                     g.GetErrorYlow(i);
 
     chi2 += pow((y-theory)/e, 2);
   }
 
-  // penalize heavily for negative slope.  Doing this rather than setting
-  // a hard limit allows getting MINOS errors.
-  if(slope < 0) chi2 += pow(slope/0.005, 2);
+  // penalize heavily for negative slope or intercept.
+  if(slope < 0) chi2 += pow(slope/0.01, 2);
+  if(intercept < 0) chi2 += pow(intercept/0.01, 2);
 }
 
 struct err_t{
@@ -113,15 +115,6 @@ static err_t bays(const double besticept, const double CL)
   }
 
   return ans;
-}
-
-static double fixerr(const double e)
-{
-  if(e < 0 || e == 54321){
-    printf("BAD ERROR\n");
-    return 0;
-  }
-  return e;
 }
 
 static void styletext(TLatex * t, const double tsize)
@@ -255,7 +248,6 @@ void rhc_stage_three(const string name, const string region)
     mn = new TMinuit(2);
     mn->mnparm(0, "icept",   1, 0.01, 0, 0, ierr);
     mn->mnparm(1, "slope", 0.1, 0.01, 0, 0, ierr);
-    mn->Command("SET STRATEGY 2");
     mn->fGraphicsMode = false;
     mn->SetFCN(fcn);
     mn->Command("SET ERR 1");
@@ -275,7 +267,6 @@ void rhc_stage_three(const string name, const string region)
         selfpileup = nominalselfpileup - 15./Nband*(b-10);
 
         mn->Command("MIGRAD");
-        mn->Command("MINOS");
 
         const double val = std::max(0., getpar(0));
 
