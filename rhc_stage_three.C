@@ -246,7 +246,8 @@ void rhc_stage_three(const string name, const string region)
     nm?"#nu_{#mu} RHC":"Neutral current",
     region == "main"?"Main ND":"Muon Catcher"), "");
   leg.AddEntry((TH1D*)NULL,
-    Form("Searching %.0f cell widths from track end", mindist), "");
+    Form("%s clusters %.0f cell widths from track end",
+         cut_dimensions == TWOD?"2D":"3D", mindist), "");
 
   const int ans_color = kRed-5;
 
