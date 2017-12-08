@@ -20,6 +20,7 @@
 TMinuit * mn;
 
 #include "common.C"
+#include "util.C"
 
 // selfpileup subtracts off what you get from one event sending high
 // energy neutrons from the vertex forward to its own muon's track
@@ -30,7 +31,7 @@ TMinuit * mn;
 // other events do. I've done a low-statistics MC study and found that
 // this number is mercifully very small, so we can safely ignore the
 // RHC/FHC differences.
-const double nominalselfpileup = 1/24. * npileup_sliceweight;
+static double nominalselfpileup = 1/24.; // multiplied by sliceweight below
 double selfpileup = nominalselfpileup;
 
 TGraphAsymmErrors g;
@@ -135,6 +136,11 @@ void rhc_stage_three(const string name, const string region)
   gStyle->SetFrameLineWidth(2);
 
   const bool mindistscan = name.size() == 2;
+  if(mindistscan){
+    printf("mindistscan not supported at the moment\n");
+    exit(1);
+  }
+
   const bool nm = name.substr(0,2) == "nm";
 
   const double tsize = 0.06;
@@ -147,7 +153,7 @@ void rhc_stage_three(const string name, const string region)
   c1->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
 
   const double minx = -0.5,
-               maxx = mindistscan?7:9,
+               maxx = 9.0,
                miny = 0;
 
   TH2D * dum = new TH2D("dum", "", 1, minx, maxx, 1000, miny, 6);
@@ -162,40 +168,44 @@ void rhc_stage_three(const string name, const string region)
   gall.SetLineColor(kGray+1);
   gall.SetMarkerColor(kGray+1);
   double mindist, y, yeup, yedn, minslc, maxslc, meanslc;
+  string cut_dimension_s;
 
   double systval = 0, systup = 0, systdn = 0;
 
-  while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn >> meanslc){
+  while(cin >> mindist >> minslc >> maxslc >> y >> yeup >> yedn
+            >> meanslc >> cut_dimension_s){
     TGraphAsymmErrors * G = NULL;
 
-    if(mindistscan){
-      g.SetPoint(g.GetN(), mindist, y);
-      g.SetPointError(g.GetN()-1, 0, 0, yedn, yeup);
+    // Very conservatively take the error on the combined sample
+    // with "any" number of slices to be the systematic error.
+    // Currently this is small compared to the fit error.
+    if(minslc < 1 && maxslc >= 10){
+      printf("Got systematic from combined sample\n");
+      systval = y;
+      systup = yeup;
+      systdn = yedn;
+      gall.SetPoint(gall.GetN(), meanslc, y);
+      gall.SetPointError(gall.GetN()-1,
+#if 0
+                         meanslc-minslc, maxslc-meanslc,
+#else
+                         0, 0,
+#endif
+                         yedn, yeup);
     }
     else{
-      // Very conservatively take the error on the combined sample
-      // with "any" number of slices to be the systematic error.
-      // Currently this is small compared to the fit error.
-      if(minslc < 1 && maxslc >= 10){
-        printf("Got systematic from combined sample\n");
-        systval = y;
-        systup = yeup;
-        systdn = yedn;
-        gall.SetPoint(gall.GetN(), meanslc, y);
-        gall.SetPointError(gall.GetN()-1,
-#if 0
-                           meanslc-minslc, maxslc-meanslc,
-#else
-                           0, 0,
-#endif
-                           yedn, yeup);
-      }
-      else{
-        g.SetPoint(g.GetN(), meanslc, y);
-        g.SetPointError(g.GetN()-1, meanslc-minslc, maxslc-meanslc, yedn, yeup);
-      }
+      g.SetPoint(g.GetN(), meanslc, y);
+      g.SetPointError(g.GetN()-1, meanslc-minslc, maxslc-meanslc, yedn, yeup);
     }
   }
+
+  two_or_three_d cut_dimensions =
+    cut_dimension_s == two_or_three_d_names[TWOD]  ? TWOD:
+    cut_dimension_s == two_or_three_d_names[THREED]? THREED:
+    (printf("BAD CUT DIMENSIONS NAME\n"), TWOD);
+
+  selfpileup *= region == "main"?npileup_sliceweight[cut_dimensions]:
+                                 npileup_sliceweight_mucatch[cut_dimensions];
 
   const double legbottom = 1-topmargin-0.15;
 
@@ -206,8 +216,7 @@ void rhc_stage_three(const string name, const string region)
 
   dum->GetYaxis()->SetTitle(Form("%s scale relative to MC",
                                  nm?"RHC #nu_{#mu}":"NC"));
-  dum->GetXaxis()->SetTitle(mindistscan?
-    "Number of cells widths around track end searched":
+  dum->GetXaxis()->SetTitle(
     "Effective other physics slices per spill");
   dum->GetYaxis()->CenterTitle();
   dum->GetXaxis()->CenterTitle();
@@ -236,80 +245,78 @@ void rhc_stage_three(const string name, const string region)
   leg.AddEntry((TH1D*)NULL, Form("%s: %s",
     nm?"#nu_{#mu} RHC":"Neutral current",
     region == "main"?"Main ND":"Muon Catcher"), "");
-  leg.AddEntry((TH1D*)NULL, mindistscan?"Any number of slices":
+  leg.AddEntry((TH1D*)NULL,
     Form("Searching %.0f cell widths from track end", mindist), "");
 
   const int ans_color = kRed-5;
 
   gStyle->SetEndErrorSize(4);
 
-  if(!mindistscan){
-    int ierr = 0;
-    mn = new TMinuit(2);
-    mn->mnparm(0, "icept",   1, 0.01, 0, 0, ierr);
-    mn->mnparm(1, "slope", 0.1, 0.01, 0, 0, ierr);
-    mn->fGraphicsMode = false;
-    mn->SetFCN(fcn);
-    mn->Command("SET ERR 1");
+  int ierr = 0;
+  mn = new TMinuit(2);
+  mn->mnparm(0, "icept",   1, 0.01, 0, 0, ierr);
+  mn->mnparm(1, "slope", 0.1, 0.01, 0, 0, ierr);
+  mn->fGraphicsMode = false;
+  mn->SetFCN(fcn);
+  mn->Command("SET ERR 1");
 
-    double upvals[3] = {9, 4, 1};
-    double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
-    double upcols[3] = {kRed, kViolet, kBlue};
+  double upvals[3] = {9, 4, 1};
+  double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
+  double upcols[3] = {kRed, kViolet, kBlue};
 
-    TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
-    const int Nband = 200;
-    for(int u = 0; u < 3; u++){
-      mn->Command(Form("SET ERR %f", upvals[u]));
-      TGraph * band = new TGraph(Nband*2);
-      band->SetFillColorAlpha(upcols[u], 0.2);
+  TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
+  const int Nband = 200;
+  for(int u = 0; u < 3; u++){
+    mn->Command(Form("SET ERR %f", upvals[u]));
+    TGraph * band = new TGraph(Nband*2);
+    band->SetFillColorAlpha(upcols[u], 0.2);
 
-      for(int b = 0; b < Nband; b++){
-        selfpileup = nominalselfpileup - 15./Nband*(b-10);
+    for(int b = 0; b < Nband; b++){
+      selfpileup = nominalselfpileup - 15./Nband*(b-10);
 
-        mn->Command("MIGRAD");
+      mn->Command("MIGRAD");
 
-        const double val = std::max(0., getpar(0));
+      const double val = std::max(0., getpar(0));
 
-        const err_t stat_berr = bays(val, CLs[u]);
+      const err_t stat_berr = bays(val, CLs[u]);
 
-        const double eup = sqrt(pow(stat_berr.up        , 2) +
-                                pow(systup * val/systval, 2));
-        const double edn = sqrt(pow(stat_berr.dn        , 2) +
-                                pow(systdn * val/systval, 2));
+      const double eup = sqrt(pow(stat_berr.up        , 2) +
+                              pow(systup * val/systval, 2));
+      const double edn = sqrt(pow(stat_berr.dn        , 2) +
+                              pow(systdn * val/systval, 2));
 
-        band->SetPoint(b, -selfpileup, val+eup);
-        band->SetPoint(Nband*2-b-1, -selfpileup, val-edn);
-      }
-
-      band->Draw("f");
+      band->SetPoint(b, -selfpileup, val+eup);
+      band->SetPoint(Nband*2-b-1, -selfpileup, val-edn);
     }
 
-    mn->Command("SET ERR 1");
-    selfpileup = nominalselfpileup;
-
-    mn->Command("MIGRAD");
-
-    const double val = std::max(0., getpar(0));
-
-    const err_t stat_berr = bays(val, CLs[2]);
-
-    const double eup = sqrt(pow(stat_berr.up, 2) +
-                            pow(systup * val/systval, 2));
-    const double edn = sqrt(pow(stat_berr.dn, 2) +
-                            pow(systdn * val/systval, 2));
-
-    printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
-           val, eup, edn);
-
-    ideal->SetPoint(0, -selfpileup, val);
-    ideal->SetPointError(0, 0, 0, edn, eup);
-
-    ideal->SetMarkerStyle(kFullCircle);
-    ideal->SetMarkerColor(ans_color);
-    ideal->SetLineColor(ans_color);
-    ideal->SetLineWidth(2);
-    ideal->Draw("p");
+    band->Draw("f");
   }
+
+  mn->Command("SET ERR 1");
+  selfpileup = nominalselfpileup;
+
+  mn->Command("MIGRAD");
+
+  const double val = std::max(0., getpar(0));
+
+  const err_t stat_berr = bays(val, CLs[2]);
+
+  const double eup = sqrt(pow(stat_berr.up, 2) +
+                          pow(systup * val/systval, 2));
+  const double edn = sqrt(pow(stat_berr.dn, 2) +
+                          pow(systdn * val/systval, 2));
+
+  printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
+         val, eup, edn);
+
+  ideal->SetPoint(0, -selfpileup, val);
+  ideal->SetPointError(0, 0, 0, edn, eup);
+
+  ideal->SetMarkerStyle(kFullCircle);
+  ideal->SetMarkerColor(ans_color);
+  ideal->SetLineColor(ans_color);
+  ideal->SetLineWidth(2);
+  ideal->Draw("p");
 
   leg.Draw();
 
@@ -349,5 +356,6 @@ void rhc_stage_three(const string name, const string region)
   t->SetY(1-0.02);
   t->Draw();
 
-  c1->Print(Form("%s_summary_%s.pdf", name.c_str(), region.c_str()));
+  c1->Print(Form("%s_summary_mindist%d_%s_%s.pdf", name.c_str(),
+    int(mindist), region.c_str(), two_or_three_d_names[cut_dimensions]));
 }

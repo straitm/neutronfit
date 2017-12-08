@@ -21,6 +21,7 @@ using std::vector;
 TMinuit * mn = NULL;
 
 #include "common.C"
+#include "util.C"
 
 enum beam_type { RHC_BEAM, FHC_BEAM };
 
@@ -41,7 +42,8 @@ const int rebin = 5;
 static TH2D ** fithist     = (TH2D**)malloc(nperiod*SIG_AND_BG*sizeof(TH2D*));
 static TH1D ** all_tcounts = (TH1D**)malloc(nperiod*SIG_AND_BG*sizeof(TH1D*));
 
-bool muoncatcher = true;// set at entry point
+static bool muoncatcher = true;// set at entry point
+static int g_nbins_e = 0; // ditto
 
 double maxfitt = maxrealtime; // varies
 
@@ -155,37 +157,58 @@ const double flat_start = 3;
 const double pileup_start = 300;
 
 // parameter numbers, C numbering, for use with TMinuit functions
-const int
+// Set in makeparameters() once we know the number of energy bins.
+static int tneut_nc,
+           aneut_nc,
+           nneut_nc,
+           nb12_nc,
+           tmich_nc,
+           nmich_nc,
+           flat_nc,
+           pileup_nc,
+           npar;
+
+// and FORTRAN numbering, for use with native MINUIT commands through
+// TMinuit::Command()
+static int flat_nf,
+           nmich_nf,
+           tmich_nf,
+           nneut_nf,
+           tneut_nf,
+           aneut_nf,
+           nb12_nf,
+           pileup_nf;
+
+static std::vector<PAR> makeparameters()
+{
   // Same for all histograms
   tneut_nc  = 0,
   aneut_nc  = 1,
 
   // Parameters of interest: energy, beam, and sig/bg dependent
   nneut_nc  = aneut_nc + 1,
-  nb12_nc   = nneut_nc + nbeam*nbins_e*SIG_AND_BG,
+  nb12_nc   = nneut_nc + nbeam*g_nbins_e*SIG_AND_BG,
 
   // Nuisance parameters: energy, beam, and sig/bg dependent
-  tmich_nc  = nb12_nc  + nbeam*nbins_e*SIG_AND_BG,
-  nmich_nc  = tmich_nc + nbeam*nbins_e*SIG_AND_BG,
+  tmich_nc  = nb12_nc  + nbeam*g_nbins_e*SIG_AND_BG,
+  nmich_nc  = tmich_nc + nbeam*g_nbins_e*SIG_AND_BG,
 
   // Nuisance parameters: energy and period dependent
   // In principle, *not* dependent on sig vs. off-space bg
-  flat_nc   = nmich_nc + nbeam *nbins_e*SIG_AND_BG,
-  pileup_nc = flat_nc  + nperiod*nbins_e,
+  flat_nc   = nmich_nc + nbeam *g_nbins_e*SIG_AND_BG,
+  pileup_nc = flat_nc  + nperiod*g_nbins_e,
 
-  npar      = pileup_nc+ nperiod*nbins_e;
+  npar      = pileup_nc+ nperiod*g_nbins_e;
 
-const int flat_nf   = flat_nc  +1, // and FORTRAN numbering,
-          nmich_nf  = nmich_nc +1, // for use with native MINUIT
-          tmich_nf  = tmich_nc +1, // commands through TMinuit::Command()
-          nneut_nf  = nneut_nc +1,
-          tneut_nf  = tneut_nc +1,
-          aneut_nf  = aneut_nc +1,
-          nb12_nf   = nb12_nc  +1,
-          pileup_nf = pileup_nc+1;
+  flat_nf   = flat_nc  +1,
+  nmich_nf  = nmich_nc +1,
+  tmich_nf  = tmich_nc +1,
+  nneut_nf  = nneut_nc +1,
+  tneut_nf  = tneut_nc +1,
+  aneut_nf  = aneut_nc +1,
+  nb12_nf   = nb12_nc  +1,
+  pileup_nf = pileup_nc+1;
 
-static std::vector<PAR> makeparameters()
-{
   std::vector<PAR> p;
   p.push_back(makepar("Tneut", n_lifetime_nominal));
   p.push_back(makepar("Aneut", n_diffusion_nominal));
@@ -193,32 +216,32 @@ static std::vector<PAR> makeparameters()
   const char * const bname[nbeam] = { "R_", "F_" };
 
   for(int b = 0; b < nbeam; b++)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         p.push_back(makepar(Form("%sNn%d-%s",
           bname[b], i, sigorbg?"B":"S"), nneut_start));
   for(int b = 0; b < nbeam; b++)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         p.push_back(makepar(Form("%sNB12_%d-%s",
           bname[b], i, sigorbg?"B":"S"), nb12_start));
 
   for(int b = 0; b < nbeam; b++)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         p.push_back(makepar(Form("%sTMu%d-%s",
           bname[b], i, sigorbg?"B":"S"), tmich_nominal));
   for(int b = 0; b < nbeam; b++)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         p.push_back(makepar(Form("%sNMu%d-%s",
           bname[b], i, sigorbg?"B":"S"), nmich_start));
 
   for(int ip = 0; ip < nperiod; ip++)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       p.push_back(makepar(Form("%sflat%d", Speriodnames[ip], i), flat_start));
   for(int ip = 0; ip < nperiod; ip++)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       p.push_back(makepar(Form("%spile%d",Speriodnames[ip],i),pileup_start));
 
   return p;
@@ -286,12 +309,12 @@ static TCanvas * c1 = new TCanvas("rhc1", "rhc1"); // hist
 
 static int get_off_beam(const int beam, const int energybin, const int isbg)
 {
-  return (beam *nbins_e + energybin)*SIG_AND_BG + isbg;
+  return (beam *g_nbins_e + energybin)*SIG_AND_BG + isbg;
 }
 
 static int get_off_period(const int period, int energybin)
 {
-  return period*nbins_e + energybin;
+  return period*g_nbins_e + energybin;
 }
 
 static void fcn(__attribute__((unused)) int & np,
@@ -371,11 +394,11 @@ static void fcn(__attribute__((unused)) int & np,
           const double norm_n   =
             beam == RHC_BEAM?
             par[nneut_nc+eb*SIG_AND_BG+isbg] /* R */:
-            par[nneut_nc + (nbins_e+eb)*SIG_AND_BG + isbg]; /*F*/
+            par[nneut_nc + (g_nbins_e+eb)*SIG_AND_BG + isbg]; /*F*/
           const double norm_b12 =
             beam == RHC_BEAM?
             par[nb12_nc+eb*SIG_AND_BG+isbg]:
-            par[nb12_nc + (nbins_e+eb)*SIG_AND_BG+isbg];
+            par[nb12_nc + (g_nbins_e+eb)*SIG_AND_BG+isbg];
 
           // Michel lifetime - ~average of mu+ and mu-, messed up by
           // detector effects
@@ -403,7 +426,7 @@ static void fcn(__attribute__((unused)) int & np,
   // penalty on Michel lifetimes.  Introduced when I started trying to
   // implement cuts on later events based on Michels, which reduces
   // the lever arm of Michels considerably.
-  for(int i = 0; i < nbeam*nbins_e; i++)
+  for(int i = 0; i < nbeam*g_nbins_e; i++)
     like += 0.5 * pow((par[tmich_nc + i] - tmich_nominal)/tmich_priorerr, 2);
 
   // penalty on neutron lifetime
@@ -418,6 +441,7 @@ static void fcn(__attribute__((unused)) int & np,
 
 void make_mn()
 {
+  std::vector<PAR> PARAMETERS = makeparameters();
   if(mn) delete mn;
   mn = new TMinuit(npar);
   mn->fGraphicsMode = false;
@@ -434,7 +458,6 @@ void make_mn()
   mn->Command("SET ERR 0.5"); // log likelihood
 
   int mnparmerr = 0;
-  std::vector<PAR> PARAMETERS = makeparameters();
   for(int i = 0; i < npar; i++)
     mn->mnparm(i, PARAMETERS[i].name,
                   PARAMETERS[i].start,
@@ -444,7 +467,7 @@ void make_mn()
 static void set_ee_to_mn(const int periodsg, const int energybin) // 0-indexed
 {
   const int beam = periodsg%nperiod < nperiodrhc? 0: 1;
-  const bool isbg = periodsg >= nperiod; 
+  const bool isbg = periodsg >= nperiod;
 
   for(int i = 0; i < ncommonpar; i++)
     ee_neg->SetParameter(i, getpar(i));
@@ -457,8 +480,8 @@ static void set_ee_to_mn(const int periodsg, const int energybin) // 0-indexed
        scales[periodsg][energybin]: 1)* // per track -> total
 
       getpar(ncommonpar +
-             (nbeam*nbins_e*(i-ncommonpar) +
-             beam * nbins_e +
+             (nbeam*g_nbins_e*(i-ncommonpar) +
+             beam * g_nbins_e +
              energybin)*SIG_AND_BG + isbg
       )
     );
@@ -467,9 +490,9 @@ static void set_ee_to_mn(const int periodsg, const int energybin) // 0-indexed
   for(int i = ncommonpar+nper_e_beam_sg; i < npar_ee-1; i++){
     ee_neg->SetParameter(i, (isbg?bgmult:1)*
       getpar(ncommonpar +
-        SIG_AND_BG*nbeam  *nbins_e*      nper_e_beam_sg          +
-                   nperiod*nbins_e*(i-ncommonpar-nper_e_beam_sg) +
-        nbins_e*(periodsg%nperiod) +
+        SIG_AND_BG*nbeam  *g_nbins_e*      nper_e_beam_sg          +
+                   nperiod*g_nbins_e*(i-ncommonpar-nper_e_beam_sg) +
+        g_nbins_e*(periodsg%nperiod) +
         energybin));
   }
 
@@ -535,6 +558,7 @@ static double beam_scale(const int beam, const int bin)
 }
 
 static void draw_ee_common(TH1D * x, const int rebin,
+                           const char * const header,
                            const char * const outname,
                            const double ymin, const double ymax)
 {
@@ -547,16 +571,17 @@ static void draw_ee_common(TH1D * x, const int rebin,
                           Form("Delayed clusters/%d#kern[-0.5]{ }#mus", rebin));
   x->Draw("e");
 
-  TLegend * leg = new TLegend(1-0.39*textsize/0.045,
-                              1-0.35*textsize/0.045,
-                              1-rightmargin, 1-topmargin-0.02);
+  TLegend * leg = new TLegend(1-0.47*textsize/0.045*0.9, // small
+                              1-0.40*textsize/0.045*0.9, // small
+                              1-rightmargin, 1-topmargin-0.03);
+  leg->AddEntry((TH1D*)NULL, header, "");
   for(int i = 0; i < ntf1s; i++){
     ees[i]->SetParameter(ee_scale_par, rebin);
     ees[i]->Draw("same");
     if(i != 0 /*ee_neg*/) leg->AddEntry(ees[i], ees_description[i], "l");
   }
 
-  leg->SetTextSize(textsize);
+  leg->SetTextSize(textsize*0.9); // small
   leg->SetMargin(0.17);
   leg->SetTextFont(42);
   leg->SetBorderSize(0);
@@ -620,7 +645,8 @@ static void stylehist(TH1 * h)
 
 // Draw the sum of the fit histograms for a beam type and energy bin.
 static void draw_ee_beam(const int beam, const int energybin,
-                         const bool isbg, const char * const outname)
+                         const bool isbg, const char * const outname,
+                         const two_or_three_d cut_dimensions)
 {
   c1->cd();
 
@@ -639,20 +665,22 @@ static void draw_ee_beam(const int beam, const int energybin,
 
   stylehist(x);
 
-  x->GetXaxis()->SetTitle(
-    Form("%s%s E_{#nu} %.1f#minus%.1f GeV: Time since muon stop (#mus)",
+  const char * const header = Form("%s%s E_{#nu} %.1f#minus%.1f GeV",
     isbg == 0?"":"Pileup: ",
-    beam == RHC_BEAM?"RHC":"FHC", bins_e[energybin], bins_e[energybin+1]));
+    beam == RHC_BEAM?"RHC":"FHC", bins_e[cut_dimensions][energybin],
+                                  bins_e[cut_dimensions][energybin+1]);
+  x->GetXaxis()->SetTitle("Time since muon stop (#mus)");
   const double ymin = beam_scale(beam, energybin)*yminpertrack*rebin,
                ymax = beam_scale(beam, energybin)*ymaxpertrack*rebin;
   x->GetYaxis()->SetRangeUser(ymin, ymax);
 
-  draw_ee_common(x, rebin, outname, ymin, ymax);
+  draw_ee_common(x, rebin, header, outname, ymin, ymax);
 }
 
 // Draw the fit histogram for a period and energy bin. 0-indexed bins
 static void draw_ee(const int periodsg, const int energybin,
-                    const char * const outname)
+                    const char * const outname,
+                    const two_or_three_d cut_dimensions)
 {
   c1->cd();
 
@@ -662,13 +690,14 @@ static void draw_ee(const int periodsg, const int energybin,
 
   stylehist(x);
 
-  x->GetXaxis()->SetTitle(
-    Form("%s E_{#nu} %.1f-%.1f GeV: Time since muon stop (#mus)",
-    Lperiodnames[periodsg], bins_e[energybin], bins_e[energybin+1]));
+  const char * const header = Form("%s E_{#nu} %.1f-%.1f GeV",
+    Lperiodnames[periodsg], bins_e[cut_dimensions][energybin],
+                            bins_e[cut_dimensions][energybin+1]);
+  x->GetXaxis()->SetTitle("Time since muon stop (#mus)");
   const double ymin = scales[periodsg][energybin]*yminpertrack*rebin,
                ymax = scales[periodsg][energybin]*ymaxpertrack*rebin;
   x->GetYaxis()->SetRangeUser(ymin, ymax);
-  draw_ee_common(x, rebin, outname, ymin, ymax);
+  draw_ee_common(x, rebin, header, outname, ymin, ymax);
 }
 
 static vector< vector< vector<fitanswers> > > dothefit()
@@ -681,7 +710,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
   int status = 0;
 
   for(int period = 0; period < nperiod; period++){
-    for(int bin = 0; bin < nbins_e; bin++){
+    for(int bin = 0; bin < g_nbins_e; bin++){
       const int off_period = get_off_period(period, bin);
       // May as well set this to near the right value
       mn->Command(Form("SET PAR %d %f", flat_nf+off_period,
@@ -696,7 +725,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
   }
 
   for(int beam = 0; beam < nbeam; beam++){
-    for(int bin = 0; bin < nbins_e; bin++){
+    for(int bin = 0; bin < g_nbins_e; bin++){
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
         const int off_beam = get_off_beam(beam, bin, sigorbg);
         // Reasonable starting points
@@ -731,7 +760,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
 
   // Now that we're (hopefully) converged, let muon lifetime float
   for(int beam = 0; beam < nbeam; beam++)
-    for(int bin = 0; bin < nbins_e; bin++)
+    for(int bin = 0; bin < g_nbins_e; bin++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         mn->Command(Form("REL %d", tmich_nf+get_off_beam(beam, bin, sigorbg)));
 
@@ -747,14 +776,14 @@ static vector< vector< vector<fitanswers> > > dothefit()
   // concerns, this prevents it from swapping with the neutron lifetime,
   // supposing we let that float.
   for(int beam = 0; beam < nbeam; beam++)
-    for(int bin = 0; bin < nbins_e; bin++)
+    for(int bin = 0; bin < g_nbins_e; bin++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         mn->Command(Form("SET LIM %d 1.6 2.6",
           tmich_nf+get_off_beam(beam, bin, sigorbg)));
 
   // MINOS errors are wrong if we used the abs trick, so limit
   for(int beam = 0; beam < nbeam; beam++){
-    for(int bin = 0; bin < nbins_e; bin++){
+    for(int bin = 0; bin < g_nbins_e; bin++){
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
         const int off_beam = get_off_beam(beam, bin, sigorbg);
         mn->Command(Form("SET PAR %d %f", nb12_nf+off_beam,
@@ -777,7 +806,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
   // that are up against zero so that we can get a sensible error matrix out.
   // This is a little dubious, but so is what happens if we don't do it.
    for(int beam = 0; beam < nbeam; beam++){
-    for(int bin = 0; bin < nbins_e; bin++){
+    for(int bin = 0; bin < g_nbins_e; bin++){
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
         const int off_beam = get_off_beam(beam, bin, sigorbg);
         if(fabs(getpar(nmich_nc + off_beam)) <
@@ -788,9 +817,9 @@ static vector< vector< vector<fitanswers> > > dothefit()
       }
     }
   }
-  
+
   for(int period = 0; period < nperiod; period++){
-    for(int bin = 0; bin < nbins_e; bin++){
+    for(int bin = 0; bin < g_nbins_e; bin++){
       const int off_period = get_off_period(period, bin);
       if(fabs(getpar(flat_nc + off_period) <
               geterr(flat_nc + off_period)))
@@ -813,7 +842,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
 
   if(!status)
     for(int beam = 0; beam < nbeam; beam++)
-      for(int bin = 0; bin < nbins_e; bin++)
+      for(int bin = 0; bin < g_nbins_e; bin++)
         for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
           const int off_beam = get_off_beam(beam, bin, sigorbg);
           if(DOMINOS){
@@ -830,7 +859,7 @@ static vector< vector< vector<fitanswers> > > dothefit()
 
   for(int beam = 0; beam < nbeam; beam++){
     vector< vector<fitanswers> > ans2;
-    for(int bin = 0; bin < nbins_e; bin++){
+    for(int bin = 0; bin < g_nbins_e; bin++){
       vector<fitanswers> ans1;
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
         const int off_beam = get_off_beam(beam, bin, sigorbg);
@@ -917,11 +946,13 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
                                TGraphAsymmErrors ** g_b12_rhc,
                                TGraphAsymmErrors ** g_b12_fhc,
                                const int mindist,
-                               const float minslc, const float maxslc)
+                               const float minslc, const float maxslc,
+                               const two_or_three_d cut_dimensions)
 {
-  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%.1f_%.1f_%s.C",
+  ofstream for_stage_two(Form("for_stage_two_mindist%d_nslc%.1f_%.1f_%s_%s.C",
                               mindist, minslc, maxslc,
-                              muoncatcher?"muoncatcher":"main"));
+                              muoncatcher?"muoncatcher":"main",
+                              two_or_three_d_names[cut_dimensions]));
   for_stage_two << "{\n";
   for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
     g_n_rhc  [sigorbg]->SetName(Form("raw_g_n_rhc[%d]", sigorbg));
@@ -943,13 +974,13 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
   hessian.Invert();
 
   // Only care about the cross-terms for the 2*bins of the fit histograms
-  for(int ii = 0; ii < nbins_e*nbeam*2 /* n and b12 */; ii++){
-    for(int jj = ii; jj < nbins_e*nbeam*2; jj++){
+  for(int ii = 0; ii < g_nbins_e*nbeam*2 /* n and b12 */; ii++){
+    for(int jj = ii; jj < g_nbins_e*nbeam*2; jj++){
 
-      const int i = ii < nbins_e*nbeam? nneut_nc + ii:
-               nb12_nc - nbins_e*nbeam + ii;
-      const int j = jj < nbins_e*nbeam? nneut_nc + jj:
-               nb12_nc - nbins_e*nbeam + jj;
+      const int i = ii < g_nbins_e*nbeam? nneut_nc + ii:
+               nb12_nc - g_nbins_e*nbeam + ii;
+      const int j = jj < g_nbins_e*nbeam? nneut_nc + jj:
+               nb12_nc - g_nbins_e*nbeam + jj;
 
       for_stage_two << "hessian[" << ii << "][" << jj << "] = "
         << hessian[i][j] << ";\n";
@@ -960,8 +991,12 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
   for_stage_two << "}\n";
 }
 
+// XXX This is getting to be a lot of arguments, suggesting that passing it
+// in via a struct, or using a config file would be better.  Probably can't
+// use a struct because there's no way to pass that in from the command line.
 void rhc_stage_one(const char * const savedhistfile, const int mindist,
-                   const float minslc, const float maxslc, const string region)
+                   const float minslc, const float maxslc, const string region,
+                   const two_or_three_d cut_dimensions)
 {
   if(mindist < 0) return; // to compile only
 
@@ -969,6 +1004,9 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
   gStyle->SetFrameLineWidth(2);
 
   muoncatcher = region == "muoncatcher";
+
+  // Needs to get into fcn(), so has to be global
+  g_nbins_e = nbins_e[cut_dimensions];
 
   /*
     Based on my MC, 400us is reasonable for a mindist of 6, but more like
@@ -982,14 +1020,15 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     much you get for mindist == 0 on average. In fcn() this is given a
     factor of 2 error (offerbangheap). Mostly we just measure it.
   */
-  n_diffusion_nominal = TWO_D_CUT?14.94 * pow(mindist + 0.625, 1.74)
-                                 : 1.39 * pow(mindist + 0.625, 3.00);
+  n_diffusion_nominal = cut_dimensions == TWOD?
+                        14.94 * pow(mindist + 0.625, 1.74):
+                         1.39 * pow(mindist + 0.625, 3.00);
 
   // From external Monte Carlo
   n_lifetime_priorerr = muoncatcher?10:5.;
-  // Hackily provide information from the more data-rich fits to the
+  // XXX Hackily provide information from the more data-rich fits to the
   // data-poor fits so they don't spin out of control.
-  if(!TWO_D_CUT || mindist <= 2) n_lifetime_priorerr = 2.;
+  if(cut_dimensions == THREED || mindist <= 2) n_lifetime_priorerr = 2.;
 
   // From a loose cut running of this program
   n_lifetime_nominal = muoncatcher?45:52.7;
@@ -1029,13 +1068,13 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   scales.resize(nperiod*SIG_AND_BG);
 
-  for(int s = 1; s <= nbins_e; s++)
+  for(int s = 1; s <= g_nbins_e; s++)
     for(int p = 0; p < nperiod*SIG_AND_BG; p++)
       scales[p].push_back(all_tcounts[p]->GetBinContent(s));
 
   const vector< vector< vector<fitanswers> > > anses = dothefit();
 
-  for(int s = 0; s < nbins_e; s++){
+  for(int s = 0; s < g_nbins_e; s++){
     for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++){
       const fitanswers rhc_ans = anses[0][s][sigorbg];
       const fitanswers fhc_ans = anses[1][s][sigorbg];
@@ -1070,8 +1109,9 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     }
   }
 
-  const string filename = Form("fit_stage_one_mindist%d_nslc%.1f_%.1f_%s.pdf",
-                               mindist, minslc, maxslc, region.c_str());
+  const string filename = Form("fit_stage_one_mindist%d_nslc%.1f_%.1f_%s_%s.pdf",
+                               mindist, minslc, maxslc, region.c_str(),
+                               two_or_three_d_names[cut_dimensions]);
 
   c1->SetTopMargin   (topmargin);
   c1->SetBottomMargin(bottommargin);
@@ -1080,21 +1120,21 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   c1->Print(Form("%s[", filename.c_str()));
 
-  for(int i = 0; i < nbins_e; i++)
+  for(int i = 0; i < g_nbins_e; i++)
     for(int beam = 0; beam < nbeam; beam++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
-        draw_ee_beam(beam, i, sigorbg, filename.c_str());
+        draw_ee_beam(beam, i, sigorbg, filename.c_str(), cut_dimensions);
 
   // Print out a per-period set of histograms unless we have merged all RHC and
   // FHC periods together, in which case that would be redundant.
   if(nbeam < nperiod)
-    for(int i = 0; i < nbins_e; i++)
+    for(int i = 0; i < g_nbins_e; i++)
       for(int period = 0; period < nperiod; period++)
         for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
-          draw_ee(period + sigorbg*nperiod, i, filename.c_str());
+          draw_ee(period + sigorbg*nperiod, i, filename.c_str(), cut_dimensions);
 
   c1->Print(Form("%s]", filename.c_str()));
 
   save_for_stage_two(g_n_rhc, g_n_fhc, g_b12_rhc, g_b12_fhc,
-                     mindist, minslc, maxslc);
+                     mindist, minslc, maxslc, cut_dimensions);
 }

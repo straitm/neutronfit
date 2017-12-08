@@ -11,17 +11,7 @@ using std::string;
 TMinuit * mn = NULL; // dumb, because of common.C
 
 #include "common.C"
-
-// If true, all tracks that pass track_itself_cut() go into the
-// denominator. This only excludes tracks based on characteristics of
-// the track itself and not on any hits coincident or following it.
-//
-// If false, don't put tracks in the denominator if we have rejected
-// them (i.e. rejected all clusters following them) based on other
-// clusters, such as the presense of a Michel-like cluster.
-//
-// For my standard study, "true" is the correct choice.
-const bool ALL_TRACKS_GO_IN_THE_DENOMINATOR = true;
+#include "util.C"
 
 bool muoncatcher = true;// set at entry point
 
@@ -63,7 +53,9 @@ struct data{
 
 enum branchstat { FOR2D, FOR1D };
 
-void setbranchaddresses(data * dat, TTree * t, const branchstat how)
+static void setbranchaddresses(data * dat, TTree * t,
+                               const branchstat how,
+                               const two_or_three_d cut_dimensions)
 {
   t->SetBranchStatus("*", 0);
   setbranchaddress("run", &dat->run, t);
@@ -84,14 +76,14 @@ void setbranchaddresses(data * dat, TTree * t, const branchstat how)
   setbranchaddress("nslc", &dat->nslc, t);
   setbranchaddress("pot", &dat->pot, t);
 
-  if(how == FOR2D || !ALL_TRACKS_GO_IN_THE_DENOMINATOR){
+  if(how == FOR2D){
     setbranchaddress("event", &dat->event, t);
     setbranchaddress("trk", &dat->trk, t);
     setbranchaddress("t", &dat->t, t);
     setbranchaddress("mindist", &dat->mindist, t);
     setbranchaddress("e", &dat->e, t);
     setbranchaddress("pe", &dat->pe, t);
-    if(!TWO_D_CUT){
+    if(cut_dimensions == THREED){
       setbranchaddress("nhitx", &dat->nhitx, t);
       setbranchaddress("nhity", &dat->nhity, t);
     }
@@ -108,7 +100,8 @@ void setbranchaddresses(data * dat, TTree * t, const branchstat how)
 // them into an intensity in 10**12 POTs ("twp") so that we are taking
 // into account neutrons from invisible rock events too.
 static bool pass_intensity(data * dat, const float minslc,
-                           const float maxslc, const bool rhc)
+                           const float maxslc, const bool rhc,
+                           const two_or_three_d cut_dimensions)
 {
   // This may not agree with other conversions, but since what I actually
   // want is neutrons produced per POT --- something no one knows ---
@@ -119,8 +112,8 @@ static bool pass_intensity(data * dat, const float minslc,
   // we're considering
   const int other_physics_nslc = dat->nslc - 2;
 
-  const double slicew = muoncatcher? npileup_sliceweight_mucatch:
-                                     npileup_sliceweight;
+  const double slicew = muoncatcher? npileup_sliceweight_mucatch[cut_dimensions]:
+                                     npileup_sliceweight[cut_dimensions];
 
   const float eff_slc = dat->pot * slc_per_twp * (1-slicew)
                           + other_physics_nslc *    slicew;
@@ -130,7 +123,8 @@ static bool pass_intensity(data * dat, const float minslc,
 
 // true if it passes the cut
 static bool track_itself_cut(data * dat, const float minslc,
-                             const float maxslc, const bool rhc)
+                             const float maxslc, const bool rhc,
+                             const two_or_three_d cut_dimensions)
 {
   return dat->primary &&
     3 == dat->type
@@ -172,12 +166,12 @@ static bool track_itself_cut(data * dat, const float minslc,
     // Update: Pretty sure that's pileup.
     && (!muoncatcher || dat->trkstartz < mucatch_trkstartz_cut)
 
-    && pass_intensity(dat, minslc, maxslc, rhc)
+    && pass_intensity(dat, minslc, maxslc, rhc, cut_dimensions)
     ;
 }
 
 // True if the track passes
-bool track_followers_cut(const vector<data> & dats)
+static bool track_followers_cut(const vector<data> & dats)
 {
   bool has_pion_gamma = false, has_xray = false;
 
@@ -200,7 +194,7 @@ bool track_followers_cut(const vector<data> & dats)
     // few percent) or radiative capture (a few percent). This does seem
     // to work: I get consistently higher fractions of neutrons. Can
     // this be made interesting?
-    /*   
+    /*
     if(dat->t < 0.25 && dat->t > -0.25 &&
        dat->mindist > 3 &&
        dat->e > 50 &&
@@ -232,25 +226,31 @@ bool track_followers_cut(const vector<data> & dats)
   return true;
 }
 
-bool clustercut(data * dat, const int mindist)
+static bool clustercut(data * dat, const int mindist,
+                       const two_or_three_d cut_dimensions)
 {
   return !(dat->t >= holex_lo && dat->t < holex_hi) &&
     dat->t > -nnegbins && dat->t < maxrealtime &&
-    (TWO_D_CUT?true:dat->nhitx >= 1 && dat->nhity >= 1) &&
+    (cut_dimensions == TWOD || (dat->nhitx >= 1 && dat->nhity >= 1)) &&
     dat->mindist <= mindist &&
     dat->pe > 35 && dat->e < 20;
 }
 
-void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
-                 const int mindist, const float minslc, const float maxslc,
-                 const bool rhc)
+static void
+fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
+            const int mindist, const float minslc, const float maxslc,
+            const bool rhc, const two_or_three_d cut_dimensions)
 {
   int lastrun = 0, lastevent = 0, lasttrk = 0;
   vector<data> dats;
   const int progint = t->GetEntries()/10;
   int progtarg = progint;
   for(int i = 0; i < t->GetEntries(); i++){
-    if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
+    if(i > progtarg){
+      printf("%.0f%% ", (100.*i)/t->GetEntries());
+      fflush(stdout);
+      progtarg += progint;
+    }
     t->GetEntry(i);
 
     // read in all of the clusters for this track
@@ -263,14 +263,9 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
     else{
       if(track_followers_cut(dats)){
         for(unsigned int j = 0; j < dats.size(); j++){
-          if(track_itself_cut(&dats[j], minslc, maxslc, rhc) &&
-             clustercut(&dats[j], mindist))
+          if(track_itself_cut(&dats[j], minslc, maxslc, rhc, cut_dimensions) &&
+             clustercut(&dats[j], mindist, cut_dimensions))
             h[dats[j].type > 10]->Fill(dats[j].t, dats[j].slce);
-
-          // In this scheme, only tracks that pass go into the denominator
-          if(!ALL_TRACKS_GO_IN_THE_DENOMINATOR)
-            if(dats[j].i == 0 && track_itself_cut(&dats[j], minslc, maxslc, rhc))
-               trackcounts[dats[j].type > 10]->Fill(dat->slce);
         }
       }
 
@@ -284,21 +279,27 @@ void fill_2dhist(TH1D ** trackcounts, TH2D ** h, data * dat, TTree * t,
 }
 
 // In this scheme, all tracks go into the denominator
-void fill_1dhist(TH1D ** h, data * dat, TTree * t, const float minslc,
-                 const float maxslc, const bool rhc)
+static void fill_1dhist(TH1D ** h, data * dat, TTree * t,
+                        const float minslc, const float maxslc,
+                        const bool rhc,
+                        const two_or_three_d cut_dimensions)
 {
   const int progint = t->GetEntries()/10;
   int progtarg = progint;
   TBranch * ibranch = t->GetBranch("i");
   for(int i = 0; i < t->GetEntries(); i++){
-    if(i > progtarg){ printf("."); fflush(stdout); progtarg += progint;}
+    if(i > progtarg){
+      printf("%.0f%% ", (100.*i)/t->GetEntries());
+      fflush(stdout);
+      progtarg += progint;
+    }
     ibranch->GetEntry(i);
     if(dat->i != 0) continue;
 
     t->GetEntry(i);
     // Don't test for dat->i==0 with type>10.  See tag
     // stagehotelcurlknotgoat in ntuple generation.
-    if(track_itself_cut(dat, minslc, maxslc, rhc)){
+    if(track_itself_cut(dat, minslc, maxslc, rhc, cut_dimensions)){
       h[0]->Fill(dat->slce); // The tracks are the same for signal
       #ifdef BGSUB
         h[1]->Fill(dat->slce); // and off-space background
@@ -308,7 +309,8 @@ void fill_1dhist(TH1D ** h, data * dat, TTree * t, const float minslc,
 }
 
 int rhc_stage_zero(const int mindist, const float minslc,
-                   const float maxslc, const string region)
+                   const float maxslc, const string region,
+                   const two_or_three_d cut_dimensions)
 {
   if(mindist < 0) return 0; // used to compile only
 
@@ -317,8 +319,9 @@ int rhc_stage_zero(const int mindist, const float minslc,
   data dat;
 
   std::ofstream o(
-    Form("savedhists_mindist%d_nslc%.1f_%.1f_%s.C",
-         mindist, minslc, maxslc, region.c_str()));
+    Form("savedhists_mindist%d_nslc%.1f_%.1f_%s_%s.C",
+         mindist, minslc, maxslc, region.c_str(),
+         two_or_three_d_names[cut_dimensions]));
   o << "{\n";
   for(int i = 0; i < nperiod; i++){
     TFile * inputTFiles = NULL;
@@ -337,31 +340,35 @@ int rhc_stage_zero(const int mindist, const float minslc,
     }
 
     TH1D * all_tcounts[SIG_AND_BG] = {
-      new TH1D(Form("%s_tcounts", Speriodnames[i]), "", nbins_e, bins_e),
+      new TH1D(Form("%s_tcounts", Speriodnames[i]), "",
+                    nbins_e[cut_dimensions], bins_e[cut_dimensions]),
       #ifdef BGSUB
-        new TH1D(Form("%sBG_tcounts",  Speriodnames[i]), "", nbins_e, bins_e)
+        new TH1D(Form("%sBG_tcounts",  Speriodnames[i]), "",
+                      nbins_e[cut_dimensions], bins_e[cut_dimensions])
       #endif
     };
     TH2D * fithist[SIG_AND_BG] = {
       new TH2D(Form("%s", Speriodnames[i]), "",
         nnegbins + maxrealtime + additional,
-        -nnegbins, maxrealtime + additional, nbins_e, bins_e),
+        -nnegbins, maxrealtime + additional,
+        nbins_e[cut_dimensions], bins_e[cut_dimensions]),
       #ifdef BGSUB
         new TH2D(Form("%sBG",  Speriodnames[i]), "",
           nnegbins + maxrealtime + additional,
-          -nnegbins, maxrealtime + additional, nbins_e, bins_e)
+          -nnegbins, maxrealtime + additional,
+          nbins_e[cut_dimensions], bins_e[cut_dimensions])
       #endif
     };
 
     const bool rhc = i < nperiodrhc;
 
-    setbranchaddresses(&dat, trees, FOR2D);
-    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc, rhc);
+    setbranchaddresses(&dat, trees, FOR2D, cut_dimensions);
+    fill_2dhist(all_tcounts, fithist, &dat, trees, mindist, minslc, maxslc,
+                rhc, cut_dimensions);
     printf("\nGot %s 2D\n", Speriodnames[i]);
 
-    setbranchaddresses(&dat, trees, FOR1D);
-    if(ALL_TRACKS_GO_IN_THE_DENOMINATOR) // see comments above
-      fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc, rhc);
+    setbranchaddresses(&dat, trees, FOR1D, cut_dimensions);
+    fill_1dhist(all_tcounts, &dat, trees, minslc, maxslc, rhc, cut_dimensions);
     printf("Got %s 1D\n", Speriodnames[i]);
     fflush(stdout);
 

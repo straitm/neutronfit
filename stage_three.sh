@@ -8,6 +8,6 @@ shift 2
 set -o pipefail
 
 grep -ihE "${name:0:2} $region" $@ | \
-  awk '{print $4, $6, $8, $10, $12, $14, $16}' | \
+  awk '{print $4, $6, $8, $10, $12, $14, $16, $17}' | \
   root -n -l -b -q rhc_stage_three.C+'("'$name'", "'$region'")' | \
   tee stage_three.$name.$region.out.txt

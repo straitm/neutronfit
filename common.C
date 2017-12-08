@@ -1,6 +1,7 @@
-// True if we are finding neutrons from 2D information alone, i.e not
-// requiring hits in both x and y
-#define TWO_D_CUT 1
+// Whether we are using neutrons with 2D information alone (usually just
+// one hit) or if we are requiring requiring hits in both x and y.
+enum two_or_three_d { TWOD, THREED, MAX_TWO_OR_THREE_D };
+const char * two_or_three_d_names[MAX_TWO_OR_THREE_D] = { "TWOD", "THREED" };
 
 //#define BGSUB
 
@@ -75,19 +76,8 @@ const double remid_cut = 0.75;
 // the others.  This is because the main detector is an excellent neutron
 // moderator, so many captures are around its edges.  With only a 2D cut, many
 // of these pileup neutrons from the rock are selected.)
-const double npileup_sliceweight =
-#if TWO_D_CUT == 1
-  0.64;
-#else
-  0.80;
-#endif
-
-const double npileup_sliceweight_mucatch =
-#if TWO_D_CUT == 1
-  0.76;
-#else
-  0.81;
-#endif
+const double npileup_sliceweight        [MAX_TWO_OR_THREE_D] = { 0.64, 0.80 };
+const double npileup_sliceweight_mucatch[MAX_TWO_OR_THREE_D] = { 0.76, 0.81 };
 
 // Number of slices per 10**12 POT in RHC and FHC.  The ratio between these
 // sets the relative number of neutrons we think are coming out of the rock.
@@ -103,13 +93,19 @@ const double slc_per_twp_fhc = 0.172;
 // use ~0.55.
 const double max_frac_e_mu = 1.5;
 
-const int nperiodrhc = 2; // 4, 6
-const int nperiodfhc = 4; // 1, 2, 3, 5
+// #define SEPARATED_PERIODS
+
+#ifdef SEPARATED_PERIODS
+  const int nperiodrhc = 2; // 4, 6
+  const int nperiodfhc = 4; // 1, 2, 3, 5
+#else
+  const int nperiodrhc = 1;
+  const int nperiodfhc = 1;
+#endif
 const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
-  //"201712-period46goodbad_rhc.root",
-  //"201712-period1235goodbad_fhc.root"
+#ifdef SEPARATED_PERIODS
   "201712-period4goodbad.root",
   "201712-period6goodbad.root",
 
@@ -117,9 +113,11 @@ const char * const inputfiles[nperiod] = {
   "201712-period2goodbad.root",
   "201712-period3goodbad.root",
   "201712-period5goodbad.root"
+#else
+  "201712-period46goodbad_rhc.root",
+  "201712-period1235goodbad_fhc.root"
+#endif
 };
-
-#define SEPARATED_PERIODS
 
 const char * const Speriodnames[SIG_AND_BG*nperiod] = {
 #ifdef SEPARATED_PERIODS
@@ -165,196 +163,11 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
 
 const int nbeam = 2; // not really generalizable as it stands
 
-//const double bins_e[nbins_e+1] = {0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0 }; // 8
-
-#if TWO_D_CUT == 1
-  const int nbins_e = 6;
-  const double bins_e[nbins_e+1] = { 0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 };
-#else
-  const int nbins_e = 3;
-  const double bins_e[nbins_e+1] = { 0.5, 1.5, 3.0, 6.0 };
-#endif
-#if 0
-  const int nbins_e = 5;
-  const double bins_e[nbins_e+1] = { 0.5, 1.6, 2.7, 3.8, 4.9, 6.0 };
-#endif
-
-double getpar(int i) // 0-indexed!
-{
-  double answer, dum;
-  mn->GetParameter(i, answer, dum);
-  return answer;
-}
-
-double getminerrup(int i) // 0-indexed!
-{
-  // Figure out how many fixed parameters there are below the one
-  // desired. Fixed parameters are, of course, FORTRAN-indexed, but the
-  // array fErp is C-indexed.
-
-  // If there are no fixed parameters, it is just the C-index
-  int wherearewe = i;
-
-  for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
-    if(mn->fIpfix[fixpar] < i+1)
-      wherearewe--;
-
-  return mn->fErp[wherearewe];
-}
-
-double getminerrdn(int i) // 0-indexed!
-{
-  int wherearewe = i;
-  for(int fixpar = 0; fixpar < mn->fNpfix; fixpar++)
-    if(mn->fIpfix[fixpar] < i+1)
-      wherearewe--;
-  return -mn->fErn[wherearewe]; // define all errors as positive
-}
-
-double geterr(int i) // 0-indexed!
-{
-  double val, err;
-  mn->GetParameter(i, val, err);
-  return err;
-}
-
-__attribute__((unused)) static double getlimlo(int i) // 0-indexed!
-{
-  double answer, dum;
-  int idum;
-  TString sdum;
-  mn->mnpout(i, sdum, dum, dum, answer, dum, idum);
-  return answer;
-}
-
-static double getlimup(int i) // 0-indexed!
-{
-  double answer, dum;
-  int idum;
-  TString sdum;
-  mn->mnpout(i, sdum, dum, dum, dum, answer, idum);
-  return answer;
-}
-
-__attribute__((unused)) static void fixat(int i, float v) // 1-indexed!
-{
-  mn->Command(Form("REL %d", i));
-  if(getlimup(i-1)) mn->Command(Form("SET LIM %d", i));
-  mn->Command(Form("SET PAR %d %g", i, v));
-  mn->Command(Form("FIX %d", i));
-}
-
-__attribute__((unused)) static void fixatzero(int i) // 1-indexed!
-{
-  mn->Command(Form("REL %d", i));
-  mn->Command(Form("SET LIM %d", i));
-  mn->Command(Form("SET PAR %d 0", i));
-  mn->Command(Form("FIX %d", i));
-}
-
-static bool onegoodminosup(const int par) // 0-indexed
-{
-  return getminerrup(par) > 0 && getminerrup(par) != 54321.0;
-}
-
-static bool onegoodminosdn(const int par) // 0-indexed
-{ // I define all errors as positive
-  return getminerrdn(par) > 0 && getminerrdn(par) != 54321.0;
-}
-
-static bool onegoodminos(const int par, const bool no_low_ok) // 0-indexed
-{
-  return (no_low_ok || onegoodminosdn(par)) && onegoodminosup(par);
-}
-
-// Get the MINOS error if present (regardless of whether, otherwise the
-// MIGRAD/HESSE error
-static double getbesterrup(const int par) // 0-indexed
-{
-  return onegoodminosup(par)? getminerrup(par): geterr(par);
-}
-
-static double getbesterrdn(const int par) // 0-indexed
-{
-  return onegoodminosdn(par)? getminerrdn(par): geterr(par);
-}
-
-void mncommand()
-{
-  std::string command;
-  while(true){
-    printf("MINUIT> ");
-    if(!getline(std::cin, command)) break;
-    if(command == "exit") break;
-    mn->Command(command.c_str());
-  }
-}
-
-static double min(const double a, const double b)
-{
-  return a < b? a: b;
-}
-
-__attribute__((unused)) static double max(const double a, const double b)
-{
-  return a > b? a: b;
-}
-
-static double product_error(const double x, const double y,
-                            const double xe, const double ye)
-{
-  return sqrt(y*y*pow(xe, 2) + x*x*pow(ye, 2));
-}
-
-__attribute__((unused))
-static double ratio_error(const double x, const double y,
-                          const double xe, const double ye)
-{
-  return 1/y * sqrt(pow(xe, 2) + x*x*pow(ye/y, 2));
-}
-
-
-static void stylegraph(TGraphAsymmErrors * g, const int color,
-                       const int linestyle, const int marker,
-                       const int linewidth, const double markersize_)
-{
-  g->SetMarkerStyle(marker);
-  g->SetLineStyle(linestyle);
-  g->SetLineColor(color);
-  g->SetMarkerColor(color);
-  g->SetLineWidth(linewidth);
-  g->SetMarkerSize(markersize_);
-}
-
-static TGraphAsymmErrors *
-newgraph(const int color, const int linestyle, const int marker,
-         const int linewidth)
-{
-  TGraphAsymmErrors * g = new TGraphAsymmErrors;
-  stylegraph(g, color, linestyle, marker, linewidth, 0.3);
-  return g;
-}
-
-static double gdrawmax(const TGraphAsymmErrors * const g)
-{
-  double max = -1e300;
-  for(int i = 0; i < g->GetN(); i++){
-    const double y = g->GetY()[i] + g->GetErrorYhigh(i);
-    if(y > max) max = y;
-  }
-  return max;
-}
-
-TBranch * setbranchaddress(const char * const name, float * d, TTree * t)
-{
-  t->SetBranchStatus(name, 1);
-  t->SetBranchAddress(name, d);
-  return t->GetBranch(name);
-}
-
-TBranch * setbranchaddress(const char * const name, int * d, TTree * t)
-{
-  t->SetBranchStatus(name, 1);
-  t->SetBranchAddress(name, d);
-  return t->GetBranch(name);
-}
+const int nbins_e[MAX_TWO_OR_THREE_D] = { 6, 3 };
+const double bins_e[MAX_TWO_OR_THREE_D][6+1] = { // janky...
+  { 0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 },
+  { 0.5, 1.5  , 3.0  , 6.0  ,  -1,  -1,  -1 }
+};
+// Other possibilities
+// 5: 0.5, 1.6, 2.7, 3.8, 4.9, 6.0
+// 8: 0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0

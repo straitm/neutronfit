@@ -18,7 +18,7 @@
 #include <vector>
 #include <string>
 
-// If defined, simplify output plots to combine the two 
+// If defined, simplify output plots to combine the two
 // categories of NC events.  No effect on the fit.
 #define COMBINENC
 
@@ -29,12 +29,15 @@ static const int npar = 9;
 static TMinuit * mn = NULL;
 
 #include "common.C"
+#include "util.C"
 
-static double residuals[nbins_e*nbeam*2][nbins_e*nbeam*2];
+static const int N_AND_B12 = 2;
+
+static double ** residuals;
 
 // filled by Macro call at start of running
 // Apparently the way Macro() is implemented means this can't be static.
-double hessian[nbins_e*nbeam*2][nbins_e*nbeam*2];
+double ** hessian;
 
 enum conttype { oned68, twod68, twod90 };
 
@@ -51,6 +54,8 @@ static const double b12eff_error = 0.2;
 /*********************************************************************/
 
 static bool muoncatcher = true; // set at entry point
+static two_or_three_d cut_dimensions = TWOD; // ditto
+static int g_nbins_e = 0; // ditto
 
 static double mum_nyield_nominal = 0;
 static double mum_nyield_error   = 0;
@@ -128,7 +133,7 @@ static const char * const trktypenames[MAXTRKTYPE] =
 
 static TH1D * makehist(const char * const name)
 {
-  return new TH1D(name, "", nbins_e, bins_e);
+  return new TH1D(name, "", g_nbins_e, bins_e[cut_dimensions]);
 }
 
 static TH1D ** makehistset(const char * const basename)
@@ -139,17 +144,17 @@ static TH1D ** makehistset(const char * const basename)
   return set;
 }
 
-static TH1D ** fhc_reco = makehistset("fhc_reco");
-static TH1D ** rhc_reco = makehistset("rhc_reco");
+static TH1D ** fhc_reco = NULL;
+static TH1D ** rhc_reco = NULL;
 
-static TH1D ** rhc_neut = makehistset("rhc_neut");
-static TH1D ** rhc_b12  = makehistset("rhc_b12");
-static TH1D ** fhc_neut = makehistset("fhc_neut");
-static TH1D ** fhc_b12  = makehistset("fhc_b12");
+static TH1D ** rhc_neut = NULL;
+static TH1D ** rhc_b12  = NULL;
+static TH1D ** fhc_neut = NULL;
+static TH1D ** fhc_b12  = NULL;
 
 // Total number of tracks in each beam's MC
-static TH1D * fhc_tracks = makehist("fhc_tracks");
-static TH1D * rhc_tracks = makehist("rhc_tracks");
+static TH1D * fhc_tracks = NULL;
+static TH1D * rhc_tracks = NULL;
 
 // Makes either one or two TGraphAsymmErrors, depending on SIG_AND_BG
 static TGraphAsymmErrors ** make_tgae_sigandbg_set()
@@ -173,10 +178,37 @@ static TGraphAsymmErrors * g_b12_rhc = new TGraphAsymmErrors;
 static TGraphAsymmErrors * g_b12_fhc = new TGraphAsymmErrors;
 
 // Out here so we can draw them
-static TH1D * tot_rhc_neut = makehist("tot_rhc_neut");
-static TH1D * tot_fhc_neut = makehist("tot_fhc_neut");
-static TH1D * tot_rhc_b12  = makehist("tot_rhc_b12");
-static TH1D * tot_fhc_b12  = makehist("tot_fhc_b12");
+static TH1D * tot_rhc_neut = NULL;
+static TH1D * tot_fhc_neut = NULL;
+static TH1D * tot_rhc_b12  = NULL;
+static TH1D * tot_fhc_b12  = NULL;
+
+// All this has to happen after we get nbins_e from the entry point
+static void init()
+{
+  residuals = (double **)malloc(sizeof(double *) * g_nbins_e*nbeam*N_AND_B12);
+  hessian   = (double **)malloc(sizeof(double *) * g_nbins_e*nbeam*N_AND_B12);
+  for(int i = 0; i < g_nbins_e*nbeam*N_AND_B12; i++){
+    residuals[i] = (double *)malloc(sizeof(double) * g_nbins_e*nbeam*N_AND_B12);
+    hessian  [i] = (double *)malloc(sizeof(double) * g_nbins_e*nbeam*N_AND_B12);
+  }
+
+  fhc_reco = makehistset("fhc_reco");
+  rhc_reco = makehistset("rhc_reco");
+
+  rhc_neut = makehistset("rhc_neut");
+  rhc_b12  = makehistset("rhc_b12");
+  fhc_neut = makehistset("fhc_neut");
+  fhc_b12  = makehistset("fhc_b12");
+
+  fhc_tracks = makehist("fhc_tracks");
+  rhc_tracks = makehist("rhc_tracks");
+
+  tot_rhc_neut = makehist("tot_rhc_neut");
+  tot_fhc_neut = makehist("tot_fhc_neut");
+  tot_rhc_b12  = makehist("tot_rhc_b12");
+  tot_fhc_b12  = makehist("tot_fhc_b12");
+}
 
 static std::vector<double> getpars()
 {
@@ -335,9 +367,9 @@ static double compare(const double * const __restrict__ dat,
                       const double * const __restrict__ model)
 {
   double chi2 = 0;
-  for(int i = 0; i < nbins_e*nbeam*2 /* n and b12 */; i++){
-    for(int j = i; j < nbins_e*nbeam*2; j++){
-      if(!useb12 && (i >= nbins_e*nbeam || j >= nbins_e*nbeam)) continue;
+  for(int i = 0; i < g_nbins_e*nbeam*N_AND_B12; i++){
+    for(int j = i; j < g_nbins_e*nbeam*N_AND_B12; j++){
+      if(!useb12 && (i >= g_nbins_e*nbeam || j >= g_nbins_e*nbeam)) continue;
 
       const double datai = dat[i];
       const double predi = model[i];
@@ -391,18 +423,20 @@ static double pi_penalty(const double npimu_stop, const double n_flight)
 
   const double cov = corr_pi_stop_flight * n_flight_error * npimu_stop_error;
 
+  const int flight_and_stop = 2;
+
   const double det = pow(n_flight_error,2) * pow(npimu_stop_error,2) - cov*cov;
-  const double hessian[2][2] = {
+  const double phessian[flight_and_stop][flight_and_stop] = {
     { pow(n_flight_error, 2)/det, -cov/det                     },
-    {  -cov/det                     , pow(npimu_stop_error, 2)/det }
+    {  -cov/det                 , pow(npimu_stop_error, 2)/det }
   };
 
   double chi2 = 0;
 
-  for(int i = 0; i < 2; i++)
-    for(int j = 0; j < 2; j++)
-      chi2 += hessian[i][j] * (i == 0?delta_stop: delta_flight)
-                            * (j == 0?delta_stop: delta_flight);
+  for(int i = 0; i < flight_and_stop; i++)
+    for(int j = 0; j < flight_and_stop; j++)
+      chi2 += phessian[i][j] * (i == 0?delta_stop: delta_flight)
+                             * (j == 0?delta_stop: delta_flight);
   return chi2;
 }
 
@@ -443,17 +477,17 @@ static void fcn(__attribute__((unused)) int & np,
   // on the NC contamination, which we do, from GENIE
   //chi2 += pow((ncscale - nc_nominal)/nc_error, 2);
 
-  static double alldat[nbins_e*4],
-                alldatup[nbins_e*4],
-                alldatdn[nbins_e*4];
+  static double * alldat   = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12),
+                * alldatup = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12),
+                * alldatdn = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12);
   static bool first = true;
   if(first){
     first = false;
-    TGraphAsymmErrors * ingraphs[4] = {
+    TGraphAsymmErrors * ingraphs[nbeam*N_AND_B12] = {
       g_n_rhc, g_n_fhc, g_b12_rhc, g_b12_fhc };
 
     int i = 0;
-    for(int g = 0; g < 4; g++){
+    for(int g = 0; g < nbeam*N_AND_B12; g++){
       for(int j = 0; j < ingraphs[g]->GetN(); j++){
         alldat[i] = ingraphs[g]->GetY()[j];
         alldatup[i] = ingraphs[g]->GetErrorYhigh(j);
@@ -463,10 +497,11 @@ static void fcn(__attribute__((unused)) int & np,
     }
   }
 
-  double allmodel[nbins_e*4];
-  TH1D * inhists[4] = { tot_rhc_neut, tot_fhc_neut, tot_rhc_b12, tot_fhc_b12 };
+  double allmodel[g_nbins_e*nbeam*N_AND_B12];
+  TH1D * inhists[nbeam*N_AND_B12] =
+    { tot_rhc_neut, tot_fhc_neut, tot_rhc_b12, tot_fhc_b12 };
   int i = 0;
-  for(int g = 0; g < 4; g++)
+  for(int g = 0; g < nbeam*N_AND_B12; g++)
     for(int b = 1; b <= inhists[g]->GetNbinsX(); b++)
        allmodel[i++] = inhists[g]->GetBinContent(b);
 
@@ -560,7 +595,8 @@ void fill_hists(const char * const file, TH1D ** h, TH1D * tracks,
 
     if(trklen < trklen_cut) continue;
     if(remid < remid_cut) continue;
-    if(slce > bins_e[nbins_e] || slce < bins_e[0]) continue;
+    if(slce > bins_e[cut_dimensions][g_nbins_e] ||
+       slce < bins_e[cut_dimensions][0]) continue;
 
     //if(nslc < minslc || nslc > maxslc) continue;
 
@@ -754,21 +790,27 @@ static double mean_slice(const bool nm, const float minslc, const float maxslc)
   // *Within* the allowed range (minslc to maxslc), find the mean.  Definition
   // must stay in sync with that in pass_intensity() in rhc_stage_one.C.
   rhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_r",
-      npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight)),
+      npileup_sliceweight[cut_dimensions],
+      slc_per_twp_rhc*(1-npileup_sliceweight[cut_dimensions])),
     Form("i == 0 && contained && primary && "
          "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
-         npileup_sliceweight, slc_per_twp_rhc*(1-npileup_sliceweight),
+         npileup_sliceweight[cut_dimensions],
+         slc_per_twp_rhc*(1-npileup_sliceweight[cut_dimensions]),
          (minslc+maxslc)/2, (maxslc-minslc)/2));
 
   fhc.Draw(Form("(nslc-2)*%f + %f * pot >> slc_f",
-      npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight)),
+      npileup_sliceweight[cut_dimensions],
+      slc_per_twp_fhc*(1-npileup_sliceweight[cut_dimensions])),
     Form("i == 0 && contained && primary && "
          "abs((nslc-2)*%f + %f * pot  -  %f) < %f",
-         npileup_sliceweight, slc_per_twp_fhc*(1-npileup_sliceweight),
+         npileup_sliceweight[cut_dimensions],
+         slc_per_twp_fhc*(1-npileup_sliceweight[cut_dimensions]),
          (minslc+maxslc)/2, (maxslc-minslc)/2));
 
-  printf("Getting mean for %4.1f-%4.1f slices: RHC %7d events, FHC %7d\n",
-         minslc, maxslc, slc_r.GetEntries(), slc_f.GetEntries());
+  printf("Mean for %4.1f-%4.1f slices: RHC %7d events: %4.2f, FHC %7d: %4.2f\n",
+         minslc, maxslc,
+         int(slc_r.GetEntries()), slc_r.GetMean(),
+         int(slc_f.GetEntries()), slc_f.GetMean());
 
   return (slc_r.GetMean() + slc_f.GetMean())/2;
 }
@@ -789,7 +831,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   //////////////////////////////////////////////////////////////////////
   const bool logy = false;
-  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 1000, logy?1e-4:-2.0, 2.0);
+  TH2D * dum = new TH2D("dm", "", 100, 0, 10, 10000, logy?1e-4:-2.0, 2.0);
   dum->GetYaxis()->SetTitleSize(tsize);
   dum->GetXaxis()->SetTitleSize(tsize);
   dum->GetYaxis()->SetLabelSize(tsize);
@@ -806,24 +848,25 @@ void draw(const int mindist, const float minslc, const float maxslc)
   stylehist(tot_fhc_neut, kBlue, 2);
   stylehistset( fhc_neut, kBlue);
 
-  dum2->GetXaxis()->SetRangeUser(bins_e[0], bins_e[nbins_e]);
+  dum2->GetXaxis()->SetRangeUser(bins_e[cut_dimensions][0],
+                                 bins_e[cut_dimensions][g_nbins_e]);
   dum2->GetYaxis()->SetRangeUser(
     min(0, 1.01*min(min(gdrawmin(g_n_rhc), tot_rhc_neut->GetMinimum()),
              min(gdrawmin(g_n_fhc), tot_fhc_neut->GetMinimum()))),
-    1.1*max(max(g_n_rhc->GetMaximum(), tot_rhc_neut->GetMaximum()),
-            max(g_n_fhc->GetMaximum(), tot_fhc_neut->GetMaximum()))
+    1.1*max(max(gdrawmax(g_n_rhc), tot_rhc_neut->GetMaximum()),
+            max(gdrawmax(g_n_fhc), tot_fhc_neut->GetMaximum()))
             );
   dum2->GetYaxis()->SetTitle("Visible neutrons/track");
   dum2->GetYaxis()->SetTitleOffset(1.25);
-  dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
+  dum2->GetXaxis()->SetTitle("Reconstructed E_{#nu} CC (GeV)");
   dum2->GetYaxis()->CenterTitle();
   dum2->GetXaxis()->CenterTitle();
 
   //
   TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
   const std::string outpdfname =
-    Form("fit_stage_two_mindist%d_nslc%.1f_%.1f_%s.pdf", mindist, minslc, maxslc,
-         muoncatcher?"muoncatcher":"main");
+    Form("fit_stage_two_mindist%d_nslc%.1f_%.1f_%s_%s.pdf", mindist, minslc, maxslc,
+         muoncatcher?"muoncatcher":"main", two_or_three_d_names[cut_dimensions]);
   c2r->Print((outpdfname + "[").c_str());
   c2r->SetLogy(logy);
   c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
@@ -930,7 +973,6 @@ void draw(const int mindist, const float minslc, const float maxslc)
 #endif
   legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
 
-  t.Draw();
   c2f->Print(outpdfname.c_str());
 
   //////////////////////////////////////////////////////////////////////
@@ -944,7 +986,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   dum3->GetXaxis()->SetTitleSize(tsize);
   dum3->GetYaxis()->SetLabelSize(tsize);
   dum3->GetXaxis()->SetLabelSize(tsize);
-  dum3->GetXaxis()->SetTitle("NC scale relative to MC");
+  dum3->GetXaxis()->SetTitle("FHC & RHC NC scale relative to MC");
   dum3->GetYaxis()->SetTitle("RHC #nu_{#mu} scale relative to MC");
   dum3->GetXaxis()->CenterTitle();
   dum3->GetYaxis()->CenterTitle();
@@ -1062,14 +1104,17 @@ void draw(const int mindist, const float minslc, const float maxslc)
   mn->Command("MINOS 10000 4");
   if(useb12) mn->Command("MINOS 10000 5");
 
-  printf("NC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f\n",
+  printf("NC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f %s\n",
     muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(0), getbesterrup(0), getbesterrdn(0),
-    mean_slice(false, minslc, maxslc));
-  printf("NM %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f\n",
+    mean_slice(false, minslc, maxslc),
+    two_or_three_d_names[cut_dimensions]);
+
+  printf("NM %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f %s\n",
     muoncatcher?"muoncatcher":"main",
     mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1),
-    mean_slice(true , minslc, maxslc));
+    mean_slice(true , minslc, maxslc),
+    two_or_three_d_names[cut_dimensions]);
   c3->cd(); // mean_slice cd()s away
 
   onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
@@ -1121,7 +1166,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   stylehistset(rhc_reco, kRed);
 
   rhc_reco[numu]->GetYaxis()->SetTitle("Probability/bin");
-  rhc_reco[numu]->GetXaxis()->SetTitle("Reconstructed E_{#nu} (GeV)");
+  rhc_reco[numu]->GetXaxis()->SetTitle("Reconstructed E_{#nu} CC (GeV)");
 
   // neutron producers
   TH1 * norm1 = fhc_reco[numu]->DrawNormalized("hist");
@@ -1155,16 +1200,17 @@ void draw(const int mindist, const float minslc, const float maxslc)
   }
 
 
-  TH2D * hresid = new TH2D("hresid", "", 2*2*nbins_e, 0, 2*2*nbins_e,
-                                         2*2*nbins_e, 0, 2*2*nbins_e);
+  TH2D * hresid = new TH2D("hresid", "",
+    N_AND_B12*nbeam*g_nbins_e, 0, N_AND_B12*nbeam*g_nbins_e,
+    N_AND_B12*nbeam*g_nbins_e, 0, N_AND_B12*nbeam*g_nbins_e);
   mn->Command("CALL");
 
   // If an input variable is up against a limit and the fit results
   // are garbage, check if one of these is huge.  If so, probably
   // the hessian is messed up.
 
-  for(int i = 0; i < nbins_e*nbeam*2; i++)
-    for(int j = 0; j < nbins_e*nbeam*2; j++)
+  for(int i = 0; i < g_nbins_e*nbeam*N_AND_B12; i++)
+    for(int j = 0; j < g_nbins_e*nbeam*N_AND_B12; j++)
       hresid->SetBinContent(i+1, j+1, fabs(residuals[i][j]));
 
   c4->SetLogz();
@@ -1180,8 +1226,6 @@ void draw(const int mindist, const float minslc, const float maxslc)
 // pileup background histograms (bgmult == 0), no subtraction occurs.
 static void do_background_subtraction()
 {
-  const int N_AND_B12 = 2;
-
   TGraphAsymmErrors ** raw_gs[nbeam*N_AND_B12]
     = { raw_g_n_rhc, raw_g_n_fhc, raw_g_b12_rhc, raw_g_b12_fhc };
   TGraphAsymmErrors *      gs[nbeam*N_AND_B12]
@@ -1206,11 +1250,16 @@ static void do_background_subtraction()
 }
 
 void rhc_stage_two(const char * const input, const int mindist,
-                   const float minslc, const float maxslc, const string region)
+                   const float minslc, const float maxslc, const string region,
+                   const two_or_three_d cut_dimensions_)
 {
   if(mindist < 0) return; // to compile only
 
   muoncatcher = region == "muoncatcher";
+  cut_dimensions = cut_dimensions_;
+  g_nbins_e = nbins_e[cut_dimensions];
+
+  init();
 
   mum_nyield_nominal = muoncatcher?0.855:0.1810;
   mum_nyield_error   = muoncatcher?0.036:0.0305;
