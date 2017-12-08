@@ -1120,16 +1120,16 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   c1->Print(Form("%s[", filename.c_str()));
 
-  for(int i = 0; i < g_nbins_e; i++)
-    for(int beam = 0; beam < nbeam; beam++)
+  for(int beam = 0; beam < nbeam; beam++)
+    for(int i = 0; i < g_nbins_e; i++)
       for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
         draw_ee_beam(beam, i, sigorbg, filename.c_str(), cut_dimensions);
 
   // Print out a per-period set of histograms unless we have merged all RHC and
   // FHC periods together, in which case that would be redundant.
   if(nbeam < nperiod)
-    for(int i = 0; i < g_nbins_e; i++)
-      for(int period = 0; period < nperiod; period++)
+    for(int period = 0; period < nperiod; period++)
+      for(int i = 0; i < g_nbins_e; i++)
         for(int sigorbg = 0; sigorbg < SIG_AND_BG; sigorbg++)
           draw_ee(period + sigorbg*nperiod, i, filename.c_str(), cut_dimensions);
 
