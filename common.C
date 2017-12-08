@@ -93,7 +93,7 @@ const double slc_per_twp_fhc = 0.172;
 // use ~0.55.
 const double max_frac_e_mu = 1.5;
 
-// #define SEPARATED_PERIODS
+#define SEPARATED_PERIODS
 
 #ifdef SEPARATED_PERIODS
   const int nperiodrhc = 2; // 4, 6
