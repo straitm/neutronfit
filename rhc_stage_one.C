@@ -1031,7 +1031,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
   if(cut_dimensions == THREED || mindist <= 2) n_lifetime_priorerr = 2.;
 
   // From a loose cut running of this program
-  n_lifetime_nominal = muoncatcher?45:52.7;
+  n_lifetime_nominal = muoncatcher?59.4:52.7;
 
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod * SIG_AND_BG; i++){
