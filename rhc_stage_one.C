@@ -91,6 +91,9 @@ double n_diffusion_nominal = 0; // set below using mindist
 // difference.
 static const double n_start_conv_time = (1.60 + 0.9)/2;
 
+// Length of a NuMI spill.  Controls prompt pile-up component of the fit.
+static const double numi_len = 9.6; // us
+
 // The meaning of the visual y axis in terms of number of selected
 // cluster per track per bin.
 static const double yminpertrack = 1e-6,
@@ -270,27 +273,30 @@ static TF1 * ee_b12 =
   new TF1("ee_b12", Form("[8]*(abs([3])/%f * exp(-x/%f))", b12life, b12life),
           holex_hi, maxrealtime+additional);
 
-static TF1 * ee_pileup = new TF1("ee_b12",
-  "[8]*((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10))",
+static TF1 * ee_pileup = new TF1("ee_pileup",
+  Form("[8]*((x >= -%f && x <= %f))*(abs([7])*abs(abs(x)-%f))",
+       numi_len, numi_len, numi_len),
   -nnegbins, maxrealtime+additional);
 
 // The sum of all the above. TF1::Draw() has a lot of trouble with the
 // discontinuity at zero, so split into the positive and negative parts.
 static TF1 * ee_pos = new TF1("ee_pos",
   Form("[8]*(abs([6]) + "
-  "(x >= 0)*("
-    "abs([5])/[4] * exp(-x/[4]) + "
-    "abs([2])/([0]-%f) * (exp(-x/[0]) - exp(-x/%f))"
-    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
-    "+ abs([3])/%f * exp(-x/%f)"
-  ") + "
-  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
-  n_start_conv_time, n_start_conv_time, b12life, b12life),
+    "(x >= 0)*("
+      "abs([5])/[4] * exp(-x/[4]) + "
+      "abs([2])/([0]-%f) * (exp(-x/[0]) - exp(-x/%f))"
+      "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x))"
+      "+ abs([3])/%f * exp(-x/%f)"
+    ") + "
+    "((x >= -%f && x <= %f))*(abs([7])*abs(abs(x)-%f)))",
+    n_start_conv_time, n_start_conv_time, b12life, b12life,
+    numi_len, numi_len, numi_len),
   holex_hi, maxrealtime+additional);
 
 static TF1 * ee_neg = new TF1("ee_neg",
-  "[8]*(abs([6]) + "
-  "((x >= -10 && x <= 10))*(abs([7])*abs(abs(x)-10)))",
+  Form("[8]*(abs([6]) + "
+       "((x >= -%f && x <= %f))*(abs([7])*abs(abs(x)-%f)))",
+       numi_len, numi_len, numi_len),
   -nnegbins, holex_lo);
 
 const int ntf1s = 7; // Number of TF1s that we are going to draw
@@ -409,8 +415,8 @@ static void fcn(__attribute__((unused)) int & np,
                 + fabs(norm_b12*sca) * exp_x_b12life;
         }
 
-        if((x >= -10 && x <= holex_lo) || (x >= holex_hi && x <= 10))
-          model += fabs(par[pileup_nc+off_period])*(10-fabs(x))
+        if((x >= -numi_len && x <= holex_lo) || (x >= holex_hi && x <= numi_len))
+          model += fabs(par[pileup_nc+off_period])*(numi_len-fabs(x))
                    * (isbg?bgmult:1);
 
         const double data = alldata[periodsg][tb][eb];
