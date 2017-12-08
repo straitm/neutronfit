@@ -1,11 +1,27 @@
-all: nm_slc_summary_mindist3_main_TWOD.pdf          \
+all: nm_slc_summary_mindist1_main_TWOD.pdf          \
+     nc_slc_summary_mindist1_main_TWOD.pdf          \
+     nm_slc_summary_mindist1_muoncatcher_TWOD.pdf   \
+     nc_slc_summary_mindist1_muoncatcher_TWOD.pdf   \
+     nm_slc_summary_mindist1_main_THREED.pdf        \
+     nc_slc_summary_mindist1_main_THREED.pdf        \
+     nm_slc_summary_mindist1_muoncatcher_THREED.pdf \
+     nc_slc_summary_mindist1_muoncatcher_THREED.pdf \
+     nm_slc_summary_mindist3_main_TWOD.pdf          \
      nc_slc_summary_mindist3_main_TWOD.pdf          \
      nm_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
      nc_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
      nm_slc_summary_mindist3_main_THREED.pdf        \
      nc_slc_summary_mindist3_main_THREED.pdf        \
      nm_slc_summary_mindist3_muoncatcher_THREED.pdf \
-     nc_slc_summary_mindist3_muoncatcher_THREED.pdf
+     nc_slc_summary_mindist3_muoncatcher_THREED.pdf \
+     nm_slc_summary_mindist6_main_TWOD.pdf          \
+     nc_slc_summary_mindist6_main_TWOD.pdf          \
+     nm_slc_summary_mindist6_muoncatcher_TWOD.pdf   \
+     nc_slc_summary_mindist6_muoncatcher_TWOD.pdf   \
+     nm_slc_summary_mindist6_main_THREED.pdf        \
+     nc_slc_summary_mindist6_main_THREED.pdf        \
+     nm_slc_summary_mindist6_muoncatcher_THREED.pdf \
+     nc_slc_summary_mindist6_muoncatcher_THREED.pdf
 
 define mindist_rule
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
