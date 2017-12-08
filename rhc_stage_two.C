@@ -43,6 +43,7 @@ enum conttype { oned68, twod68, twod90 };
 
 static const double tsize = 0.055;
 
+static const bool logy = false;
 static const double leftmargin = 0.135;
 static const double topmargin  = tsize*1.33;
 static const double rightmargin= 0.03;
@@ -701,15 +702,6 @@ void make_mn()
                               fhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
 }
 
-static void styleleg(TLegend * leg)
-{
-  leg->SetTextFont(42);
-  leg->SetBorderSize(0);
-  leg->SetFillStyle(0);
-  leg->SetTextSize(tsize);
-  leg->SetNColumns(1);
-}
-
 TGraph * wrest_contour(const char * const name)
 {
   TGraph * cont = dynamic_cast<TGraph *>(mn->GetPlot());
@@ -718,6 +710,33 @@ TGraph * wrest_contour(const char * const name)
     cont->SetLineWidth(2);
   }
   return cont;
+}
+
+static TCanvas * stylecan(TCanvas * can)
+{
+  can->SetTickx(1);
+  can->SetTicky(1);
+  can->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  can->SetLogy(logy);
+  return can;
+}
+
+static void stylecontourleg(TLegend * leg)
+{
+  leg->SetTextFont(42);
+  leg->SetBorderSize(0);
+  leg->SetTextSize(tsize*9./10.95);
+  leg->SetFillStyle(0);
+  leg->SetMargin(0.074);
+}
+
+static void styleleg(TLegend * leg)
+{
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetMargin(0.23);
+  leg->SetTextFont(42);
+  leg->SetTextSize(tsize);
 }
 
 void stylehist(TH1 * h, const int color, const int width,
@@ -830,7 +849,6 @@ void draw(const int mindist, const float minslc, const float maxslc)
   t.SetY(1-0.02);
 
   //////////////////////////////////////////////////////////////////////
-  const bool logy = false;
   TH2D * dum = new TH2D("dm", "", 100, 0, 10, 10000, logy?1e-4:-2.0, 2.0);
   dum->GetYaxis()->SetTitleSize(tsize);
   dum->GetXaxis()->SetTitleSize(tsize);
@@ -863,22 +881,20 @@ void draw(const int mindist, const float minslc, const float maxslc)
   dum2->GetXaxis()->CenterTitle();
 
   //
-  TCanvas * c2r = new TCanvas("rhc2r", "rhc2r");
+  TCanvas * c2r = stylecan(new TCanvas("rhc2r", "rhc2r"));
   const std::string outpdfname =
     Form("fit_stage_two_mindist%d_nslc%.1f_%.1f_%s_%s.pdf", mindist, minslc, maxslc,
          muoncatcher?"muoncatcher":"main", two_or_three_d_names[cut_dimensions]);
   c2r->Print((outpdfname + "[").c_str());
-  c2r->SetLogy(logy);
-  c2r->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
   dum2->Draw();
 
   const double one_entry_leg_y1  = 0.90;
-  const double four_entry_leg_y1 = 1-topmargin-0.3
+  const double four_entry_leg_y1 = 1-topmargin-0.39
 #ifdef COMBINENC
     +0.05
 #endif
   ;
-  const double leg_y2 = 1-topmargin-0.01;
+  const double leg_y2 = 1-topmargin-0.03;
   const double leg_x1 = leftmargin + 0.02;
   const double leg_x2 = leftmargin + 0.33;
 
@@ -892,7 +908,8 @@ void draw(const int mindist, const float minslc, const float maxslc)
                               leg_x2,
                               leg_y2);
   styleleg(leg);
-  leg->AddEntry(g_n_rhc, "RHC data", "lpe");
+  leg->AddEntry((TH1D*)NULL, "NOvA ND #bar{#nu}_{#mu} mode", "");
+  leg->AddEntry(g_n_rhc, "Data", "lpe");
   leg->Draw();
 
   if(print_wo_fit) c2r->Print(outpdfname.c_str());
@@ -913,30 +930,26 @@ void draw(const int mindist, const float minslc, const float maxslc)
 #endif
   };
 
-  for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++) // wait, what?
-    for(int h = 0; h < ndrawhists; h++)
-      c2hists[h]->Draw("histsame][");
+  for(int h = 0; h < ndrawhists; h++) c2hists[h]->Draw("histsame][");
 
   leg->SetY1NDC(four_entry_leg_y1);
-  leg->AddEntry(tot_rhc_neut, "RHC fit", "l");
+  leg->AddEntry(tot_rhc_neut, "Fit", "l");
 #ifdef COMBINENC
   // Pretty sketchy, but turns out to be ok since they are all updated
   // during the fit anyway.
   rhc_neut[piflight]->Add(rhc_neut[stoppi]);
-  leg->AddEntry(rhc_neut[piflight], "RHC neutral current", "l");
+  leg->AddEntry(rhc_neut[piflight], "Neutral current", "l");
 #else
-  leg->AddEntry(rhc_neut[piflight], "RHC #pi^{#pm}, p in flight", "l");
-  leg->AddEntry(rhc_neut[stoppi], "RHC stopped #pi^{#minus}", "l");
+  leg->AddEntry(rhc_neut[piflight], "#pi^{#pm}, p in flight", "l");
+  leg->AddEntry(rhc_neut[stoppi], "Stopped #pi^{#minus}", "l");
 #endif
-  leg->AddEntry(rhc_neut[numu], "RHC #nu_{#mu}", "l");
+  leg->AddEntry(rhc_neut[numu], "#nu_{#mu} #rightarrow #mu^{#minus}", "l");
 
   t.Draw();
   c2r->Print(outpdfname.c_str());
 
   //
-  TCanvas * c2f = new TCanvas("rhc2f", "rhc2f");
-  c2f->SetLogy(logy);
-  c2f->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  TCanvas * c2f = stylecan(new TCanvas("rhc2f", "rhc2f"));
   dum2->Draw();
 
   draw_with_visible_errors_and_leak_memory(g_n_fhc);
@@ -945,7 +958,8 @@ void draw(const int mindist, const float minslc, const float maxslc)
                                leg_x2,
                                leg_y2);
   styleleg(legf);
-  legf->AddEntry(g_n_fhc, "FHC data", "lpe");
+  legf->AddEntry((TH1D*)NULL, "NOvA ND #nu_{#mu} mode", "");
+  legf->AddEntry(g_n_fhc, "Data", "lpe");
   legf->Draw();
   t.Draw();
   if(print_wo_fit) c2f->Print(outpdfname.c_str());
@@ -958,26 +972,24 @@ void draw(const int mindist, const float minslc, const float maxslc)
     fhc_neut[stoppi],
 #endif
   };
-  for(int i = 1; i <= tot_rhc_neut->GetNbinsX(); i++)
-    for(int h = 0; h < ndrawhists; h++)
-      c2histsf[h]->Draw("histsame][");
+
+  for(int h = 0; h < ndrawhists; h++) c2histsf[h]->Draw("histsame][");
 
   legf->SetY1NDC(four_entry_leg_y1);
-  legf->AddEntry(tot_fhc_neut, "FHC fit", "l");
+  legf->AddEntry(tot_fhc_neut, "Fit", "l");
 #ifdef COMBINENC
   fhc_neut[piflight]->Add(fhc_neut[stoppi]);
-  legf->AddEntry(fhc_neut[piflight], "FHC neutral current", "l");
+  legf->AddEntry(fhc_neut[piflight], "Neutral current", "l");
 #else
-  legf->AddEntry(fhc_neut[piflight], "FHC #pi^{#pm}, p in flight", "l");
-  legf->AddEntry(fhc_neut[stoppi], "FHC stopped #pi^{#minus}", "l");
+  legf->AddEntry(fhc_neut[piflight], "#pi^{#pm}, p in flight", "l");
+  legf->AddEntry(fhc_neut[stoppi], "Stopped #pi^{#minus}", "l");
 #endif
-  legf->AddEntry(fhc_neut[numu], "FHC #nu_{#mu}", "l");
+  legf->AddEntry(fhc_neut[numu], "#nu_{#mu} #rightarrow #mu^{#minus}", "l");
 
   c2f->Print(outpdfname.c_str());
 
   //////////////////////////////////////////////////////////////////////
-  TCanvas * c3 = new TCanvas("rhc3", "rhc3");
-  c3->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  TCanvas * c3 = stylecan(new TCanvas("rhc3", "rhc3"));
 
   const double ncmin = 0, ncmax = 2.4,
     nmmin = 0.0, nmmax = 2.6;
@@ -1124,14 +1136,9 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   mn->Command(Form("SET ERR %f", TMath::ChisquareQuantile(0.90, 2))); // put back
 
-  leg = new TLegend(leftmargin, 0.67, 1-rightmargin, 1-topmargin);
-  leg->SetTextFont(42);
-  leg->SetBorderSize(1);
-  leg->SetTextSize(tsize*9./11.);
-  leg->SetFillStyle(1001);
-  leg->SetMargin(0.1);
+  leg = new TLegend(leftmargin+0.03, 0.67, 1-rightmargin, 1-topmargin-0.03);
+  stylecontourleg(leg);
   if(cont_full != NULL){
-    leg->AddEntry((TH1D*)NULL, "", "");
     leg->AddEntry(cont_full,
 #if 0
       Form("90%%, effective stopped #pi^{#minus}/#mu^{#minus} n yield %.1f#pm%.1f; "
@@ -1147,20 +1154,19 @@ void draw(const int mindist, const float minslc, const float maxslc)
   }
   if(cont_perfect_nuclear != NULL)
     leg->AddEntry(cont_perfect_nuclear,
-                  "perfectly known nuclear stopping #pi/#mu neutron yield", "l");
+                  "+ perfectly known nuclear stopping #pi/#mu neutron yield", "l");
   if(cont_perfect_ratio != NULL)
     leg->AddEntry(cont_perfect_ratio,
-                  "and perfectly known atomic capture ratios", "l");
+                  "+ perfectly known atomic capture ratios", "l");
   if(cont_double_perfect_ratio != NULL)
     leg->AddEntry(cont_double_perfect_ratio,
-                  "and perfectly known in-flight neutron yields", "l");
+                  "+ perfectly known in-flight neutron yields", "l");
   leg->Draw();
   t.Draw();
   c3->Print(outpdfname.c_str());
 
   //////////////////////////////////////////////////////////////////////
-  TCanvas * c4 = new TCanvas("rhc4", "rhc4");
-  c4->SetMargin(leftmargin, rightmargin, bottommargin, topmargin);
+  TCanvas * c4 = stylecan(new TCanvas("rhc4", "rhc4"));
 
   stylehistset(fhc_reco, kBlue);
   stylehistset(rhc_reco, kRed);
@@ -1186,13 +1192,13 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
 
     TLegend * leg4 = new TLegend(leg_x1, 1-topmargin, leg_x2, leg_y2);
+    styleleg(leg4);
     leg4->AddEntry(fhc_reco[numu], "#mu^{#minus} in FHC", "l");
     leg4->AddEntry(rhc_reco[numu], "#mu^{#minus} in RHC", "l");
     leg4->AddEntry(fhc_reco[stoppi], "Stopped #pi^{#minus} in FHC", "l");
     leg4->AddEntry(rhc_reco[stoppi], "Stopped #pi^{#minus} in RHC", "l");
     leg4->AddEntry(fhc_reco[piflight], "#pi^{#pm}, p in flight in FHC", "l");
     leg4->AddEntry(rhc_reco[piflight], "#pi^{#pm}, p in flight in RHC", "l");
-    styleleg(leg4);
     leg4->Draw();
 
     t.Draw();

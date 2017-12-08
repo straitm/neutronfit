@@ -582,7 +582,7 @@ static void draw_ee_common(TH1D * x, const int rebin,
   }
 
   leg->SetTextSize(textsize*0.9); // small
-  leg->SetMargin(0.17);
+  leg->SetMargin(0.165);
   leg->SetTextFont(42);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
@@ -904,7 +904,7 @@ static void init_ee()
     TF1 * e = ees[i];
     switch(i){
       case 0: case 1:
-        e->SetLineColorAlpha(kRed, 0.8);
+        e->SetLineColorAlpha(kRed, 0.75);
         e->SetLineWidth(3);
         e->SetNpx(400);
         break;
