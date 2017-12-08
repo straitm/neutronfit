@@ -55,8 +55,8 @@ $(foreach region, $(REGIONS), \
     $(foreach maxslc, $(MAXSLCS), \
       $(foreach mindist, $(MINDISTS), \
         $(foreach cuttype, $(CUTTYPES), \
-	  $(eval $(call mindist_rule,$(mindist),$(minslc),$(maxslc),$(region),$(cuttype))) \
-	 ) \
+          $(eval $(call mindist_rule,$(mindist),$(minslc),$(maxslc),$(region),$(cuttype))) \
+         ) \
        ) \
      ) \
    ) \
@@ -77,13 +77,13 @@ endef
 
 REACTIONS := nm nc
 $(foreach region, $(REGIONS), \
-  $(foreach reaction, $(REACTIONS), \
-		$(foreach mindist, $(MINDISTS), \
-			$(foreach cuttype, $(CUTTYPES), \
-					$(eval $(call summary_rule,$(reaction),$(region),$(mindist),$(cuttype))) \
-			 ) \
-		 ) \
-   ) \
+    $(foreach reaction, $(REACTIONS), \
+      $(foreach mindist, $(MINDISTS), \
+        $(foreach cuttype, $(CUTTYPES), \
+          $(eval $(call summary_rule,$(reaction),$(region),$(mindist),$(cuttype))) \
+         ) \
+       ) \
+     ) \
  )
 
 rhc_stage_zero_C.so: rhc_stage_zero.C common.C util.C
