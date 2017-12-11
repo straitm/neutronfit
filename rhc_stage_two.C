@@ -1273,7 +1273,9 @@ void rhc_stage_two(const char * const input, const int mindist,
   neff_nominal = 0.5  * (muoncatcher?0.5:1);
   neff_error   = 0.05 * (muoncatcher?0.5:1);
 
-  const double rough_neut_lifetime = muoncatcher?60:52.; // us
+  const double rough_neut_lifetime = muoncatcher?
+    nominal_neutron_lifetime_muoncatcher:nominal_neutron_lifetime_main; // us
+
   const double mean_time_of_muon_capture_weighted_by_neut_yield =
   muoncatcher?0.21:1.07; // us
   timing_eff_difference_for_pions =

@@ -81,7 +81,7 @@ double n_diffusion_nominal = 0; // set below using mindist
 // gives the effective approximate rising exponential. For just muons it
 // is 1.6us.
 //
-// Note, though, that if half of the neutrons are from *pion* capture,
+// Note, though, that if half of the neutrons are from pions and/or protons,
 // this is more like 0.9us. If that number is used, you get a 1.4%
 // increase in the number of neutrons inferred, i.e. for a fixed number
 // here, the "efficiency" for pion-produced neutrons is about 1.4% lower
@@ -1014,6 +1014,15 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
   // Needs to get into fcn(), so has to be global
   g_nbins_e = nbins_e[cut_dimensions];
 
+  // From external Monte Carlo
+  n_lifetime_priorerr = muoncatcher?10:5.;
+  // XXX Hackily provide information from the more data-rich fits to the
+  // data-poor fits so they don't spin out of control.
+  if(cut_dimensions == THREED || mindist <= 2) n_lifetime_priorerr = 2.;
+
+  n_lifetime_nominal = muoncatcher?nominal_neutron_lifetime_muoncatcher
+                                  :nominal_neutron_lifetime_main;
+
   /*
     Based on my MC, 400us is reasonable for a mindist of 6, but more like
     25us for a mindist of 2. However, it's murky because we don't measure
@@ -1025,19 +1034,15 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     cases. Note the addition of 5/8 of a cellwidth because that's how
     much you get for mindist == 0 on average. In fcn() this is given a
     factor of 2 error (offerbangheap). Mostly we just measure it.
+
+    But don't start it smaller than the neutron lifetime, because
+    then it competes with decay for explaining the shape of the data
+    and the fit gets stuck in bad states.
   */
-  n_diffusion_nominal = cut_dimensions == TWOD?
+  n_diffusion_nominal = std::max(cut_dimensions == TWOD?
                         14.94 * pow(mindist + 0.625, 1.74):
-                         1.39 * pow(mindist + 0.625, 3.00);
-
-  // From external Monte Carlo
-  n_lifetime_priorerr = muoncatcher?10:5.;
-  // XXX Hackily provide information from the more data-rich fits to the
-  // data-poor fits so they don't spin out of control.
-  if(cut_dimensions == THREED || mindist <= 2) n_lifetime_priorerr = 2.;
-
-  // From a loose cut running of this program
-  n_lifetime_nominal = muoncatcher?59.4:52.7;
+                         1.39 * pow(mindist + 0.625, 3.00),
+                        n_lifetime_nominal);
 
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod * SIG_AND_BG; i++){

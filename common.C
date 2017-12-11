@@ -171,3 +171,7 @@ const double bins_e[MAX_TWO_OR_THREE_D][6+1] = { // janky...
 // Other possibilities
 // 5: 0.5, 1.6, 2.7, 3.8, 4.9, 6.0
 // 8: 0.5, 1, 1.5, 2, 2.5, 3, 4.0, 5.0, 6.0
+
+// From a loose cut running of stage one
+const double nominal_neutron_lifetime_main        = 53.6; // us
+const double nominal_neutron_lifetime_muoncatcher = 59.4;
