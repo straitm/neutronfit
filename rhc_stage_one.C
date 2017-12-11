@@ -255,7 +255,7 @@ static TF1 * ee_flat =
 
 static TF1 * ee_mich =
   new TF1("ee_mich", "[8]*(abs([5])/[4] * exp(-x/[4]))",
-          holex_hi, maxrealtime+additional);
+          0, maxrealtime+additional);
 
 static TF1 * ee_neut =
   new TF1("ee_mich",
@@ -267,11 +267,11 @@ static TF1 * ee_neut =
    // intersection-of-two-cylinders cut
    "*(TMath::Erf(sqrt([1]/x))-2/sqrt(TMath::Pi())*sqrt([1]/x)*exp(-[1]/x)))",
   n_start_conv_time, n_start_conv_time),
-   holex_hi, maxrealtime+additional);
+   0, maxrealtime+additional);
 
 static TF1 * ee_b12 =
   new TF1("ee_b12", Form("[8]*(abs([3])/%f * exp(-x/%f))", b12life, b12life),
-          holex_hi, maxrealtime+additional);
+          0, maxrealtime+additional);
 
 static TF1 * ee_pileup = new TF1("ee_pileup",
   Form("[8]*((x >= -%f && x <= %f))*(abs([7])*abs(abs(x)-%f))",
@@ -291,13 +291,13 @@ static TF1 * ee_pos = new TF1("ee_pos",
     "((x >= -%f && x <= %f))*(abs([7])*abs(abs(x)-%f)))",
     n_start_conv_time, n_start_conv_time, b12life, b12life,
     numi_len, numi_len, numi_len),
-  holex_hi, maxrealtime+additional);
+  0, maxrealtime+additional);
 
 static TF1 * ee_neg = new TF1("ee_neg",
   Form("[8]*(abs([6]) + "
        "((x >= -%f && x <= %f))*(abs([7])*abs(abs(x)-%f)))",
        numi_len, numi_len, numi_len),
-  -nnegbins, holex_lo);
+  -nnegbins, 0);
 
 const int ntf1s = 7; // Number of TF1s that we are going to draw
 static TF1 * ees[ntf1s] =
