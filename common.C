@@ -76,8 +76,16 @@ const double remid_cut = 0.75;
 // the others.  This is because the main detector is an excellent neutron
 // moderator, so many captures are around its edges.  With only a 2D cut, many
 // of these pileup neutrons from the rock are selected.)
-const double npileup_sliceweight        [MAX_TWO_OR_THREE_D] = { 0.64, 0.80 };
-const double npileup_sliceweight_mucatch[MAX_TWO_OR_THREE_D] = { 0.76, 0.81 };
+//
+// I have adjusted these numbers using the ratio of neutrons reaching the
+// detector in a small MC run with the rock composition we have been using, and
+// with a sensible composition that includes the water content documented in
+// MINOS-doc-2777.  My MC is a little dubious because it does not simulate
+// events very far away from the walls, and maybe not even in the ceiling, but
+// the ratio should be more or less right.  To be updated.  The numbers without
+// this adjustment were { 0.64, 0.80 }, { 0.76, 0.81 }.
+const double npileup_sliceweight        [MAX_TWO_OR_THREE_D] = { 0.75, 0.86 };
+const double npileup_sliceweight_mucatch[MAX_TWO_OR_THREE_D] = { 0.78, 0.83 };
 
 // Number of slices per 10**12 POT in RHC and FHC.  The ratio between these
 // sets the relative number of neutrons we think are coming out of the rock.
