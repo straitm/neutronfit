@@ -1,6 +1,6 @@
 #!/bin/bash
 
-d="$1"
+d="results-`date -I`-$1"
 
 # *Do* fail if the directory exists
 if ! mkdir "$d"; then
