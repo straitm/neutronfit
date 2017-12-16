@@ -1,27 +1,7 @@
-all: nm_slc_summary_mindist1_main_TWOD.pdf          \
-     nc_slc_summary_mindist1_main_TWOD.pdf          \
-     nm_slc_summary_mindist1_muoncatcher_TWOD.pdf   \
-     nc_slc_summary_mindist1_muoncatcher_TWOD.pdf   \
-     nm_slc_summary_mindist1_main_THREED.pdf        \
-     nc_slc_summary_mindist1_main_THREED.pdf        \
-     nm_slc_summary_mindist1_muoncatcher_THREED.pdf \
-     nc_slc_summary_mindist1_muoncatcher_THREED.pdf \
-     nm_slc_summary_mindist3_main_TWOD.pdf          \
-     nc_slc_summary_mindist3_main_TWOD.pdf          \
-     nm_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
+all: nm_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
      nc_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
-     nm_slc_summary_mindist3_main_THREED.pdf        \
-     nc_slc_summary_mindist3_main_THREED.pdf        \
-     nm_slc_summary_mindist3_muoncatcher_THREED.pdf \
-     nc_slc_summary_mindist3_muoncatcher_THREED.pdf \
      nm_slc_summary_mindist6_main_TWOD.pdf          \
-     nc_slc_summary_mindist6_main_TWOD.pdf          \
-     nm_slc_summary_mindist6_muoncatcher_TWOD.pdf   \
-     nc_slc_summary_mindist6_muoncatcher_TWOD.pdf   \
-     nm_slc_summary_mindist6_main_THREED.pdf        \
-     nc_slc_summary_mindist6_main_THREED.pdf        \
-     nm_slc_summary_mindist6_muoncatcher_THREED.pdf \
-     nc_slc_summary_mindist6_muoncatcher_THREED.pdf
+     nc_slc_summary_mindist6_main_TWOD.pdf
 
 define mindist_rule
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
@@ -71,7 +51,7 @@ $(1)_slc_summary_mindist$(3)_$(2)_$(4).pdf: common.C util.C rhc_stage_three.C st
                 fit_stage_two_mindist$(3)_nslc3.5_4.5_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc4.5_5.3_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc5.3_7.0_$(2)_$(4).out.txt
-	./stage_three.sh $(1)_slc $(2) \
+	./stage_three.sh $(1)_slc $(2) $(4) \
           fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
 endef
 
