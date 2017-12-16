@@ -39,8 +39,6 @@ static double ** residuals;
 // Apparently the way Macro() is implemented means this can't be static.
 double ** hessian;
 
-enum conttype { oned68, twod68, twod90 };
-
 static const double tsize = 0.055;
 
 static const bool logy = false;

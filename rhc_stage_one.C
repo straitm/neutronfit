@@ -997,7 +997,7 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
   for_stage_two << "}\n";
 }
 
-// XXX This is getting to be a lot of arguments, suggesting that passing it
+// TODO: This is getting to be a lot of arguments, suggesting that passing it
 // in via a struct, or using a config file would be better.  Probably can't
 // use a struct because there's no way to pass that in from the command line.
 void rhc_stage_one(const char * const savedhistfile, const int mindist,
