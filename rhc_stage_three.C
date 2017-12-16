@@ -54,8 +54,9 @@ static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
     chi2 += pow((y-theory)/e, 2);
   }
 
-  // penalize heavily for negative slope or intercept.
-  if(slope < 0) chi2 += pow(slope/0.01, 2);
+  // penalize heavily for negative intercept. I don't think it is valid
+  // to require the slope to be positive, though, because of the way the
+  // components play against each other.
   if(intercept < 0) chi2 += pow(intercept/0.01, 2);
 }
 
@@ -65,8 +66,8 @@ struct err_t{
 
 static err_t bays(const double besticept, const double CL)
 {
-  const int N = 2000;
-  const double inc = 10./N;
+  const int N = 4000;
+  const double inc = 20./N;
   vector<double> pbyp;
   mn->Command("MIGRAD");
   const double gmin = mn->fAmin;
@@ -146,6 +147,8 @@ void rhc_stage_three(const string name, const string region)
   const double tsize = 0.06;
 
   TCanvas * c1 = new TCanvas("c1", "c1");
+  c1->SetTickx(1);
+  c1->SetTicky(1);
   const double leftmargin = 0.125;
   const double topmargin  = tsize*1.33;
   const double rightmargin= 0.03;
@@ -207,17 +210,18 @@ void rhc_stage_three(const string name, const string region)
   selfpileup *= region == "main"?npileup_sliceweight[cut_dimensions]:
                                  npileup_sliceweight_mucatch[cut_dimensions];
 
-  const double legbottom = 1-topmargin-0.15;
+  const double legbottom = 1-topmargin-0.16;
 
   double maxy = dum->GetYaxis()->GetBinLowEdge(dum->GetNbinsY()+1);
   while(gdrawmax(&g) > 0 && gdrawmax(&g) < maxy*legbottom*0.98) maxy *= 0.99;
   maxy = int(maxy*10.)/10.;
+  if(maxy < 3) maxy = 3;
   dum->GetYaxis()->SetRangeUser(miny, maxy);
 
   dum->GetYaxis()->SetTitle(Form("%s scale relative to MC",
                                  nm?"RHC #nu_{#mu}":"NC"));
   dum->GetXaxis()->SetTitle(
-    "Effective other physics slices per spill");
+    "Effective pile-up slices per spill");
   dum->GetYaxis()->CenterTitle();
   dum->GetXaxis()->CenterTitle();
   dum->GetYaxis()->SetTitleSize(tsize);
@@ -235,7 +239,7 @@ void rhc_stage_three(const string name, const string region)
   g.Draw("pz");
   gall.Draw("pz");
 
-  TLegend leg(leftmargin+0.05, legbottom, leftmargin+0.2, 1-topmargin-0.01);
+  TLegend leg(leftmargin+0.05, legbottom, leftmargin+0.2, 1-topmargin-0.03);
   leg.SetMargin(0.01);
   leg.SetTextFont(42);
   leg.SetBorderSize(0);
@@ -261,9 +265,9 @@ void rhc_stage_three(const string name, const string region)
   mn->SetFCN(fcn);
   mn->Command("SET ERR 1");
 
-  double upvals[3] = {9, 4, 1};
-  double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
-  double upcols[3] = {kRed, kViolet, kBlue};
+  const double upvals[3] = {9, 4, 1};
+  const double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
+  const double upcols[3] = {kRed, kViolet, kBlue};
 
   TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
   const int Nband = 200;
