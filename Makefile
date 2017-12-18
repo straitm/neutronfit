@@ -43,7 +43,7 @@ $(foreach region, $(REGIONS), \
  )
 
 define summary_rule
-$(1)_slc_summary_mindist$(3)_$(2)_$(4).pdf: common.C util.C rhc_stage_three.C stage_three.sh \
+$(1)_slc_summary_mindist$(3)_$(2)_$(4).pdf: rhc_stage_three_C.so stage_three.sh \
                 fit_stage_two_mindist$(3)_nslc0.0_20.0_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc0.0_2.1_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc2.1_2.8_$(2)_$(4).out.txt \
@@ -74,6 +74,9 @@ rhc_stage_one_C.so: rhc_stage_one.C common.C util.C
 
 rhc_stage_two_C.so: rhc_stage_two.C common.C util.C
 	./stage_two.sh -1 0 0 main TWOD
+
+rhc_stage_three_C.so: rhc_stage_three.C common.C util.C
+	./stage_three.sh compile 0 0 TWOD 0
 
 output = fit_stage_*.out.txt \
          fit_stage_one_mindist*nslc*.pdf \

@@ -132,6 +132,8 @@ static void stylearrow(TArrow * a)
 
 void rhc_stage_three(const string name, const string region)
 {
+  if(name == "compile") return; // to compile only
+
   gErrorIgnoreLevel = kError;
   gStyle->SetOptStat(0);
   gStyle->SetFrameLineWidth(2);
