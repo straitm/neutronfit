@@ -1061,6 +1061,14 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     }
   }
 
+#if 0
+  // sensitivity study - scale up RHC periods by a factor of two
+  fithist[0]->Scale(2);
+  all_tcounts[0]->Scale(2);
+  fithist[1]->Scale(2);
+  all_tcounts[1]->Scale(2);
+#endif
+
   init_ee();
 
   TGraphAsymmErrors * g_n_rhc[SIG_AND_BG],

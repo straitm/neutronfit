@@ -267,6 +267,15 @@ void rhc_stage_three(const string name, const string region)
   mn->SetFCN(fcn);
   mn->Command("SET ERR 1");
 
+#if 0
+  mn->Command("MIGRAD");
+
+  // Sensitivity study: What if we got a similar point at pile-up
+  // of 0.25 ~ mean 1 slice per spill.
+  g.SetPoint(g.GetN(), 0.25, getpar(0) + 0.25*getpar(1));
+  g.SetPointError(g.GetN()-1, 0.25, 0.25, g.GetErrorYlow(0), g.GetErrorYhigh(0));
+#endif
+
   const double upvals[3] = {9, 4, 1};
   const double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
   const double upcols[3] = {kRed, kViolet, kBlue};
