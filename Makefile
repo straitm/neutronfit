@@ -1,7 +1,4 @@
-all: nm_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
-     nc_slc_summary_mindist3_muoncatcher_TWOD.pdf   \
-     nm_slc_summary_mindist6_main_TWOD.pdf          \
-     nc_slc_summary_mindist6_main_TWOD.pdf
+all: stage_four.nm.TWOD.out.txt stage_four.nc.TWOD.out.txt
 
 define mindist_rule
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
@@ -42,8 +39,12 @@ $(foreach region, $(REGIONS), \
    ) \
  )
 
+
+
 define summary_rule
-$(1)_slc_summary_mindist$(3)_$(2)_$(4).pdf: rhc_stage_three_C.so stage_three.sh \
+stage_three.$(1).mindist$(3).$(2).$(4).out.txt \
+stage_three.$(1).mindist$(3).$(2).$(4).pdf: \
+  rhc_stage_three_C.so stage_three.sh \
                 fit_stage_two_mindist$(3)_nslc0.0_20.0_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc0.0_2.1_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc2.1_2.8_$(2)_$(4).out.txt \
@@ -51,19 +52,34 @@ $(1)_slc_summary_mindist$(3)_$(2)_$(4).pdf: rhc_stage_three_C.so stage_three.sh 
                 fit_stage_two_mindist$(3)_nslc3.5_4.5_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc4.5_5.3_$(2)_$(4).out.txt \
                 fit_stage_two_mindist$(3)_nslc5.3_7.0_$(2)_$(4).out.txt
-	./stage_three.sh $(1)_slc $(2) $(4) \
+	./stage_three.sh $(1)_slc $(2) $(4) $(3) \
           fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
 endef
 
 REACTIONS := nm nc
 $(foreach region, $(REGIONS), \
-    $(foreach reaction, $(REACTIONS), \
-      $(foreach mindist, $(MINDISTS), \
-        $(foreach cuttype, $(CUTTYPES), \
-          $(eval $(call summary_rule,$(reaction),$(region),$(mindist),$(cuttype))) \
-         ) \
+  $(foreach reaction, $(REACTIONS), \
+    $(foreach mindist, $(MINDISTS), \
+      $(foreach cuttype, $(CUTTYPES), \
+        $(eval $(call summary_rule,$(reaction),$(region),$(mindist),$(cuttype))) \
        ) \
      ) \
+   ) \
+ )
+
+# Oh, make, make, make...  Yes, $$$\^ expands to $^, which expands to the list
+# of prerequisites.
+define combineregion_rule
+stage_four.$(1).$(2).pdf stage_four.$(1).$(2).out.txt: stage_three.$(1).mindist6.main.$(2).out.txt \
+                                                       stage_three.$(1).mindist3.muoncatcher.$(2).out.txt \
+                                                       stage_four.sh rhc_stage_four.C bayes.C
+	./stage_four.sh $(1) $(2) $$$\^
+endef
+
+$(foreach reaction, $(REACTIONS), \
+  $(foreach cuttype, $(CUTTYPES), \
+    $(eval $(call combineregion_rule,$(reaction),$(cuttype))) \
+   ) \
  )
 
 rhc_stage_zero_C.so: rhc_stage_zero.C common.C util.C
@@ -75,7 +91,7 @@ rhc_stage_one_C.so: rhc_stage_one.C common.C util.C
 rhc_stage_two_C.so: rhc_stage_two.C common.C util.C
 	./stage_two.sh -1 0 0 main TWOD
 
-rhc_stage_three_C.so: rhc_stage_three.C common.C util.C
+rhc_stage_three_C.so: rhc_stage_three.C common.C util.C bayes.C
 	./stage_three.sh compile 0 0 TWOD 0
 
 output = fit_stage_*.out.txt \
@@ -84,8 +100,9 @@ output = fit_stage_*.out.txt \
          for_stage_two*C \
          savedhists_*.C \
          for_stage_two*.C \
-         n?_{mindist_,slc_}summary_mindist*_{main,muoncatcher}_*.pdf \
-         *.out.txt
+         stage_three.n?.{mindist,slc}?.mindist*.{main,muoncatcher}.*.pdf \
+         *.out.txt \
+         *.tmp
 
 clean:
 	rm -f $(output) *.so gmon.out *_C.d

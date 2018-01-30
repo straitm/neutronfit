@@ -21,6 +21,7 @@ TMinuit * mn;
 
 #include "common.C"
 #include "util.C"
+#include "bayes.C"
 
 // selfpileup subtracts off what you get from one event sending high
 // energy neutrons from the vertex forward to its own muon's track
@@ -64,7 +65,18 @@ struct err_t{
   double up, dn;
 };
 
-static err_t bays(const double besticept, const double CL)
+
+// Find the Bayesian errors for the given central value at the given confidence
+// level (0..1).  The ordering principle is greatest likelihood, i.e.  all
+// points inside of the confidence band have a higher likelihood than all points
+// outside.
+//
+// Apply a systematic error which is a two-sided gaussian of error systup on
+// the top side and systdn on the bottom, with top and bottom each having 50%
+// probability.
+static err_t bayes(const double besticept, const double CL,
+                   const bool verbose, const double systup,
+                   const double systdn)
 {
   const int N = 4000;
   const double inc = 20./N;
@@ -81,18 +93,22 @@ static err_t bays(const double besticept, const double CL)
   }
   mn->Command("REL 1");
 
-  const vector<double> pbyi = pbyp;
+  // Apply systematic error and normalize
+  convolve_syst(pbyp, inc, systup, systdn);
+
+  vector<double> pbyi = pbyp;
   std::sort   (pbyp.begin(), pbyp.end());
   std::reverse(pbyp.begin(), pbyp.end());
 
-  double totp = 0;
-  for(unsigned int i = 0; i < pbyp.size(); i++) totp += pbyp[i];
+  if(verbose)
+    for(unsigned int i = 0; i < pbyi.size(); i++)
+      printf("Probdensity %10f %17.14g\n", inc*i, pbyi[i]);
 
   double acc = 0;
   double cutoff = -1;
   for(unsigned int i = 0; i < pbyp.size(); i++){
     acc += pbyp[i];
-    if(acc/totp >= CL){
+    if(acc >= CL){
       cutoff = (pbyp[i] + pbyp[(i>0?i:1)-1])/2;
       break;
     }
@@ -294,15 +310,10 @@ void rhc_stage_three(const string name, const string region)
 
       const double val = std::max(0., getpar(0));
 
-      const err_t stat_berr = bays(val, CLs[u]);
+      const err_t stat_berr = bayes(val, CLs[u], false, systup, systdn);
 
-      const double eup = sqrt(pow(stat_berr.up        , 2) +
-                              pow(systup * val/systval, 2));
-      const double edn = sqrt(pow(stat_berr.dn        , 2) +
-                              pow(systdn * val/systval, 2));
-
-      band->SetPoint(b, -selfpileup, val+eup);
-      band->SetPoint(Nband*2-b-1, -selfpileup, val-edn);
+      band->SetPoint(b, -selfpileup, val+stat_berr.up);
+      band->SetPoint(Nband*2-b-1, -selfpileup, val-stat_berr.dn);
     }
 
     band->Draw("f");
@@ -315,18 +326,15 @@ void rhc_stage_three(const string name, const string region)
 
   const double val = std::max(0., getpar(0));
 
-  const err_t stat_berr = bays(val, CLs[2]);
+  printf("Systematics: + %f - %f\n", systup, systdn);
 
-  const double eup = sqrt(pow(stat_berr.up, 2) +
-                          pow(systup * val/systval, 2));
-  const double edn = sqrt(pow(stat_berr.dn, 2) +
-                          pow(systdn * val/systval, 2));
+  const err_t stat_berr = bayes(val, CLs[2], true, systup, systdn);
 
   printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
-         val, eup, edn);
+         val, stat_berr.up, stat_berr.dn);
 
   ideal->SetPoint(0, -selfpileup, val);
-  ideal->SetPointError(0, 0, 0, edn, eup);
+  ideal->SetPointError(0, 0, 0, stat_berr.dn, stat_berr.up);
 
   ideal->SetMarkerStyle(kFullCircle);
   ideal->SetMarkerColor(ans_color);
@@ -372,6 +380,6 @@ void rhc_stage_three(const string name, const string region)
   t->SetY(1-0.02);
   t->Draw();
 
-  c1->Print(Form("%s_summary_mindist%d_%s_%s.pdf", name.c_str(),
+  c1->Print(Form("stage_three.%s.mindist%d.%s.%s.pdf", name.substr(0, 2).c_str(),
     int(mindist), region.c_str(), two_or_three_d_names[cut_dimensions]));
 }

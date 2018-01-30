@@ -6,8 +6,9 @@ fit_stage_???_mindist*_nslc*_*_*.pdf
 for_stage_two_mindist*_nslc*_*_*.C
 for_stage_two_ready_mindist*_nslc*_*_*.C
 savedhists_mindist*_nslc*_*_*.C
-n*_slc_summary_*.pdf
-n*_summary_*.pdf
+stage_three*pdf
+results-*
+*.tmp
 gmon.out
 *.swp
 *.swo
