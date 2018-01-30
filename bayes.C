@@ -23,22 +23,25 @@ void convolve_syst(vector<double> & prob, const double interval,
       if(prob[j] > 0)
         // Almost sure the sign is right
         newp += prob[j] * gaus(delta, delta > 0? dn: up);
-    } 
+    }
     result[i] = newp;
-  } 
+  }
 
   prob = result;
 
   normalize(prob);
 }
 
-void valerr(const vector<double> & combined, const double interval)
-{
-  const double CL = 0.682689492137;
+struct ve{
+  double val, up, dn;
+};
 
+ve valerr(const vector<double> & combined, const double interval,
+          const double CL = 0.682689492137)
+{
   double best = 0;
   int besti = -1;
- 
+
   for(unsigned int i = 0; i < combined.size(); i++){
     if(combined[i] > best){
       best = combined[i];
@@ -79,5 +82,10 @@ void valerr(const vector<double> & combined, const double interval)
   }
 
   printf("%f + %f - %f\n", besti*interval, up, dn);
+  ve ans;
+  ans.val = besti*interval;
+  ans.up = up;
+  ans.dn = dn;
+  return ans;
 }
 

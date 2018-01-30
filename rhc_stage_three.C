@@ -61,11 +61,6 @@ static void fcn(int & np, double * gin, double & chi2, double *par, int flag)
   if(intercept < 0) chi2 += pow(intercept/0.01, 2);
 }
 
-struct err_t{
-  double up, dn;
-};
-
-
 // Find the Bayesian errors for the given central value at the given confidence
 // level (0..1).  The ordering principle is greatest likelihood, i.e.  all
 // points inside of the confidence band have a higher likelihood than all points
@@ -74,13 +69,12 @@ struct err_t{
 // Apply a systematic error which is a two-sided gaussian of error systup on
 // the top side and systdn on the bottom, with top and bottom each having 50%
 // probability.
-static err_t bayes(const double besticept, const double CL,
-                   const bool verbose, const double systup,
-                   const double systdn)
+static ve bayes(const double CL, const bool verbose,
+                const double systup, const double systdn)
 {
   const int N = 4000;
   const double inc = 20./N;
-  vector<double> pbyp;
+  vector<double> prob;
   mn->Command("MIGRAD");
   const double gmin = mn->fAmin;
   mn->Command("SET PRINT -1");
@@ -89,50 +83,18 @@ static err_t bayes(const double besticept, const double CL,
     mn->Command(Form("SET PAR 1 %f", inc*i));
     mn->Command("FIX 1");
     mn->Command("MIGRAD");
-    pbyp.push_back(exp(0.5*(gmin - mn->fAmin)));
+    prob.push_back(exp(0.5*(gmin - mn->fAmin)));
   }
   mn->Command("REL 1");
 
   // Apply systematic error and normalize
-  convolve_syst(pbyp, inc, systup, systdn);
-
-  vector<double> pbyi = pbyp;
-  std::sort   (pbyp.begin(), pbyp.end());
-  std::reverse(pbyp.begin(), pbyp.end());
+  convolve_syst(prob, inc, systup, systdn);
 
   if(verbose)
-    for(unsigned int i = 0; i < pbyi.size(); i++)
-      printf("Probdensity %10f %17.14g\n", inc*i, pbyi[i]);
+    for(unsigned int i = 0; i < prob.size(); i++)
+      printf("Probdensity %10f %17.14g\n", inc*i, prob[i]);
 
-  double acc = 0;
-  double cutoff = -1;
-  for(unsigned int i = 0; i < pbyp.size(); i++){
-    acc += pbyp[i];
-    if(acc >= CL){
-      cutoff = (pbyp[i] + pbyp[(i>0?i:1)-1])/2;
-      break;
-    }
-  }
-
-  if(cutoff == -1) printf("Failed to find cutoff\n");
-
-  err_t ans;
-
-  for(unsigned int i = 0; i < pbyi.size(); i++){
-    if(pbyi[i] > cutoff){
-      ans.dn = besticept - inc*(i-0.5);
-      break;
-    }
-  }
-
-  for(unsigned int i = int(besticept/inc); i < pbyi.size(); i++){
-    if(pbyi[i] < cutoff){
-      ans.up = inc*(i-0.5) - besticept;
-      break;
-    }
-  }
-
-  return ans;
+  return valerr(prob, inc, CL);
 }
 
 static void styletext(TLatex * t, const double tsize)
@@ -308,12 +270,10 @@ void rhc_stage_three(const string name, const string region)
 
       mn->Command("MIGRAD");
 
-      const double val = std::max(0., getpar(0));
+      const ve berr = bayes(CLs[u], false, systup, systdn);
 
-      const err_t stat_berr = bayes(val, CLs[u], false, systup, systdn);
-
-      band->SetPoint(b, -selfpileup, val+stat_berr.up);
-      band->SetPoint(Nband*2-b-1, -selfpileup, val-stat_berr.dn);
+      band->SetPoint(b, -selfpileup, berr.val+berr.up);
+      band->SetPoint(Nband*2-b-1, -selfpileup, berr.val-berr.dn);
     }
 
     band->Draw("f");
@@ -324,17 +284,13 @@ void rhc_stage_three(const string name, const string region)
 
   mn->Command("MIGRAD");
 
-  const double val = std::max(0., getpar(0));
-
-  printf("Systematics: + %f - %f\n", systup, systdn);
-
-  const err_t stat_berr = bayes(val, CLs[2], true, systup, systdn);
+  const ve berr = bayes(CLs[2], true, systup, systdn);
 
   printf("%s %11s : %.2f + %.2f - %.2f\n", name.c_str(), region.c_str(),
-         val, stat_berr.up, stat_berr.dn);
+         berr.val, berr.up, berr.dn);
 
-  ideal->SetPoint(0, -selfpileup, val);
-  ideal->SetPointError(0, 0, 0, stat_berr.dn, stat_berr.up);
+  ideal->SetPoint(0, -selfpileup, berr.val);
+  ideal->SetPointError(0, 0, 0, berr.dn, berr.up);
 
   ideal->SetMarkerStyle(kFullCircle);
   ideal->SetMarkerColor(ans_color);

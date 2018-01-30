@@ -67,13 +67,14 @@ $(foreach region, $(REGIONS), \
    ) \
  )
 
-# Oh, make, make, make...  Yes, $$$\^ expands to $^, which expands to the list
-# of prerequisites.
 define combineregion_rule
-stage_four.$(1).$(2).pdf stage_four.$(1).$(2).out.txt: stage_three.$(1).mindist6.main.$(2).out.txt \
-                                                       stage_three.$(1).mindist3.muoncatcher.$(2).out.txt \
-                                                       stage_four.sh rhc_stage_four.C bayes.C
-	./stage_four.sh $(1) $(2) $$$\^
+stage_four.$(1).$(2).pdf stage_four.$(1).$(2).out.txt: \
+  stage_three.$(1).mindist6.main.$(2).out.txt \
+  stage_three.$(1).mindist3.muoncatcher.$(2).out.txt \
+  rhc_stage_four_C.so stage_four.sh
+	./stage_four.sh $(1) $(2) \
+          stage_three.$(1).mindist6.main.$(2).out.txt \
+          stage_three.$(1).mindist3.muoncatcher.$(2).out.txt
 endef
 
 $(foreach reaction, $(REACTIONS), \
@@ -93,6 +94,9 @@ rhc_stage_two_C.so: rhc_stage_two.C common.C util.C
 
 rhc_stage_three_C.so: rhc_stage_three.C common.C util.C bayes.C
 	./stage_three.sh compile 0 0 TWOD 0
+
+rhc_stage_four_C.so: rhc_stage_four.C common.C util.C bayes.C
+	./stage_four.sh compile
 
 output = fit_stage_*.out.txt \
          fit_stage_one_mindist*nslc*.pdf \
