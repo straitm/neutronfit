@@ -254,12 +254,26 @@ void rhc_stage_three(const string name, const string region)
   g.SetPointError(g.GetN()-1, 0.25, 0.25, g.GetErrorYlow(0), g.GetErrorYhigh(0));
 #endif
 
+#if DOUBLERHCSTUDY
+  #ifdef LOWINTENSITYSTUDY
+    TLatex fake(4.5, 1.3, "#splitline{With faked double RHC stats}"
+                          "{and low intensity running}");
+  #else
+    TLatex fake(4.5, 1.5, "With faked double RHC stats");
+  #endif
+  fake.SetTextAlign(22);
+  fake.SetTextFont(42);
+  fake.SetTextAngle(-24);
+  fake.SetTextSize(tsize*1.5);
+  fake.Draw();
+#endif
+
   const double upvals[3] = {9, 4, 1};
   const double CLs[3] = {0.997300203937, 0.954499736104, 0.682689492137};
   const double upcols[3] = {kRed, kViolet, kBlue};
 
   TGraphAsymmErrors * ideal = new TGraphAsymmErrors;
-  const int Nband = 200;
+  const int Nband = 50;
   for(int u = 0; u < 3; u++){
     mn->Command(Form("SET ERR %f", upvals[u]));
     TGraph * band = new TGraph(Nband*2);
