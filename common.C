@@ -5,6 +5,9 @@ const char * two_or_three_d_names[MAX_TWO_OR_THREE_D] = { "TWOD", "THREED" };
 
 //#define BGSUB
 
+//#define LOWINTENSITYSTUDY
+//#define DOUBLERHCSTUDY
+
 // Number of neutron pileup background samples per signal sample.  Set by my
 // ntuple maker.  Set to zero to skip background subtraction.
 const int bgmult =

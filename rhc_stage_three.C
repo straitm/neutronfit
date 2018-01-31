@@ -245,7 +245,7 @@ void rhc_stage_three(const string name, const string region)
   mn->SetFCN(fcn);
   mn->Command("SET ERR 1");
 
-#if 0
+#ifdef LOWINTENSITYSTUDY
   mn->Command("MIGRAD");
 
   // Sensitivity study: What if we got a similar point at pile-up

@@ -1061,7 +1061,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     }
   }
 
-#if 0
+#ifdef DOUBLERHCSTUDY
   // sensitivity study - scale up RHC periods by a factor of two
   fithist[0]->Scale(2);
   all_tcounts[0]->Scale(2);
