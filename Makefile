@@ -1,21 +1,35 @@
 all: stage_four.nm.TWOD.out.txt stage_four.nc.TWOD.out.txt
 
 define mindist_rule
-fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
+fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.pdf: \
+  stage_two_nicer_hist.sh rhc_stage_two_nicer_hist.C \
+  fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C
+	./stage_two_nicer_hist.sh \
+          fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C 
+
+fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt \
+fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.C \
+fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C \
+fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
   rhc_stage_two_C.so for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C \
   common.C stage_two.sh
 	./stage_two.sh $(1) $(2) $(3) $(4) $(5)
 
-fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C: \
-  rhc_stage_one_C.so savedhists_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C common.C stage_one.sh
+fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf \
+fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt \
+for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C: \
+  rhc_stage_one_C.so savedhists_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C \
+  common.C stage_one.sh
 	./stage_one.sh $(1) $(2) $(3) $(4) $(5)
 
 for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C: \
   for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C make_stage_two_ready.awk
-	cat for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C | ./make_stage_two_ready.awk \
+	cat for_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C | \
+          ./make_stage_two_ready.awk \
           > for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C
 
-savedhists_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C: rhc_stage_zero_C.so common.C stage_zero.sh
+savedhists_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C: \
+  rhc_stage_zero_C.so common.C stage_zero.sh
 	./stage_zero.sh $(1) $(2) $(3) $(4) $(5)
 endef
 

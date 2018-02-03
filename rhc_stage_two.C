@@ -762,7 +762,7 @@ static void draw_with_visible_errors_and_leak_memory(TGraphAsymmErrors * g)
 {
   g->Draw("pz");
   static int i = 0;
-  TGraphAsymmErrors * foo = (TGraphAsymmErrors *)g->Clone(Form("foo-%d", i++));
+  TGraphAsymmErrors * foo = (TGraphAsymmErrors *)g->Clone(Form("foo_%d", i++));
   foo->SetMarkerSize(0);
   foo->Draw("pz");
 }
@@ -856,7 +856,9 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   //////////////////////////////////////////////////////////////////////
   stylegraph(g_n_rhc, kRed +3, kSolid, kOpenSquare, 2, 1.0);
+  g_n_rhc->SetName("g_n_rhc");
   stylegraph(g_n_fhc, kBlue+3, kSolid, kOpenCircle, 2, 1.0);
+  g_n_fhc->SetName("g_n_fhc");
 
   stylehist(tot_rhc_neut, kRed, 2);
   stylehistset( rhc_neut, kRed);
@@ -880,9 +882,10 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   //
   TCanvas * c2r = stylecan(new TCanvas("rhc2r", "rhc2r"));
-  const std::string outpdfname =
-    Form("fit_stage_two_mindist%d_nslc%.1f_%.1f_%s_%s.pdf", mindist, minslc, maxslc,
+  const std::string outbasename =
+    Form("fit_stage_two_mindist%d_nslc%.1f_%.1f_%s_%s", mindist, minslc, maxslc,
          muoncatcher?"muoncatcher":"main", two_or_three_d_names[cut_dimensions]);
+  const std::string outpdfname = Form("%s.pdf", outbasename.c_str());
   c2r->Print((outpdfname + "[").c_str());
   dum2->Draw();
 
@@ -945,6 +948,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   t.Draw();
   c2r->Print(outpdfname.c_str());
+  c2r->SaveAs(Form("%s_rhchist.C", outbasename.c_str()));
 
   //
   TCanvas * c2f = stylecan(new TCanvas("rhc2f", "rhc2f"));
@@ -985,6 +989,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   legf->AddEntry(fhc_neut[numu], "#nu_{#mu} #rightarrow #mu^{#minus}", "l");
 
   c2f->Print(outpdfname.c_str());
+  c2f->SaveAs(Form("%s_fhchist.C", outbasename.c_str()));
 
   //////////////////////////////////////////////////////////////////////
   TCanvas * c3 = stylecan(new TCanvas("rhc3", "rhc3"));
