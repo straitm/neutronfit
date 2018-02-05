@@ -125,6 +125,7 @@ rhc_stage_four_C.so: rhc_stage_four.C common.C util.C bayes.C
 output = fit_stage_*.out.txt \
          fit_stage_one_mindist*nslc*.pdf \
          fit_stage_two*pdf \
+         fit_stage_two*hchist*C \
          for_stage_two*C \
          savedhists_*.C \
          for_stage_two*.C \

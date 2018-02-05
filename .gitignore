@@ -7,6 +7,7 @@ for_stage_two_mindist*_nslc*_*_*.C
 for_stage_two_ready_mindist*_nslc*_*_*.C
 savedhists_mindist*_nslc*_*_*.C
 stage_three*pdf
+fit_stage_two*C
 stage_four*pdf
 results-*
 *.tmp
