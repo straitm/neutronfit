@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Make sure we fail if root fails at the beginning of a pipeline
+set -o pipefail
+
 # Fragile. Must match enum in common.C
 if [ "$5" == TWOD ]; then
   fiftharg=0
