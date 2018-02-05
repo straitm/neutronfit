@@ -1174,27 +1174,28 @@ void draw(const int mindist, const float minslc, const float maxslc)
   stylehistset(fhc_reco, kBlue);
   stylehistset(rhc_reco, kRed);
 
-  rhc_reco[numu]->GetYaxis()->SetTitle("Probability/bin");
-  rhc_reco[numu]->GetXaxis()->SetTitle("Reconstructed E_{#nu} CC (GeV)");
+  fhc_reco[numu]->GetYaxis()->SetTitle("Probability/bin");
+  fhc_reco[numu]->GetXaxis()->SetTitle("Reconstructed E_{#nu} CC (GeV)");
 
   // neutron producers
-  TH1 * norm1 = fhc_reco[numu]->DrawNormalized("hist");
-  TH1 * norm2 = rhc_reco[numu]->DrawNormalized("histsame");
-  TH1 * norm3 = fhc_reco[stoppi]->DrawNormalized("histsame");
-  TH1 * norm4 = rhc_reco[stoppi]->DrawNormalized("histsame");
-  TH1 * norm5 = fhc_reco[piflight]->DrawNormalized("ehistsame");
-  TH1 * norm6 = rhc_reco[piflight]->DrawNormalized("histsame");
+  TH1 * norm1 = fhc_reco[numu]->DrawNormalized("histe");
+  TH1 * norm2 = rhc_reco[numu]->DrawNormalized("histsamee");
+  //TH1 * norm3 = fhc_reco[stoppi]->DrawNormalized("histsamee");
+  //TH1 * norm4 = rhc_reco[stoppi]->DrawNormalized("histsamee");
+  TH1 * norm5 = fhc_reco[piflight]->DrawNormalized("ehistsamee");
+  TH1 * norm6 = rhc_reco[piflight]->DrawNormalized("histsamee");
 
-  if(norm1 && norm2 && norm3 && norm4 && norm5 && norm6){
-    double maxy = max(norm1->GetMaximum(), norm2->GetMaximum());
+  if(true){ // norm1 && norm2 && norm3 && norm4 && norm5 && norm6){
+    double maxy = 0.7; /* max(norm1->GetMaximum(), norm2->GetMaximum());
     maxy = max(maxy, norm3->GetMaximum());
     maxy = max(maxy, norm4->GetMaximum());
     maxy = max(maxy, norm5->GetMaximum());
-    maxy = max(maxy, norm6->GetMaximum());
+    maxy = max(maxy, norm6->GetMaximum());*/
     norm1->GetYaxis()->SetRangeUser(0, maxy*1.1);
 
 
-    TLegend * leg4 = new TLegend(leg_x1, 1-topmargin, leg_x2, leg_y2);
+    TLegend * leg4 = new TLegend(0.5, 1-topmargin-0.45,
+                                 0.9, 1-topmargin-0.03);
     styleleg(leg4);
     leg4->AddEntry(fhc_reco[numu], "#mu^{#minus} in FHC", "l");
     leg4->AddEntry(rhc_reco[numu], "#mu^{#minus} in RHC", "l");

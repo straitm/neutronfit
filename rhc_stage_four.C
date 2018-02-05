@@ -86,7 +86,7 @@ int rhc_stage_four(const char * const inbase, const bool nm)
 
   gStyle->SetOptStat(0);
 
-  const double ymax = nm?1.9:3.79;
+  const double ymax = nm?1.9:6.99;
 
   TH2D dum("dum", "", 3, 0, 1, 1, 1e-10, ymax);
 
