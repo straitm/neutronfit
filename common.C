@@ -107,7 +107,7 @@ const double max_frac_e_mu = 1.5;
 #define SEPARATED_PERIODS
 
 #ifdef SEPARATED_PERIODS
-  const int nperiodrhc = 2; // 4, 6
+  const int nperiodrhc = 3; // 4, 6, 7
   const int nperiodfhc = 4; // 1, 2, 3, 5
 #else
   const int nperiodrhc = 1;
@@ -119,6 +119,7 @@ const char * const inputfiles[nperiod] = {
 #ifdef SEPARATED_PERIODS
   "201712-period4goodbad.root",
   "201712-period6goodbad.root",
+  "201802-period7agoodbad.root",
 
   "201712-period1goodbad.root",
   "201712-period2goodbad.root",
@@ -132,9 +133,9 @@ const char * const inputfiles[nperiod] = {
 
 const char * const Speriodnames[SIG_AND_BG*nperiod] = {
 #ifdef SEPARATED_PERIODS
-      "P4",   "P6",   "P1",   "P2",   "P3",   "P5",
+      "P4",   "P6",  "P7",  "P1",   "P2",   "P3",   "P5",
   #ifdef BGSUB
-      "P4BG", "P6BG", "P1BG", "P2BG", "P3BG", "P5BG"
+      "P4BG", "P6BG", "P7BG", "P1BG", "P2BG", "P3BG", "P5BG"
   #endif
 #else
   "PR",
@@ -150,6 +151,7 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
 #ifdef SEPARATED_PERIODS
      "Period 4 (RHC)",
      "Period 6 (RHC)",
+     "Period 7 (RHC)",
      "Period 1 (FHC)",
      "Period 2 (FHC)",
      "Period 3 (FHC)",
@@ -157,6 +159,7 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
   #ifdef BGSUB
      "Period 4 (RHC) Pileup",
      "Period 6 (RHC) Pileup",
+     "Period 7 (RHC) Pileup",
      "Period 1 (FHC) Pileup",
      "Period 2 (FHC) Pileup",
      "Period 3 (FHC) Pileup",
