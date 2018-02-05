@@ -1,18 +1,27 @@
 all: stage_four.nm.TWOD.out.txt stage_four.nc.TWOD.out.txt
 
+# Just to get everything built, artificially require rhchist for fhchist, which
+# is required by stage_three
 define mindist_rule
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.pdf: \
+  fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.pdf \
   stage_two_nicer_hist.sh rhc_stage_two_nicer_hist.C \
   fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C
 	./stage_two_nicer_hist.sh \
-          fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C 
+          fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C
+
+fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.pdf: \
+  stage_two_nicer_hist.sh rhc_stage_two_nicer_hist.C \
+  fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.C
+	./stage_two_nicer_hist.sh \
+          fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.C
 
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).out.txt \
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.C \
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C \
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
   rhc_stage_two_C.so for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C \
-  common.C stage_two.sh
+  common.C stage_two.sh newrhcmc.root newfhcmc.root
 	./stage_two.sh $(1) $(2) $(3) $(4) $(5)
 
 fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf \
@@ -39,8 +48,8 @@ CUTTYPES := TWOD THREED
 MINDISTS := 0 1 2 3 4 5 6
 # 99.98% of primary contained tracks are in events with <= 20 slices
 # Must match the cuts in the summary_rule below
-MINSLCS := 0.0 2.1 2.8 3.5 4.5 5.3 7.0 20.0
-MAXSLCS := 0.0 2.1 2.8 3.5 4.5 5.3 7.0 20.0
+MINSLCS := 0.0 1.4 2.1 2.8 3.5 4.5 5.3 7.0
+MAXSLCS :=     1.4 2.1 2.8 3.5 4.5 5.3 7.0 20.0
 $(foreach region, $(REGIONS), \
   $(foreach minslc, $(MINSLCS), \
     $(foreach maxslc, $(MAXSLCS), \
@@ -59,15 +68,16 @@ define summary_rule
 stage_three.$(1).mindist$(3).$(2).$(4).out.txt \
 stage_three.$(1).mindist$(3).$(2).$(4).pdf: \
   rhc_stage_three_C.so stage_three.sh \
-                fit_stage_two_mindist$(3)_nslc0.0_20.0_$(2)_$(4).out.txt \
-                fit_stage_two_mindist$(3)_nslc0.0_2.1_$(2)_$(4).out.txt \
-                fit_stage_two_mindist$(3)_nslc2.1_2.8_$(2)_$(4).out.txt \
-                fit_stage_two_mindist$(3)_nslc2.8_3.5_$(2)_$(4).out.txt \
-                fit_stage_two_mindist$(3)_nslc3.5_4.5_$(2)_$(4).out.txt \
-                fit_stage_two_mindist$(3)_nslc4.5_5.3_$(2)_$(4).out.txt \
-                fit_stage_two_mindist$(3)_nslc5.3_7.0_$(2)_$(4).out.txt
+                fit_stage_two_mindist$(3)_nslc0.0_20.0_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc0.0_1.4_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc1.4_2.1_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc2.1_2.8_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc2.8_3.5_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc3.5_4.5_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc4.5_5.3_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc5.3_7.0_$(2)_$(4)_fhchist.pdf
 	./stage_three.sh $(1)_slc $(2) $(4) $(3) \
-          fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
+          fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_1.4,1.4_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
 endef
 
 REACTIONS := nm nc
