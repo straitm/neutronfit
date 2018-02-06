@@ -48,8 +48,8 @@ CUTTYPES := TWOD THREED
 MINDISTS := 0 1 2 3 4 5 6
 # 99.98% of primary contained tracks are in events with <= 20 slices
 # Must match the cuts in the summary_rule below
-MINSLCS := 0.0 1.4 2.1 2.8 3.5 4.5 5.3 7.0
-MAXSLCS :=     1.4 2.1 2.8 3.5 4.5 5.3 7.0 20.0
+MINSLCS := 0.0 1.4 2.1 2.8 3.5 4.5 5.3 6.4
+MAXSLCS :=     1.4 2.1 2.8 3.5 4.5 5.3 6.4 20.0
 $(foreach region, $(REGIONS), \
   $(foreach minslc, $(MINSLCS), \
     $(foreach maxslc, $(MAXSLCS), \
@@ -74,9 +74,9 @@ stage_three.$(1).mindist$(3).$(2).$(4).pdf: \
                 fit_stage_two_mindist$(3)_nslc2.8_3.5_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc3.5_4.5_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc4.5_5.3_$(2)_$(4)_fhchist.pdf \
-                fit_stage_two_mindist$(3)_nslc5.3_7.0_$(2)_$(4)_fhchist.pdf
+                fit_stage_two_mindist$(3)_nslc5.3_6.4_$(2)_$(4)_fhchist.pdf
 	./stage_three.sh $(1)_slc $(2) $(4) $(3) \
-          fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
+          fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_6.4}_$(2)_$(4).out.txt
 endef
 
 REACTIONS := nm nc
