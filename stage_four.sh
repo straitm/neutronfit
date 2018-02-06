@@ -4,7 +4,7 @@
 set -o pipefail
 
 if [ $1 == compile ]; then
-  root -b -q rhc_stage_four.C+'(NULL, false)'
+  root -b -q rhc_stage_four.C++'(NULL, false)'
   exit
 fi
 
