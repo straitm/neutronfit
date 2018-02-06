@@ -1063,10 +1063,11 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
 #ifdef DOUBLERHCSTUDY
   // sensitivity study - scale up RHC periods by a factor of two
-  fithist[0]->Scale(2);
-  all_tcounts[0]->Scale(2);
-  fithist[1]->Scale(2);
-  all_tcounts[1]->Scale(2);
+  const double morebymidmay2018 = 1.86;
+  fithist[0]->Scale(morebymidmay2018);
+  all_tcounts[0]->Scale(morebymidmay2018);
+  fithist[1]->Scale(morebymidmay2018);
+  all_tcounts[1]->Scale(morebymidmay2018);
 #endif
 
   init_ee();
