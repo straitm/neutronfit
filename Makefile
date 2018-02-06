@@ -69,15 +69,14 @@ stage_three.$(1).mindist$(3).$(2).$(4).out.txt \
 stage_three.$(1).mindist$(3).$(2).$(4).pdf: \
   rhc_stage_three_C.so stage_three.sh \
                 fit_stage_two_mindist$(3)_nslc0.0_20.0_$(2)_$(4)_fhchist.pdf \
-                fit_stage_two_mindist$(3)_nslc0.0_1.4_$(2)_$(4)_fhchist.pdf \
-                fit_stage_two_mindist$(3)_nslc1.4_2.1_$(2)_$(4)_fhchist.pdf \
+                fit_stage_two_mindist$(3)_nslc0.0_2.1_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc2.1_2.8_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc2.8_3.5_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc3.5_4.5_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc4.5_5.3_$(2)_$(4)_fhchist.pdf \
                 fit_stage_two_mindist$(3)_nslc5.3_7.0_$(2)_$(4)_fhchist.pdf
 	./stage_three.sh $(1)_slc $(2) $(4) $(3) \
-          fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_1.4,1.4_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
+          fit_stage_two_mindist$(3)_nslc{0.0_20.0,0.0_2.1,2.1_2.8,2.8_3.5,3.5_4.5,4.5_5.3,5.3_7.0}_$(2)_$(4).out.txt
 endef
 
 REACTIONS := nm nc
