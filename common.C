@@ -117,17 +117,17 @@ const int nperiod    = nperiodrhc + nperiodfhc;
 
 const char * const inputfiles[nperiod] = {
 #ifdef SEPARATED_PERIODS
-  "201712-period4goodbad.root",
-  "201712-period6goodbad.root",
-  "201802-period7agoodbad.root",
+  "../ndcosmic_data/201712-period4goodbad.root",
+  "../ndcosmic_data/201712-period6goodbad.root",
+  "../ndcosmic_data/201802-period7agoodbad.root",
 
-  "201712-period1goodbad.root",
-  "201712-period2goodbad.root",
-  "201712-period3goodbad.root",
-  "201712-period5goodbad.root"
+  "../ndcosmic_data/201712-period1goodbad.root",
+  "../ndcosmic_data/201712-period2goodbad.root",
+  "../ndcosmic_data/201712-period3goodbad.root",
+  "../ndcosmic_data/201712-period5goodbad.root"
 #else
-  "201712-period46goodbad_rhc.root",
-  "201712-period1235goodbad_fhc.root"
+  "../ndcosmic_data/201712-period46goodbad_rhc.root",
+  "../ndcosmic_data/201712-period1235goodbad_fhc.root"
 #endif
 };
 

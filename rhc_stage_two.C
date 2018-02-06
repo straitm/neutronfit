@@ -1311,8 +1311,8 @@ void rhc_stage_two(const char * const input, const int mindist,
   // between the number of primary tracks in the given beam type and the truth
   // of those tracks.  But it might be confusing if the individual histograms
   // are drawn without normalization.
-  fill_hists("newfhcmc.root", fhc_reco, fhc_tracks, minslc, maxslc);
-  fill_hists("newrhcmc.root", rhc_reco, rhc_tracks, minslc, maxslc);
+  fill_hists("../ndcosmic_data/newfhcmc.root", fhc_reco, fhc_tracks, minslc, maxslc);
+  fill_hists("../ndcosmic_data/newrhcmc.root", rhc_reco, rhc_tracks, minslc, maxslc);
 
   gROOT->Macro(input);
 
