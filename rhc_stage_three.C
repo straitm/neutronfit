@@ -254,7 +254,7 @@ void rhc_stage_three(const string name, const string region)
   g.SetPointError(g.GetN()-1, 0.25, 0.25, g.GetErrorYlow(0), g.GetErrorYhigh(0));
 #endif
 
-#if DOUBLERHCSTUDY
+#ifdef DOUBLERHCSTUDY
   #ifdef LOWINTENSITYSTUDY
     TLatex fake(4.5, 1.3, "#splitline{With faked double RHC stats}"
                           "{and low intensity running}");
