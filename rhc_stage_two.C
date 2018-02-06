@@ -994,7 +994,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   //////////////////////////////////////////////////////////////////////
   TCanvas * c3 = stylecan(new TCanvas("rhc3", "rhc3"));
 
-  const double ncmin = 0, ncmax = 2.4,
+  const double ncmin = 0, ncmax = 9.9,
     nmmin = 0.0, nmmax = 2.6;
   TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetYaxis()->SetTitleSize(tsize);
