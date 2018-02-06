@@ -21,7 +21,7 @@ fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_rhchist.C \
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5)_fhchist.C \
 fit_stage_two_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf: \
   rhc_stage_two_C.so for_stage_two_ready_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).C \
-  common.C stage_two.sh newrhcmc.root newfhcmc.root
+  common.C stage_two.sh
 	./stage_two.sh $(1) $(2) $(3) $(4) $(5)
 
 fit_stage_one_mindist$(1)_nslc$(2)_$(3)_$(4)_$(5).pdf \
