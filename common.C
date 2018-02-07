@@ -42,7 +42,7 @@ const double trkx_cut = 170,
              mucatch_trkz_cuthi = 1560,
              mucatch_trkstartz_cut = 1100;
 const double trklen_cut = 200;
-const double remid_cut = 0.75;
+const double remid_cut = 0.949; // to get 0.949999 accepted
 
 
 // *** Parameters controlling how we deal with pileup neutrons from other ***
@@ -177,10 +177,10 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
 
 const int nbeam = 2; // not really generalizable as it stands
 
-const int nbins_e[MAX_TWO_OR_THREE_D] = { 6, 3 };
-const double bins_e[MAX_TWO_OR_THREE_D][6+1] = { // janky...
-  { 0.5, 1.375, 2.250, 3.125, 4.0, 5.0, 6.0 },
-  { 0.5, 1.5  , 3.0  , 6.0  ,  -1,  -1,  -1 }
+const int nbins_e[MAX_TWO_OR_THREE_D] = { 5, 3 };
+const double bins_e[MAX_TWO_OR_THREE_D][5+1] = { // janky...
+  { 0.5, 1.375, 2.250, 3.125, 4.5, 6.0 },
+  { 0.5, 1.5  , 3.0  , 6.0  ,  -1,  -1 }
 };
 // Other possibilities
 // 5: 0.5, 1.6, 2.7, 3.8, 4.9, 6.0

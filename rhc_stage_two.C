@@ -25,7 +25,7 @@
 using std::string;
 using std::vector;
 
-static const int npar = 9;
+static const int npar = 10;
 static TMinuit * mn = NULL;
 
 #include "common.C"
@@ -120,8 +120,12 @@ static const double corr_pi_stop_flight = 0.5;
 static const double nm_nominal = 1;
 static const double nm_error = 0.1;
 
-static const double nc_nominal = 1;
-static const double nc_error = 0.3;
+// Assign 40% errors to each, because the FHC errors for the standard NuMu
+// selection are 29% and this is a weird, but not totally unrelated, selection
+static const double nc_nominal_r = 1;
+static const double nc_error_r = 0.4;
+static const double nc_nominal_f = 1;
+static const double nc_error_f = 0.4;
 
 static bool useb12 = false; // can be changed between fits
 
@@ -233,15 +237,16 @@ static void reset_hists()
 
 static void update_hists(const double * const pars)
 {
-  const double ncscale         = pars[0];
-  const double r_nmscale       = pars[1];
-  const double real_npimu_stop = pars[2];
-  const double neff            = pars[3];
-  const double b12eff          = pars[4];
-  const double mum_nyield      = pars[5];
-  const double real_n_flight   = pars[6];
-  const double pileup_rhc      = pars[7];
-  const double pileup_fhc      = pars[8];
+  const double ncscale_r       = pars[0];
+  const double ncscale_f       = pars[1];
+  const double r_nmscale       = pars[2];
+  const double real_npimu_stop = pars[3];
+  const double neff            = pars[4];
+  const double b12eff          = pars[5];
+  const double mum_nyield      = pars[6];
+  const double real_n_flight   = pars[7];
+  const double pileup_rhc      = pars[8];
+  const double pileup_fhc      = pars[9];
 
   const double npimu_stop = real_npimu_stop*timing_eff_difference_for_pions;
   const double n_flight   = real_n_flight  *timing_eff_difference_for_pions;
@@ -257,15 +262,15 @@ static void update_hists(const double * const pars)
   reset_hists();
 
   // Estimate of neutrons from RHC per muon, in total and for each truth
-  rhc_neut[piflight]->Add(rhc_reco[piflight], ncscale*n_flight             *neff);
-  rhc_neut[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
+  rhc_neut[piflight]->Add(rhc_reco[piflight], ncscale_r*n_flight           *neff);
+  rhc_neut[stoppi]  ->Add(rhc_reco[stoppi], ncscale_r*npimu_stop*mum_nyield*neff);
   rhc_neut[numu]    ->Add(rhc_reco[numu],     r_nmscale         *mum_nyield*neff);
   rhc_neut[numubar] ->Add(rhc_reco[numubar],                     mup_nyield*neff);
   rhc_neut[pileup]  ->Add(rhc_reco[pileup],   pileup_rhc);
 
   // Ditto FHC
-  fhc_neut[piflight]->Add(fhc_reco[piflight], ncscale*n_flight             *neff);
-  fhc_neut[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*npimu_stop*mum_nyield*neff);
+  fhc_neut[piflight]->Add(fhc_reco[piflight], ncscale_f*n_flight           *neff);
+  fhc_neut[stoppi]  ->Add(fhc_reco[stoppi], ncscale_f*npimu_stop*mum_nyield*neff);
   fhc_neut[numu]    ->Add(fhc_reco[numu],                        mum_nyield*neff);
   fhc_neut[numubar] ->Add(fhc_reco[numubar],                     mup_nyield*neff);
   fhc_neut[pileup]  ->Add(fhc_reco[pileup],   pileup_fhc);
@@ -337,14 +342,14 @@ static void update_hists(const double * const pars)
     + 0.1 * 0.01;
 
   // Estimate of number of B-12 from RHC per track
-  rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale*  flight_b12yield*b12eff);
-  rhc_b12[stoppi]  ->Add(rhc_reco[stoppi],   ncscale*stop_pim_b12yield*b12eff);
+  rhc_b12[piflight]->Add(rhc_reco[piflight], ncscale_r*flight_b12yield*b12eff);
+  rhc_b12[stoppi]  ->Add(rhc_reco[stoppi], ncscale_f*stop_pim_b12yield*b12eff);
   rhc_b12[numu]    ->Add(rhc_reco[numu],     r_nmscale*   mum_b12yield*b12eff);
   rhc_b12[numubar] ->Add(rhc_reco[numubar],               mup_b12yield*b12eff);
 
   // Ditto FHC
-  fhc_b12[piflight]->Add(fhc_reco[piflight], ncscale*  flight_b12yield*b12eff);
-  fhc_b12[stoppi]  ->Add(fhc_reco[stoppi],   ncscale*stop_pim_b12yield*b12eff);
+  fhc_b12[piflight]->Add(fhc_reco[piflight], ncscale_f*flight_b12yield*b12eff);
+  fhc_b12[stoppi]  ->Add(fhc_reco[stoppi], ncscale_f*stop_pim_b12yield*b12eff);
   fhc_b12[numu]    ->Add(fhc_reco[numu],                  mum_b12yield*b12eff);
   fhc_b12[numubar] ->Add(fhc_reco[numubar],               mup_b12yield*b12eff);
 
@@ -446,15 +451,16 @@ static void fcn(__attribute__((unused)) int & np,
   chi2 = 0;
 
   update_hists(par);
-  const double ncscale    = par[0];
-  const double r_nmscale  = par[1];
-  const double npimu_stop = par[2];
-  const double neff       = par[3];
-  const double b12eff     = par[4];
-  const double mum_nyield = par[5];
-  const double n_flight   = par[6];
-  const double pileup_rhc = par[7];
-  const double pileup_fhc = par[8];
+  const double ncscale_r  = par[0];
+  const double ncscale_f  = par[1];
+  const double r_nmscale  = par[2];
+  const double npimu_stop = par[3];
+  const double neff       = par[4];
+  const double b12eff     = par[5];
+  const double mum_nyield = par[6];
+  const double n_flight   = par[7];
+  const double pileup_rhc = par[8];
+  const double pileup_fhc = par[9];
 
   // penalty terms
 
@@ -474,7 +480,8 @@ static void fcn(__attribute__((unused)) int & np,
 
   // Can use this if we think we have an external handle
   // on the NC contamination, which we do, from GENIE
-  //chi2 += pow((ncscale - nc_nominal)/nc_error, 2);
+  chi2 += pow((ncscale_r - nc_nominal_r)/nc_error_r, 2);
+  chi2 += pow((ncscale_f - nc_nominal_f)/nc_error_r, 2);
 
   static double * alldat   = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12),
                 * alldatup = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12),
@@ -684,19 +691,20 @@ void make_mn()
   mn->SetFCN(fcn);
 
   int mnparmerr = 0;
-  mn->mnparm(0, "NCscale", 1, 0.2, 0, 0, mnparmerr);
-  mn->mnparm(1, "NMscale", 1, 0.1, 0, 0, mnparmerr);
-  mn->mnparm(2, "npimu_stop", npimu_stop_nominal, npimu_stop_error,
+  mn->mnparm(0, "NCscale_rhc", 1, 0.2, 0, 0, mnparmerr);
+  mn->mnparm(1, "NCscale_fhc", 1, 0.2, 0, 0, mnparmerr);
+  mn->mnparm(2, "NMscale", 1, 0.1, 0, 0, mnparmerr);
+  mn->mnparm(3, "npimu_stop", npimu_stop_nominal, npimu_stop_error,
              0, 0, mnparmerr);
-  mn->mnparm(3, "neff", neff_nominal, neff_error, 0, 0, mnparmerr);
-  mn->mnparm(4, "b12eff", b12eff_nominal, b12eff_error, 0, 0, mnparmerr);
-  mn->mnparm(5, "mum_nyield", mum_nyield_nominal, mum_nyield_error,
+  mn->mnparm(4, "neff", neff_nominal, neff_error, 0, 0, mnparmerr);
+  mn->mnparm(5, "b12eff", b12eff_nominal, b12eff_error, 0, 0, mnparmerr);
+  mn->mnparm(6, "mum_nyield", mum_nyield_nominal, mum_nyield_error,
                 0, 0, mnparmerr);
-  mn->mnparm(6, "n_flight", n_flight_nominal, 0.1,
+  mn->mnparm(7, "n_flight", n_flight_nominal, 0.1,
              0, 0, mnparmerr);
-  mn->mnparm(7, "pileup_rhc", rhc_tracks->GetMaximum()/10.,
+  mn->mnparm(8, "pileup_rhc", rhc_tracks->GetMaximum()/10.,
                               rhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
-  mn->mnparm(8, "pileup_fhc", fhc_tracks->GetMaximum()/10.,
+  mn->mnparm(9, "pileup_fhc", fhc_tracks->GetMaximum()/10.,
                               fhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
 }
 
@@ -994,14 +1002,14 @@ void draw(const int mindist, const float minslc, const float maxslc)
   //////////////////////////////////////////////////////////////////////
   TCanvas * c3 = stylecan(new TCanvas("rhc3", "rhc3"));
 
-  const double ncmin = 0, ncmax = 9.9,
+  const double ncmin = 0, ncmax = 2.9,
     nmmin = 0.0, nmmax = 2.6;
   TH2D * dum3 = new TH2D("dm3", "", 100, ncmin, ncmax, 1, nmmin, nmmax);
   dum3->GetYaxis()->SetTitleSize(tsize);
   dum3->GetXaxis()->SetTitleSize(tsize);
   dum3->GetYaxis()->SetLabelSize(tsize);
   dum3->GetXaxis()->SetLabelSize(tsize);
-  dum3->GetXaxis()->SetTitle("FHC & RHC NC scale relative to MC");
+  dum3->GetXaxis()->SetTitle("RHC NC scale relative to MC");
   dum3->GetYaxis()->SetTitle("RHC #nu_{#mu} scale relative to MC");
   dum3->GetXaxis()->CenterTitle();
   dum3->GetYaxis()->CenterTitle();
@@ -1016,17 +1024,17 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   mn->fGraphicsMode = true;
 
-  TMarker * bestfit = new TMarker(getpar(0), getpar(1), kFullCircle);
+  TMarker * bestfit = new TMarker(getpar(0), getpar(2), kFullCircle);
 
   mn->Command(Form("SET ERR %f", TMath::ChisquareQuantile(0.90, 2)));
 
-  mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
-  mn->Command("MNCONT 1 2 50");
+  mn->Command("MINOS 10000 3");
+  mn->Command("MNCONT 2 3 50");
   TGraph * cont_full = wrest_contour("cont_full");
 
-  const double twodminerrdn = getminerrdn(1);
-  const double twodminerrup = getminerrup(1);
+  const double twodminerrdn = getminerrdn(2);
+  const double twodminerrup = getminerrup(2);
   const double twodminerrleft  = getminerrdn(0);
   const double twodminerrright = getminerrup(0);
 
@@ -1039,25 +1047,25 @@ void draw(const int mindist, const float minslc, const float maxslc)
   const double proper_npimu_stop_error = npimu_stop_error;
   npimu_stop_error = 1.1;
   mn->Command("MIGRAD");
-  mn->Command("MNCONT 1 2 50");
+  mn->Command("MNCONT 2 3 50");
   TGraph * cont_perfect_nuclear = wrest_contour("cont_perfect_nuclear");
 
-  mn->Command(Form("SET PAR 3 %f", npimu_stop_nominal));
-  mn->Command("FIX 3");
+  mn->Command(Form("SET PAR 4 %f", npimu_stop_nominal));
+  mn->Command("FIX 4");
   mn->Command("MIGRAD");
-  mn->Command("MNCONT 1 2 50");
+  mn->Command("MNCONT 2 3 50");
   TGraph * cont_perfect_ratio = wrest_contour("cont_perfect_ratio");
 
-  mn->Command(Form("SET PAR 7 %f", n_flight_nominal));
-  mn->Command("FIX 7");
+  mn->Command(Form("SET PAR 8 %f", n_flight_nominal));
+  mn->Command("FIX 8");
   mn->Command("MIGRAD");
-  mn->Command("MNCONT 1 2 50");
+  mn->Command("MNCONT 2 3 50");
   TGraph * cont_double_perfect_ratio = wrest_contour("cont_double_perfect_ratio");
 
   // restore
   npimu_stop_error = proper_npimu_stop_error;
-  mn->Command("REL 3");
-  mn->Command("REL 7");
+  mn->Command("REL 4");
+  mn->Command("REL 8");
   mn->Command("MIGRAD");
 
   if(cont_double_perfect_ratio != NULL){
@@ -1104,36 +1112,38 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   bestfit->Draw();
 
-  mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
+  mn->Command("MINOS 10000 3");
 
   TGraphAsymmErrors * onederrs = new TGraphAsymmErrors;
   onederrs->SetLineWidth(2);
-  onederrs->SetPoint(0, getpar(0), getpar(1) - twodminerrdn*1.2);
-  onederrs->SetPoint(1, getpar(0)-twodminerrleft*1.2, getpar(1));
+  onederrs->SetPoint(0, getpar(1), getpar(2) - twodminerrdn*1.2);
+  onederrs->SetPoint(1, getpar(1)-twodminerrleft*1.2, getpar(2));
 
   mn->Command("SET ERR 1"); // get one D 68% errors
   mn->Command("MIGRAD");
-  mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
-  mn->Command("MINOS 10000 4");
-  if(useb12) mn->Command("MINOS 10000 5");
+  mn->Command("MINOS 10000 3");
+  mn->Command("MINOS 10000 5");
+  if(useb12) mn->Command("MINOS 10000 6");
 
-  printf("NC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f %s\n",
-    muoncatcher?"muoncatcher":"main",
-    mindist, minslc, maxslc, getpar(0), getbesterrup(0), getbesterrdn(0),
-    mean_slice(false, minslc, maxslc),
-    two_or_three_d_names[cut_dimensions]);
+  for(int i = 0; i < 2; i++)
+    printf("NC_%cHC %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f %s\n",
+      i == 0?'R':'F',
+      muoncatcher?"muoncatcher":"main",
+      mindist, minslc, maxslc, getpar(i), getbesterrup(i), getbesterrdn(i),
+      mean_slice(false, minslc, maxslc),
+      two_or_three_d_names[cut_dimensions]);
 
   printf("NM %s mindist %d slcrange %.1f - %.1f : %f + %f - %f meanslc %f %s\n",
     muoncatcher?"muoncatcher":"main",
-    mindist, minslc, maxslc, getpar(1), getbesterrup(1), getbesterrdn(1),
+    mindist, minslc, maxslc, getpar(2), getbesterrup(2), getbesterrdn(2),
     mean_slice(true , minslc, maxslc),
     two_or_three_d_names[cut_dimensions]);
   c3->cd(); // mean_slice cd()s away
 
-  onederrs->SetPointError(0, getminerrdn(0), getminerrup(0), 0, 0);
-  onederrs->SetPointError(1, 0, 0, getminerrdn(1), getminerrup(1));
+  onederrs->SetPointError(0, getminerrdn(1), getminerrup(1), 0, 0);
+  onederrs->SetPointError(1, 0, 0, getminerrdn(2), getminerrup(2));
   onederrs->SetMarkerStyle(kFullCircle);
   onederrs->Draw("pz");
 
@@ -1320,28 +1330,29 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   make_mn();
 
-  mn->Command("SET LIM 1 0 50"); // NC scale
-  mn->Command("SET LIM 2 0 50");  // numubar scale
+  mn->Command("SET LIM 1 0 50"); // NC scale RHC
+  mn->Command("SET LIM 2 0 50"); // NC scale FHC
+  mn->Command("SET LIM 3 0 50");  // numubar scale
 
   // stopped pion to muon neutron yield ratio
-  mn->Command(Form("SET LIM 3 %f %f",
+  mn->Command(Form("SET LIM 4 %f %f",
     max(0, npimu_stop_nominal - 5*npimu_stop_error),
            npimu_stop_nominal + 5*npimu_stop_error));
 
-  mn->Command("SET LIM 4 0.01 1.05"); // neutron efficiency
-  mn->Command("SET LIM 5 0.01 1.05"); // B-12 efficiency
-  mn->Command("SET LIM 6 0.01 1.5"); // mu- neutron yield
+  mn->Command("SET LIM 5 0.01 1.05"); // neutron efficiency
+  mn->Command("SET LIM 6 0.01 1.05"); // B-12 efficiency
+  mn->Command("SET LIM 7 0.01 1.5"); // mu- neutron yield
 
   // other-in-flight neutron yield
-  mn->Command("SET LIM 7 0 20");
+  mn->Command("SET LIM 8 0 20");
 
   // pile-up
-  mn->Command(Form("SET PAR 8 %f", 0.));
   mn->Command(Form("SET PAR 9 %f", 0.));
-  mn->Command(Form("FIX 8"));
-  mn->Command(Form("FIX 9")); // Let's try later
+  mn->Command(Form("SET PAR 10 %f", 0.));
+  mn->Command(Form("FIX 9"));
+  mn->Command(Form("FIX 10")); // Let's try later
 
-  if(!useb12) mn->Command("FIX 5");
+  if(!useb12) mn->Command("FIX 6");
   mn->Command("MINIMIZE 10000");
   mn->Command("HESSE");
   mn->Command("CALL");
