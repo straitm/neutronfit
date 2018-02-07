@@ -20,6 +20,11 @@ void stylepad(TPad * pad)
   pad->SetRightMargin(0.03);
 }
 
+double max(double a, double b)
+{
+  return a>b?a:b;
+}
+
 void rhc_stage_two_nicer_hist(const string fmacroin)
 {
   // Unforgivable ROOT magic in use
@@ -70,6 +75,9 @@ void rhc_stage_two_nicer_hist(const string fmacroin)
   TH1D * neut_piflight    = isfhc?     fhc_neut_piflight: rhc_neut_piflight;
   TGraphAsymmErrors * g_n = isfhc? g_n_fhc:           g_n_rhc;
 
+
+  dm2->GetYaxis()->SetRangeUser(0,
+    1.1*max(gdrawmax(g_n), tot_neut->GetMaximum()));
 
   tot_neut->Draw("histsame");
   neut_numu->Draw("histsame");

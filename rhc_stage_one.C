@@ -875,6 +875,9 @@ static vector< vector< vector<fitanswers> > > dothefit()
         ans.n_mage_up = getbesterrup(nneut_nc+off_beam);
         ans.n_mage_dn = std::min(ans.n_mag, getbesterrdn(nneut_nc+off_beam));
 
+        // But don't use any MINOS errors if either one is bad.
+        if(!ans.n_good) ans.n_mage_up = ans.n_mage_dn = geterr(nneut_nc+off_beam);
+
         ans.b12_good   = onegoodminos(nb12_nc+off_beam, true);
         ans.b12mag     =       getpar(nb12_nc+off_beam);
         ans.b12mage_up = getbesterrup(nb12_nc+off_beam);
