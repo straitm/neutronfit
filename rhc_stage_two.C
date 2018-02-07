@@ -25,7 +25,7 @@
 using std::string;
 using std::vector;
 
-static const int npar = 10;
+static const int npar = 11;
 static TMinuit * mn = NULL;
 
 #include "common.C"
@@ -120,12 +120,16 @@ static const double corr_pi_stop_flight = 0.5;
 static const double nm_nominal = 1;
 static const double nm_error = 0.1;
 
-// Assign 40% errors to each, because the FHC errors for the standard NuMu
-// selection are 29% and this is a weird, but not totally unrelated, selection
-static const double nc_nominal_r = 1;
-static const double nc_error_r = 0.4;
-static const double nc_nominal_f = 1;
-static const double nc_error_f = 0.4;
+// NC errors are a combination of calibration/acceptance uncertainties and
+// cross section uncertainties.  For the standard 2017 FHC numu selection, it
+// is 23% from the former and 17% from the latter.  My selection sculpts the
+// acceptance differently, so let's inflate the cross section errors.
+static const double nc_xsec_scale_nominal_r = 1;
+static const double nc_xsec_scale_error_r = 0.17 * 1.5;
+static const double nc_xsec_scale_nominal_f = 1;
+static const double nc_xsec_scale_error_f = 0.17 * 1.5;
+static const double nc_calacc_scale_nominal = 1;
+static const double nc_calacc_scale_error = 0.23;
 
 static bool useb12 = false; // can be changed between fits
 
@@ -237,8 +241,8 @@ static void reset_hists()
 
 static void update_hists(const double * const pars)
 {
-  const double ncscale_r       = pars[0];
-  const double ncscale_f       = pars[1];
+  const double nc_xsec_scale_r = pars[0];
+  const double nc_xsec_scale_f = pars[1];
   const double r_nmscale       = pars[2];
   const double real_npimu_stop = pars[3];
   const double neff            = pars[4];
@@ -247,6 +251,10 @@ static void update_hists(const double * const pars)
   const double real_n_flight   = pars[7];
   const double pileup_rhc      = pars[8];
   const double pileup_fhc      = pars[9];
+  const double nc_calacc_scale = pars[10];
+
+  const double ncscale_r = nc_xsec_scale_r * nc_calacc_scale;
+  const double ncscale_f = nc_xsec_scale_f * nc_calacc_scale;
 
   const double npimu_stop = real_npimu_stop*timing_eff_difference_for_pions;
   const double n_flight   = real_n_flight  *timing_eff_difference_for_pions;
@@ -451,8 +459,8 @@ static void fcn(__attribute__((unused)) int & np,
   chi2 = 0;
 
   update_hists(par);
-  const double ncscale_r  = par[0];
-  const double ncscale_f  = par[1];
+  const double nc_xsec_scale_r = par[0];
+  const double nc_xsec_scale_f = par[1];
   const double r_nmscale  = par[2];
   const double npimu_stop = par[3];
   const double neff       = par[4];
@@ -461,6 +469,7 @@ static void fcn(__attribute__((unused)) int & np,
   const double n_flight   = par[7];
   const double pileup_rhc = par[8];
   const double pileup_fhc = par[9];
+  const double nc_calacc_scale = par[10];
 
   // penalty terms
 
@@ -480,8 +489,9 @@ static void fcn(__attribute__((unused)) int & np,
 
   // Can use this if we think we have an external handle
   // on the NC contamination, which we do, from GENIE
-  chi2 += pow((ncscale_r - nc_nominal_r)/nc_error_r, 2);
-  chi2 += pow((ncscale_f - nc_nominal_f)/nc_error_r, 2);
+  chi2 += pow((nc_xsec_scale_r - nc_xsec_scale_nominal_r)/nc_xsec_scale_error_r, 2);
+  chi2 += pow((nc_xsec_scale_f - nc_xsec_scale_nominal_f)/nc_xsec_scale_error_f, 2);
+  chi2 += pow((nc_calacc_scale - nc_calacc_scale_nominal)/nc_calacc_scale_error, 2);
 
   static double * alldat   = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12),
                 * alldatup = (double *)malloc(sizeof(double)*g_nbins_e*nbeam*N_AND_B12),
@@ -691,8 +701,8 @@ void make_mn()
   mn->SetFCN(fcn);
 
   int mnparmerr = 0;
-  mn->mnparm(0, "NCscale_rhc", 1, 0.2, 0, 0, mnparmerr);
-  mn->mnparm(1, "NCscale_fhc", 1, 0.2, 0, 0, mnparmerr);
+  mn->mnparm(0, "NCxsec_rhc", 1, 0.2, 0, 0, mnparmerr);
+  mn->mnparm(1, "NCxsec_fhc", 1, 0.2, 0, 0, mnparmerr);
   mn->mnparm(2, "NMscale", 1, 0.1, 0, 0, mnparmerr);
   mn->mnparm(3, "npimu_stop", npimu_stop_nominal, npimu_stop_error,
              0, 0, mnparmerr);
@@ -706,6 +716,7 @@ void make_mn()
                               rhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
   mn->mnparm(9, "pileup_fhc", fhc_tracks->GetMaximum()/10.,
                               fhc_tracks->GetMaximum()/100., 0, 0, mnparmerr);
+  mn->mnparm(10, "NCcalacc", 1, 0.2, 0, 0, mnparmerr);
 }
 
 TGraph * wrest_contour(const char * const name)
@@ -1009,7 +1020,7 @@ void draw(const int mindist, const float minslc, const float maxslc)
   dum3->GetXaxis()->SetTitleSize(tsize);
   dum3->GetYaxis()->SetLabelSize(tsize);
   dum3->GetXaxis()->SetLabelSize(tsize);
-  dum3->GetXaxis()->SetTitle("RHC NC scale relative to MC");
+  dum3->GetXaxis()->SetTitle("RHC NC cross section scale relative to MC");
   dum3->GetYaxis()->SetTitle("RHC #nu_{#mu} scale relative to MC");
   dum3->GetXaxis()->CenterTitle();
   dum3->GetYaxis()->CenterTitle();
@@ -1330,8 +1341,8 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   make_mn();
 
-  mn->Command("SET LIM 1 0 50"); // NC scale RHC
-  mn->Command("SET LIM 2 0 50"); // NC scale FHC
+  mn->Command("SET LIM 1 0 50"); // NC cross section scale RHC
+  mn->Command("SET LIM 2 0 50"); // NC cross section scale FHC
   mn->Command("SET LIM 3 0 50");  // numubar scale
 
   // stopped pion to muon neutron yield ratio
@@ -1351,6 +1362,8 @@ void rhc_stage_two(const char * const input, const int mindist,
   mn->Command(Form("SET PAR 10 %f", 0.));
   mn->Command(Form("FIX 9"));
   mn->Command(Form("FIX 10")); // Let's try later
+
+  mn->Command("SET LIM 11 0 50"); // NC calibration/acceptance scale, shared
 
   if(!useb12) mn->Command("FIX 6");
   mn->Command("MINIMIZE 10000");
