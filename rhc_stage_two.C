@@ -1104,6 +1104,8 @@ void draw(const int mindist, const float minslc, const float maxslc)
 
   bestfit->Draw();
 
+  mn->Command("SHOW COV");
+
   mn->Command("MINOS 10000 1");
   mn->Command("MINOS 10000 2");
 
@@ -1261,12 +1263,12 @@ static void do_background_subtraction()
 
 void rhc_stage_two(const char * const input, const int mindist,
                    const float minslc, const float maxslc, const string region,
-                   const two_or_three_d cut_dimensions_)
+                   const /* two_or_three_d */ int cut_dimensions_)
 {
   if(mindist < 0) return; // to compile only
 
   muoncatcher = region == "muoncatcher";
-  cut_dimensions = cut_dimensions_;
+  cut_dimensions = (two_or_three_d)cut_dimensions_;
   g_nbins_e = nbins_e[cut_dimensions];
 
   init();

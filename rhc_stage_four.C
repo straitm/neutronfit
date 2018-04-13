@@ -47,14 +47,14 @@ int rhc_stage_four(const char * const inbase, const bool nm)
   }
 
   if(probi < 1){
-    fprintf(stderr, "Not enough series, got size1=%d size2=%d\n",
-            probs[0].size(), probs[1].size());
+    fprintf(stderr, "Not enough series, got size1=%ul size2=%ul\n",
+            (unsigned int)probs[0].size(), (unsigned int)probs[1].size());
     return 1;
   }
 
   if(probs[0].size() != probs[1].size()){
-    fprintf(stderr, "Series don't have the same size! size1=%d size2=%d\n",
-            probs[0].size(), probs[1].size());
+    fprintf(stderr, "Series don't have the same size! size1=%ul size2=%ul\n",
+            (unsigned int)probs[0].size(), (unsigned int)probs[1].size());
     return 1;
   }
 

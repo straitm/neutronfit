@@ -1005,9 +1005,11 @@ static void save_for_stage_two(TGraphAsymmErrors ** g_n_rhc,
 // use a struct because there's no way to pass that in from the command line.
 void rhc_stage_one(const char * const savedhistfile, const int mindist,
                    const float minslc, const float maxslc, const string region,
-                   const two_or_three_d cut_dimensions)
+                   const /* two_or_three_d */ int cut_dimensions_)
 {
   if(mindist < 0) return; // to compile only
+
+  const two_or_three_d cut_dimensions = (two_or_three_d)cut_dimensions_;
 
   gStyle->SetOptStat(0);
   gStyle->SetFrameLineWidth(2);
