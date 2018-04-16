@@ -1,3 +1,5 @@
+TMinuit * mn = NULL; // dummy so util.C compiles
+
 #include "util.C"
 
 // These are the same...
