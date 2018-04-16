@@ -1051,17 +1051,33 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
 
   gROOT->Macro(savedhistfile);
   for(int i = 0; i < nperiod * SIG_AND_BG; i++){
-    const char * namt = Form("%s_tcounts", Speriodnames[i]);
-    if(NULL == (all_tcounts[i] = dynamic_cast<TH1D*>(
-      gROOT->FindObject(namt)))){
-      fprintf(stderr, "Could not read %s from %s\n", namt, savedhistfile);
+    all_tcounts[i] = NULL;
+
+    // Now in ROOT 6, every call to SavePrimitive generates a new __N postfix
+    // for both the variable name and the TNamed name, so we have to search for
+    // the object we want.  Limit at 99 is arbitrary and could be violated...
+    for(int N = 1; N <= 99; N++)
+      if(NULL != (all_tcounts[i] =
+         dynamic_cast<TH1D*>(gROOT->FindObject(Form("%s_tcounts__%d",
+                                                    Speriodnames[i], N)))))
+        break;
+
+    if(NULL == all_tcounts[i]){
+      fprintf(stderr, "Could not read %s_tcounts from %s\n",
+              Speriodnames[i], savedhistfile);
       _exit(1);
     }
 
-    const char * nam2 = Form("%s", Speriodnames[i]);
-    if(NULL == (fithist[i] = dynamic_cast<TH2D*>(
-      gROOT->FindObject(nam2)))){
-      fprintf(stderr, "Could not read %s from %s\n", nam2, savedhistfile);
+    fithist[i] = NULL;
+    for(int N = 1; N <= 99; N++)
+      if(NULL != (fithist[i] =
+         dynamic_cast<TH2D*>(gROOT->FindObject(Form("%s__%d",
+                                                    Speriodnames[i], N)))))
+        break;
+
+    if(NULL == fithist[i]){
+      fprintf(stderr, "Could not read %s from %s\n",
+              Speriodnames[i], savedhistfile);
       _exit(1);
     }
   }
