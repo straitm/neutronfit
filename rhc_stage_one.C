@@ -1056,7 +1056,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     // Now in ROOT 6, every call to SavePrimitive generates a new __N postfix
     // for both the variable name and the TNamed name, so we have to search for
     // the object we want.  Limit at 99 is arbitrary and could be violated...
-    for(int N = 1; N <= 99; N++)
+    for(int N = 0; N <= 99; N++)
       if(NULL != (all_tcounts[i] =
          dynamic_cast<TH1D*>(gROOT->FindObject(Form(N == 0?"%s_tcounts":"%s_tcounts__%d",
                                                     Speriodnames[i], N)))))
