@@ -1058,7 +1058,7 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     // the object we want.  Limit at 99 is arbitrary and could be violated...
     for(int N = 1; N <= 99; N++)
       if(NULL != (all_tcounts[i] =
-         dynamic_cast<TH1D*>(gROOT->FindObject(Form("%s_tcounts__%d",
+         dynamic_cast<TH1D*>(gROOT->FindObject(Form(N == 0?"%s_tcounts":"%s_tcounts__%d",
                                                     Speriodnames[i], N)))))
         break;
 
@@ -1069,9 +1069,9 @@ void rhc_stage_one(const char * const savedhistfile, const int mindist,
     }
 
     fithist[i] = NULL;
-    for(int N = 1; N <= 99; N++)
+    for(int N = 0; N <= 99; N++)
       if(NULL != (fithist[i] =
-         dynamic_cast<TH2D*>(gROOT->FindObject(Form("%s__%d",
+         dynamic_cast<TH2D*>(gROOT->FindObject(Form(N == 0?"%s":"%s__%d",
                                                     Speriodnames[i], N)))))
         break;
 
