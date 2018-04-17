@@ -22,11 +22,6 @@ void stylepad(TPad * pad)
   pad->SetRightMargin(0.03);
 }
 
-double max(double a, double b)
-{
-  return a>b?a:b;
-}
-
 void rhc_stage_two_nicer_hist(const string fmacroin)
 {
   // Unforgivable ROOT magic in use
@@ -57,9 +52,9 @@ void rhc_stage_two_nicer_hist(const string fmacroin)
   rat.SetTopMargin(0);
   rat.SetBottomMargin(0.23);
 
-  const double tsize = dm2->GetXaxis()->GetLabelSize();
+  const double tsize = dm2__1->GetXaxis()->GetLabelSize();
 
-  dm2->Draw();
+  dm2__1->Draw();
 
   // Dirty trick to get rid of the half-drawn zero
   TPave coverzero;
@@ -78,7 +73,7 @@ void rhc_stage_two_nicer_hist(const string fmacroin)
   TGraphAsymmErrors * g_n = isfhc? g_n_fhc:           g_n_rhc;
 
 
-  dm2->GetYaxis()->SetRangeUser(0,
+  dm2__1->GetYaxis()->SetRangeUser(0,
     1.1*max(gdrawmax(g_n), tot_neut->GetMaximum()));
 
   tot_neut->Draw("histsame");
@@ -99,7 +94,7 @@ void rhc_stage_two_nicer_hist(const string fmacroin)
   // Thanks ROOT for making this hard
   const double textratio = (1-divheight)/divheight;
 
-  TH2D * dum = dm2->Clone("dum");
+  TH2D * dum = dm2__1->Clone("dum");
 
   dum->GetYaxis()->SetTitle("Data/Fit");
   dum->GetYaxis()->SetNdivisions(308);
@@ -107,7 +102,7 @@ void rhc_stage_two_nicer_hist(const string fmacroin)
   const double ytitleoff = 1.1;
 
   dum->GetYaxis()->SetTitleOffset(ytitleoff/textratio);
-  dm2->GetYaxis()->SetTitleOffset(ytitleoff);
+  dm2__1->GetYaxis()->SetTitleOffset(ytitleoff);
 
   const double halfwidth = 0.49;
 
