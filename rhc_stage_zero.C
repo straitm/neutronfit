@@ -310,9 +310,11 @@ static void fill_1dhist(TH1D ** h, data * dat, TTree * t,
 
 int rhc_stage_zero(const int mindist, const float minslc,
                    const float maxslc, const string region,
-                   const two_or_three_d cut_dimensions)
+                   const /* two_or_three_d */ int cut_dimensions_)
 {
   if(mindist < 0) return 0; // used to compile only
+
+  const two_or_three_d cut_dimensions = (two_or_three_d) cut_dimensions_;
 
   muoncatcher = region == "muoncatcher";
 
