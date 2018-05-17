@@ -77,7 +77,8 @@ void rhc_stage_two_nicer_hist(const string fmacroin)
 
 
   dm2->GetYaxis()->SetRangeUser(0,
-    1.1*max(gdrawmax(g_n), tot_neut->GetMaximum()));
+    1.1*(gdrawmax(g_n)> tot_neut->GetMaximum()?
+         gdrawmax(g_n): tot_neut->GetMaximum()));
 
   tot_neut->Draw("histsame");
   neut_numu->Draw("histsame");
