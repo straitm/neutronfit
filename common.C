@@ -119,7 +119,7 @@ const char * const inputfiles[nperiod] = {
 #ifdef SEPARATED_PERIODS
   "../ndcosmic_data/201712-period4goodbad.root",
   "../ndcosmic_data/201712-period6goodbad.root",
-  "../ndcosmic_data/201802-period7agoodbad.root",
+  "../ndcosmic_data/201805-period7abcgoodbad.root",
 
   "../ndcosmic_data/201712-period1goodbad.root",
   "../ndcosmic_data/201712-period2goodbad.root",
