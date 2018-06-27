@@ -1294,8 +1294,8 @@ void rhc_stage_two(const char * const input, const int mindist,
 
   init();
 
-  mum_nyield_nominal = muoncatcher?0.855:0.1810;
-  mum_nyield_error   = muoncatcher?0.036:0.0305;
+  mum_nyield_nominal = muoncatcher?0.854:0.176;
+  mum_nyield_error   = muoncatcher?0.036:0.029;
 
   neff_nominal = 0.5  * (muoncatcher?0.5:1);
   neff_error   = 0.05 * (muoncatcher?0.5:1);
@@ -1315,8 +1315,8 @@ void rhc_stage_two(const char * const input, const int mindist,
   //
   // Multiplied by a pretty ad hoc correction for tracking difficulties, see
   // below.
-  npimu_stop_nominal = (muoncatcher? 3.98 : 14.29) *
-                       (muoncatcher? 0.9  : 0.75);
+  npimu_stop_nominal = (muoncatcher? 4.0 : 14.69) *
+                       (muoncatcher? 0.9 : 0.75);
 
   // Not const because I want to adjust it to make different contours, and it
   // is used by fcn().
@@ -1324,7 +1324,7 @@ void rhc_stage_two(const char * const input, const int mindist,
   // This is the error from physics added in quadrature with an error
   // I made up for bad tracking which makes us miss the pions' neutrons
   // more often than the muons'.
-  npimu_stop_error = sqrt(pow(muoncatcher?0.6:2.52  , 2)
+  npimu_stop_error = sqrt(pow(muoncatcher?0.6:2.57  , 2)
                         + pow(npimu_stop_nominal*0.1, 2));
 
 
