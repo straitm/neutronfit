@@ -127,7 +127,7 @@ const char * const inputfiles[nperiod] = {
   "../ndcosmic_data/201712-period3goodbad.root",
   "../ndcosmic_data/201712-period5goodbad.root"
 #else
-  "../ndcosmic_data/201712-period4678goodbad_rhc.root",
+  "../ndcosmic_data/201904-period4678goodbad_rhc.root",
   "../ndcosmic_data/201712-period1235goodbad_fhc.root"
 #endif
 };
