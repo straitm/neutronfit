@@ -108,7 +108,7 @@ const double max_frac_e_mu = 1.5;
 
 #ifdef SEPARATED_PERIODS
   const int nperiodrhc = 4; // 4, 6, 7, 8
-  const int nperiodfhc = 4; // 1, 2, 3, 5
+  const int nperiodfhc = 5; // 1, 2, 3, 5, 9
 #else
   const int nperiodrhc = 1;
   const int nperiodfhc = 1;
@@ -125,7 +125,8 @@ const char * const inputfiles[nperiod] = {
   "../ndcosmic_data/201712-period1goodbad.root",
   "../ndcosmic_data/201712-period2goodbad.root",
   "../ndcosmic_data/201712-period3goodbad.root",
-  "../ndcosmic_data/201712-period5goodbad.root"
+  "../ndcosmic_data/201712-period5goodbad.root",
+  "../ndcosmic_data/201911-period9a.root"
 #else
   "../ndcosmic_data/201904-period4678goodbad_rhc.root",
   "../ndcosmic_data/201712-period1235goodbad_fhc.root"
@@ -134,9 +135,9 @@ const char * const inputfiles[nperiod] = {
 
 const char * const Speriodnames[SIG_AND_BG*nperiod] = {
 #ifdef SEPARATED_PERIODS
-      "P4",   "P6",   "P7",   "P8",   "P1",   "P2",   "P3",   "P5",
+      "P4",   "P6",   "P7",   "P8",   "P1",   "P2",   "P3",   "P5",   "P9",
   #ifdef BGSUB
-      "P4BG", "P6BG", "P7BG", "P8BG", "P1BG", "P2BG", "P3BG", "P5BG"
+      "P4BG", "P6BG", "P7BG", "P8BG", "P1BG", "P2BG", "P3BG", "P5BG", "P9BG",
   #endif
 #else
   "PR",
@@ -158,6 +159,7 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
      "Period 2 (FHC)",
      "Period 3 (FHC)",
      "Period 5 (FHC)",
+     "Period 9 (FHC)",
   #ifdef BGSUB
      "Period 4 (RHC) Pileup",
      "Period 6 (RHC) Pileup",
@@ -167,6 +169,7 @@ const char * const Lperiodnames[SIG_AND_BG*nperiod] = {
      "Period 2 (FHC) Pileup",
      "Period 3 (FHC) Pileup",
      "Period 5 (FHC) Pileup",
+     "Period 9 (FHC) Pileup",
   #endif
 #else
      "RHC",
